@@ -1593,36 +1593,65 @@ fn subpixel_antialias_falls_back_without_backend_support() {
 
 #[test]
 fn textarea_keyboard_and_text_shaper_hooks_work() {
-    static KEYS: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
+    static KEYS: [char; 6] = ['a', 'b', 'c', 'd', 'e', 'f'];
+    static ALT_KEYS: [char; 6] = ['1', '2', '3', '4', '5', '6'];
     let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 96, 48));
     let textarea = gui
         .add_textarea(Rect::new(0, 0, 50, 14), "HELLO", "TYPE", Style::panel())
         .unwrap();
     let keyboard = gui
-        .add_keyboard(Rect::new(0, 16, 50, 20), &KEYS, 3, Some(textarea), Style::button())
+        .add_keyboard_with_alt(
+            Rect::new(0, 16, 50, 20),
+            &KEYS,
+            Some(&ALT_KEYS),
+            3,
+            Some(textarea),
+            Style::button(),
+        )
         .unwrap();
     gui.set_focus(Some(textarea)).unwrap();
-    gui.handle_input(InputEvent::Left).unwrap();
+    gui.move_textarea_cursor(textarea, -1).unwrap();
     assert_eq!(gui.textarea_cursor(textarea), Some(4));
     gui.set_textarea_text(textarea, "HI").unwrap();
     assert_eq!(gui.textarea_text(textarea), Some("HI"));
     gui.set_focus(Some(keyboard)).unwrap();
+    gui.set_keyboard_layout(keyboard, KeyboardLayout::Shift).unwrap();
+    assert_eq!(gui.keyboard_layout(keyboard), Some(KeyboardLayout::Shift));
+    assert_eq!(gui.keyboard_selected_key(keyboard), Some('A'));
+    gui.set_keyboard_layout(keyboard, KeyboardLayout::Symbols).unwrap();
+    assert_eq!(gui.keyboard_selected_key(keyboard), Some('1'));
     gui.handle_input(InputEvent::Down).unwrap();
     gui.handle_input(InputEvent::Select).unwrap();
-    assert_eq!(gui.keyboard_selected_key(keyboard), Some('B'));
+    assert_eq!(gui.keyboard_selected_key(keyboard), Some('2'));
+    let mut saw_text_input = false;
     let mut saw_target_value_change = false;
     while let Some(event) = gui.pop_event() {
+        if matches!(event, UiEvent::TextInput { id, ch } if id == textarea && ch == '2') {
+            saw_text_input = true;
+        }
         if event == UiEvent::ValueChanged(textarea) {
             saw_target_value_change = true;
-            break;
         }
     }
+    assert!(saw_text_input);
     assert!(saw_target_value_change);
 
     let shaper = BasicTextShaper;
     let mut shaped = heapless::Vec::<ShapedGlyph, 8>::new();
     shaper.shape("AB", ShapingConfig::default(), &mut shaped);
     assert_eq!(shaped.len(), 2);
+
+    let mut target = TestBuffer::new(24, 8);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 24, 8));
+    ctx.draw_text_shaped_in::<_, 8>(
+        Rect::new(0, 0, 24, 8),
+        "ab",
+        TextStyle::new(Rgb565::WHITE),
+        &shaper,
+        ShapingConfig::default(),
+    )
+    .unwrap();
+    assert!(target.digest() != 0);
 }
 
 #[test]

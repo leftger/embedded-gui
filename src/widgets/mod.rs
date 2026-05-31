@@ -117,6 +117,8 @@ pub enum WidgetKind<'a> {
         keys: &'a [char],
         selected: usize,
         cols: u8,
+        alt_keys: Option<&'a [char]>,
+        layout: KeyboardLayout,
         target: Option<WidgetId>,
     },
     Image {
@@ -129,6 +131,13 @@ pub enum WidgetKind<'a> {
         items: &'a [&'a str],
         selected: usize,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyboardLayout {
+    Normal,
+    Shift,
+    Symbols,
 }
 
 impl WidgetKind<'_> {
@@ -328,8 +337,10 @@ impl<'a> WidgetNode<'a> {
                 keys,
                 selected,
                 cols,
+                alt_keys,
+                layout,
                 ..
-            } => render_keyboard(ctx, rect, keys, selected, cols, self.style, state),
+            } => render_keyboard(ctx, rect, keys, selected, cols, alt_keys, layout, self.style, state),
             WidgetKind::Image { image, fit } => render_image(ctx, rect, image, fit, self.style, state),
             WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
             WidgetKind::Spacer => Ok(()),
@@ -1199,6 +1210,8 @@ fn render_keyboard<D>(
     keys: &[char],
     selected: usize,
     cols: u8,
+    alt_keys: Option<&[char]>,
+    layout: KeyboardLayout,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -1228,8 +1241,9 @@ where
         if idx == selected.min(keys.len() - 1) {
             ctx.fill_rect(cell, style.accent)?;
         }
+        let rendered = keyboard_key_for_layout(key, idx, keys, alt_keys, layout);
         let mut label = [0u8; 4];
-        let text = key.encode_utf8(&mut label);
+        let text = rendered.encode_utf8(&mut label);
         ctx.draw_text_in(
             cell.inset(EdgeInsets::all(1)),
             text,
@@ -1237,6 +1251,32 @@ where
         )?;
     }
     Ok(())
+}
+
+fn keyboard_key_for_layout(
+    base: char,
+    idx: usize,
+    base_keys: &[char],
+    alt_keys: Option<&[char]>,
+    layout: KeyboardLayout,
+) -> char {
+    match layout {
+        KeyboardLayout::Normal => base,
+        KeyboardLayout::Shift => {
+            if base.is_ascii_alphabetic() {
+                base.to_ascii_uppercase()
+            } else {
+                base
+            }
+        }
+        KeyboardLayout::Symbols => alt_keys
+            .and_then(|keys| keys.get(idx).copied())
+            .or_else(|| {
+                const FALLBACK: [char; 10] = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'];
+                FALLBACK.get(idx % FALLBACK.len()).copied()
+            })
+            .unwrap_or_else(|| base_keys.get(idx).copied().unwrap_or(base)),
+    }
 }
 
 fn render_menu<D>(

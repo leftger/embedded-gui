@@ -16,7 +16,7 @@ use crate::{
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },
-    widgets::{WidgetKind, WidgetNode},
+    widgets::{KeyboardLayout, WidgetKind, WidgetNode},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -798,12 +798,29 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         S: Into<WidgetStyle>,
     {
+        self.add_keyboard_with_alt(rect, keys, None, cols, target, style)
+    }
+
+    pub fn add_keyboard_with_alt<S>(
+        &mut self,
+        rect: Rect,
+        keys: &'a [char],
+        alt_keys: Option<&'a [char]>,
+        cols: u8,
+        target: Option<WidgetId>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
         let id = self.add_widget(
             rect,
             WidgetKind::Keyboard {
                 keys,
                 selected: 0,
                 cols: cols.max(1),
+                alt_keys,
+                layout: KeyboardLayout::Normal,
                 target,
             },
             style,
@@ -1198,6 +1215,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub fn move_textarea_cursor(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
+        let next = self.textarea_cursor(id).ok_or(GuiError::NotFound)? as i32 + delta as i32;
+        self.set_textarea_cursor(id, next.max(0) as usize)
+    }
+
     pub fn textarea_cursor(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::TextArea { cursor, .. } => Some(cursor),
@@ -1207,8 +1229,37 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn keyboard_selected_key(&self, id: WidgetId) -> Option<char> {
         match self.node(id)?.kind {
-            WidgetKind::Keyboard { keys, selected, .. } => keys.get(selected).copied(),
+            WidgetKind::Keyboard {
+                keys,
+                alt_keys,
+                selected,
+                layout,
+                ..
+            } => keyboard_char_for_layout(keys, alt_keys, selected, layout),
             _ => None,
+        }
+    }
+
+    pub fn keyboard_layout(&self, id: WidgetId) -> Option<KeyboardLayout> {
+        match self.node(id)?.kind {
+            WidgetKind::Keyboard { layout, .. } => Some(layout),
+            _ => None,
+        }
+    }
+
+    pub fn set_keyboard_layout(&mut self, id: WidgetId, layout: KeyboardLayout) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Keyboard {
+                layout: ref mut current,
+                ..
+            } => {
+                *current = layout;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
         }
     }
 
@@ -2303,14 +2354,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 }
                 WidgetKind::Keyboard {
                     keys,
+                    alt_keys,
                     selected,
+                    layout,
                     target,
                     ..
                 } => {
-                    if keys.get(selected).is_some() {
+                    if let Some(ch) = keyboard_char_for_layout(keys, alt_keys, selected, layout) {
                         changed = true;
                         changed_rect = Some(node.rect);
                         if let Some(target) = target {
+                            let _ = self.push_event(UiEvent::TextInput { id: target, ch });
                             let _ = self.push_event(UiEvent::ValueChanged(target));
                         }
                     }
@@ -2473,4 +2527,26 @@ fn bump_index(current: &mut usize, len: usize, delta: i8) -> bool {
     } else {
         false
     }
+}
+
+fn keyboard_char_for_layout(
+    keys: &[char],
+    alt_keys: Option<&[char]>,
+    selected: usize,
+    layout: KeyboardLayout,
+) -> Option<char> {
+    let base = keys.get(selected).copied()?;
+    Some(match layout {
+        KeyboardLayout::Normal => base,
+        KeyboardLayout::Shift => {
+            if base.is_ascii_alphabetic() {
+                base.to_ascii_uppercase()
+            } else {
+                base
+            }
+        }
+        KeyboardLayout::Symbols => alt_keys
+            .and_then(|keys| keys.get(selected).copied())
+            .unwrap_or('#'),
+    })
 }

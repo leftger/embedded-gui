@@ -724,6 +724,37 @@ where
         self.draw_text_in_with_font(rect, text, style, style.font)
     }
 
+    pub fn draw_text_shaped_in<S, const N: usize>(
+        &mut self,
+        rect: Rect,
+        text: &str,
+        style: TextStyle,
+        shaper: &S,
+        config: crate::text::ShapingConfig,
+    ) -> Result<(), D::Error>
+    where
+        S: crate::text::TextShaper,
+    {
+        if rect.is_empty() {
+            return Ok(());
+        }
+        let mut shaped = heapless::Vec::<crate::text::ShapedGlyph, N>::new();
+        shaper.shape(text, config, &mut shaped);
+        if shaped.is_empty() {
+            return Ok(());
+        }
+        let mut x = rect.x;
+        let y = rect.y + rect.h.saturating_sub(style.font.line_height()) as i32 / 2;
+        for glyph in shaped {
+            self.draw_char_with_font(x, y, glyph.ch, style.color, style.opacity, style.font)?;
+            x += (glyph.x_advance as i32).max(1) * style.font.advance() as i32;
+            if x >= rect.right() {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     pub fn draw_text_in_with_font(
         &mut self,
         rect: Rect,
