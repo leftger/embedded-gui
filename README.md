@@ -72,10 +72,10 @@ The script prints a small ASCII visualization for each requested glyph.
 
 ## Example Screenshots
 
-Dashboard-style UI (placeholder):
+Dashboard-style UI:
 
-![Dashboard Placeholder](docs/screenshots/dashboard-placeholder.svg)
+![Dashboard UI screenshot](docs/screenshots/dashboard.png)
 
-Mixed font text model showcase (placeholder):
+Mixed font text model showcase:
 
-![Fonts Placeholder](docs/screenshots/fonts-placeholder.svg)
+![Mixed font showcase screenshot](docs/screenshots/fonts.png)
