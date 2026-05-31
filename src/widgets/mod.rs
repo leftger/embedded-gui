@@ -12,6 +12,8 @@ use crate::{
     widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},
 };
 
+pub const TEXTAREA_CAPACITY: usize = 128;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetKind<'a> {
     Panel,
@@ -126,9 +128,15 @@ pub enum WidgetKind<'a> {
         align: TextAlign,
     },
     TextArea {
-        text: &'a str,
+        text_buf: [u8; TEXTAREA_CAPACITY],
+        text_len: u8,
         cursor: usize,
         placeholder: &'a str,
+        selection: Option<(usize, usize)>,
+        cursor_visible: bool,
+        read_only: bool,
+        single_line: bool,
+        accept_newline: bool,
     },
     Keyboard {
         keys: &'a [char],
@@ -421,10 +429,24 @@ impl<'a> WidgetNode<'a> {
                 state,
             ),
             WidgetKind::TextArea {
-                text,
+                text_buf,
+                text_len,
                 cursor,
                 placeholder,
-            } => render_textarea(ctx, rect, text, cursor, placeholder, self.style, state),
+                selection,
+                cursor_visible,
+                ..
+            } => render_textarea(
+                ctx,
+                rect,
+                textarea_text(&text_buf, text_len),
+                cursor,
+                placeholder,
+                selection,
+                cursor_visible,
+                self.style,
+                state,
+            ),
             WidgetKind::Keyboard {
                 keys,
                 selected,
@@ -1493,6 +1515,8 @@ fn render_textarea<D>(
     text: &str,
     cursor: usize,
     placeholder: &str,
+    selection: Option<(usize, usize)>,
+    cursor_visible: bool,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -1503,6 +1527,7 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     let inner = block.inner(rect).inset(EdgeInsets::all(1));
+    let max_chars = (inner.w / style.font.advance()).max(1) as usize;
     let shown = if text.is_empty() { placeholder } else { text };
     let color = if text.is_empty() {
         Rgb565::new(
@@ -1513,12 +1538,62 @@ where
     } else {
         style.text
     };
-    ctx.draw_text_in(inner, shown, TextStyle::new(color).with_font(style.font))?;
+    if !text.is_empty() {
+        if let Some((start, end)) = selection {
+            let start = start.min(end).min(text.chars().count());
+            let end = end.max(start).min(text.chars().count());
+            for idx in start..end {
+                let (col, row) = textarea_grid_position(text, idx, max_chars);
+                let sel_rect = Rect::new(
+                    inner.x + (col as u32 * style.font.advance()) as i32,
+                    inner.y + (row as u32 * style.font.line_height()) as i32,
+                    style.font.advance(),
+                    style.font.line_height().min(inner.h),
+                );
+                ctx.fill_rect(sel_rect, style.accent)?;
+            }
+        }
+    }
+    ctx.draw_text_in(
+        inner,
+        shown,
+        TextStyle::new(color)
+            .with_font(style.font)
+            .with_wrap(TextWrap::Character),
+    )?;
     let chars = text.chars().count();
     let cursor = cursor.min(chars);
-    let x = inner.x + (cursor as u32 * style.font.advance()) as i32;
-    let caret = Rect::new(x, inner.y, 1, style.font.line_height().min(inner.h));
-    ctx.fill_rect(caret, style.accent)
+    if state == VisualState::Focused && cursor_visible {
+        let (col, row) = textarea_grid_position(text, cursor, max_chars);
+        let x = inner.x + (col as u32 * style.font.advance()) as i32;
+        let y = inner.y + (row as u32 * style.font.line_height()) as i32;
+        let caret = Rect::new(x, y, 1, style.font.line_height().min(inner.h));
+        ctx.fill_rect(caret, style.accent)?;
+    }
+    Ok(())
+}
+
+fn textarea_grid_position(text: &str, cursor: usize, max_chars: usize) -> (usize, usize) {
+    let mut row = 0usize;
+    let mut col = 0usize;
+    for ch in text.chars().take(cursor) {
+        if ch == '\n' {
+            row += 1;
+            col = 0;
+            continue;
+        }
+        col += 1;
+        if col >= max_chars {
+            row += 1;
+            col = 0;
+        }
+    }
+    (col, row)
+}
+
+fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
+    let used = (len as usize).min(TEXTAREA_CAPACITY);
+    core::str::from_utf8(&buf[..used]).unwrap_or("")
 }
 
 fn render_keyboard<D>(

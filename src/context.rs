@@ -16,7 +16,7 @@ use crate::{
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },
-    widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode},
+    widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode, TEXTAREA_CAPACITY},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,6 +53,20 @@ struct InertiaScroll {
     velocity: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TextareaSnapshot {
+    text_buf: [u8; TEXTAREA_CAPACITY],
+    text_len: u8,
+    cursor: usize,
+    selection: Option<(usize, usize)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TextareaHistoryEntry {
+    id: WidgetId,
+    snapshot: TextareaSnapshot,
+}
+
 pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
     viewport: Rect,
     widgets: Vec<WidgetNode<'a>, NODES>,
@@ -66,10 +80,14 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     active_focus_group: Option<FocusGroupId>,
     render_quality: RenderQuality,
     long_press_ms: u32,
+    textarea_cursor_blink_ms: u32,
+    textarea_cursor_blink_elapsed_ms: u32,
     press_repeat_delay_ms: u32,
     press_repeat_interval_ms: u32,
     pressed: Option<PressTracker>,
     inertia_scroll: Option<InertiaScroll>,
+    textarea_undo: Vec<TextareaHistoryEntry, NODES>,
+    textarea_redo: Vec<TextareaHistoryEntry, NODES>,
     next_id: u16,
 }
 
@@ -92,10 +110,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             active_focus_group: None,
             render_quality: RenderQuality::High,
             long_press_ms: 500,
+            textarea_cursor_blink_ms: 500,
+            textarea_cursor_blink_elapsed_ms: 0,
             press_repeat_delay_ms: 650,
             press_repeat_interval_ms: 140,
             pressed: None,
             inertia_scroll: None,
+            textarea_undo: Vec::new(),
+            textarea_redo: Vec::new(),
             next_id: 1,
         }
     }
@@ -118,6 +140,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.focus = None;
         self.pressed = None;
         self.inertia_scroll = None;
+        self.textarea_undo.clear();
+        self.textarea_redo.clear();
         self.dirty.mark_all(self.viewport)?;
         Ok(())
     }
@@ -133,6 +157,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn set_press_repeat_timing(&mut self, delay_ms: u32, interval_ms: u32) {
         self.press_repeat_delay_ms = delay_ms.max(1);
         self.press_repeat_interval_ms = interval_ms.max(1);
+    }
+
+    pub fn set_textarea_cursor_blink_timing(&mut self, period_ms: u32) {
+        self.textarea_cursor_blink_ms = period_ms.max(1);
     }
 
     pub fn widgets(&self) -> &[WidgetNode<'a>] {
@@ -267,6 +295,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
         let old = self.focus;
         self.focus = focus;
+        self.textarea_cursor_blink_elapsed_ms = 0;
+        self.set_textarea_cursor_visible(old, true);
+        self.set_textarea_cursor_visible(focus, true);
         self.mark_focus_pair(old, focus)?;
         if let Some(id) = old {
             self.push_event(UiEvent::Defocused(id))?;
@@ -909,12 +940,19 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         S: Into<WidgetStyle>,
     {
         let cursor = text.chars().count();
+        let (text_buf, text_len) = textarea_storage_from_str(text);
         let id = self.add_widget(
             rect,
             WidgetKind::TextArea {
-                text,
+                text_buf,
+                text_len,
                 cursor,
                 placeholder,
+                selection: None,
+                cursor_visible: true,
+                read_only: false,
+                single_line: false,
+                accept_newline: true,
             },
             style,
         )?;
@@ -1343,12 +1381,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
             WidgetKind::TextArea {
-                text: ref mut current,
+                text_buf: ref mut buf,
+                text_len: ref mut len,
                 cursor: ref mut c,
                 ..
             } => {
-                *current = text;
-                *c = (*c).min(text.chars().count());
+                let (next_buf, next_len) = textarea_storage_from_str(text);
+                *buf = next_buf;
+                *len = next_len;
+                *c = (*c).min(textarea_text(buf, *len).chars().count());
                 self.dirty.add(rect)?;
                 Ok(())
             }
@@ -1356,9 +1397,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn textarea_text(&self, id: WidgetId) -> Option<&'a str> {
-        match self.node(id)?.kind {
-            WidgetKind::TextArea { text, .. } => Some(text),
+    pub fn textarea_text(&self, id: WidgetId) -> Option<&str> {
+        match &self.node(id)?.kind {
+            WidgetKind::TextArea {
+                text_buf, text_len, ..
+            } => Some(textarea_text(text_buf, *text_len)),
             _ => None,
         }
     }
@@ -1368,10 +1411,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
             WidgetKind::TextArea {
-                text,
+                text_buf,
+                text_len,
                 cursor: ref mut current,
                 ..
             } => {
+                let text = textarea_text(&text_buf, text_len);
                 *current = cursor.min(text.chars().count());
                 self.dirty.add(rect)?;
                 Ok(())
@@ -1382,7 +1427,94 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn move_textarea_cursor(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
         let next = self.textarea_cursor(id).ok_or(GuiError::NotFound)? as i32 + delta as i32;
-        self.set_textarea_cursor(id, next.max(0) as usize)
+        self.set_textarea_cursor_with_extend(id, next.max(0) as usize, false)
+    }
+
+    pub fn move_textarea_cursor_select(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
+        let next = self.textarea_cursor(id).ok_or(GuiError::NotFound)? as i32 + delta as i32;
+        self.set_textarea_cursor_with_extend(id, next.max(0) as usize, true)
+    }
+
+    pub fn move_textarea_cursor_word(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
+        let (text, cursor) = match &self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                ..
+            } => (textarea_text(text_buf, *text_len), *cursor),
+            _ => return Err(GuiError::NotFound),
+        };
+        let next = if delta >= 0 {
+            next_word_boundary(text, cursor)
+        } else {
+            prev_word_boundary(text, cursor)
+        };
+        self.set_textarea_cursor_with_extend(id, next, false)
+    }
+
+    pub fn move_textarea_cursor_word_select(
+        &mut self,
+        id: WidgetId,
+        delta: i8,
+    ) -> Result<(), GuiError> {
+        let (text, cursor) = match &self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                ..
+            } => (textarea_text(text_buf, *text_len), *cursor),
+            _ => return Err(GuiError::NotFound),
+        };
+        let next = if delta >= 0 {
+            next_word_boundary(text, cursor)
+        } else {
+            prev_word_boundary(text, cursor)
+        };
+        self.set_textarea_cursor_with_extend(id, next, true)
+    }
+
+    pub fn set_textarea_cursor_home(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.set_textarea_cursor(id, 0)
+    }
+
+    pub fn set_textarea_cursor_end(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let len = self
+            .textarea_text(id)
+            .map(|text| text.chars().count())
+            .ok_or(GuiError::NotFound)?;
+        self.set_textarea_cursor(id, len)
+    }
+
+    pub fn set_textarea_cursor_line_home(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
+        let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
+        let next = textarea_cursor_from_row_col(text, row, 0, wrap_cols);
+        self.set_textarea_cursor_with_extend(id, next, false)
+    }
+
+    pub fn set_textarea_cursor_line_home_select(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
+        let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
+        let next = textarea_cursor_from_row_col(text, row, 0, wrap_cols);
+        self.set_textarea_cursor_with_extend(id, next, true)
+    }
+
+    pub fn set_textarea_cursor_line_end(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
+        let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
+        let row_end = textarea_row_end_col(text, row, wrap_cols);
+        let next = textarea_cursor_from_row_col(text, row, row_end, wrap_cols);
+        self.set_textarea_cursor_with_extend(id, next, false)
+    }
+
+    pub fn set_textarea_cursor_line_end_select(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
+        let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
+        let row_end = textarea_row_end_col(text, row, wrap_cols);
+        let next = textarea_cursor_from_row_col(text, row, row_end, wrap_cols);
+        self.set_textarea_cursor_with_extend(id, next, true)
     }
 
     pub fn textarea_cursor(&self, id: WidgetId) -> Option<usize> {
@@ -1392,10 +1524,315 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub fn set_textarea_selection(
+        &mut self,
+        id: WidgetId,
+        start: usize,
+        end: usize,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                selection: ref mut current,
+                ..
+            } => {
+                let text = textarea_text(&text_buf, text_len);
+                let len = text.chars().count();
+                let start = start.min(len);
+                let end = end.min(len);
+                *current = Some((start.min(end), start.max(end)));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn clear_textarea_selection(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                selection: ref mut current,
+                ..
+            } => {
+                *current = None;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn textarea_selection(&self, id: WidgetId) -> Option<(usize, usize)> {
+        match self.node(id)?.kind {
+            WidgetKind::TextArea { selection, .. } => selection,
+            _ => None,
+        }
+    }
+
+    pub fn textarea_cursor_visible(&self, id: WidgetId) -> Option<bool> {
+        match self.node(id)?.kind {
+            WidgetKind::TextArea { cursor_visible, .. } => Some(cursor_visible),
+            _ => None,
+        }
+    }
+
+    pub fn set_textarea_capabilities(
+        &mut self,
+        id: WidgetId,
+        read_only: bool,
+        single_line: bool,
+        accept_newline: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                read_only: ref mut ro,
+                single_line: ref mut sl,
+                accept_newline: ref mut an,
+                ..
+            } => {
+                *ro = read_only;
+                *sl = single_line;
+                *an = accept_newline && !single_line;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
     pub fn textarea_insert_char(&mut self, id: WidgetId, ch: char) -> Result<(), GuiError> {
-        self.node(id).ok_or(GuiError::NotFound)?;
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let before = self.capture_textarea_snapshot(id)?;
+        let mut emit = false;
+        if let Some(node) = self.node_mut(id) {
+            if let WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                selection,
+                read_only,
+                single_line,
+                accept_newline,
+                ..
+            } = &mut node.kind
+            {
+                if *read_only {
+                    return Ok(());
+                }
+                if ch == '\n' && (*single_line || !*accept_newline) {
+                    return Ok(());
+                }
+                let mut chars: heapless::Vec<char, TEXTAREA_CAPACITY> = heapless::Vec::new();
+                for c in textarea_text(text_buf, *text_len).chars() {
+                    let _ = chars.push(c);
+                }
+
+                if ch == '\u{8}' {
+                    let removed_selection = delete_selection_if_any(&mut chars, cursor, selection);
+                    if !removed_selection && *cursor > 0 && *cursor <= chars.len() {
+                        chars.remove(*cursor - 1);
+                        *cursor -= 1;
+                    }
+                    if removed_selection || *cursor < textarea_text(text_buf, *text_len).chars().count() {
+                        *selection = None;
+                        let (next_buf, next_len) = textarea_storage_from_chars(&chars);
+                        *text_buf = next_buf;
+                        *text_len = next_len;
+                        emit = true;
+                    }
+                } else if ch == '\u{7f}' {
+                    let removed_selection = delete_selection_if_any(&mut chars, cursor, selection);
+                    if !removed_selection && *cursor < chars.len() {
+                        chars.remove(*cursor);
+                    }
+                    if removed_selection || *cursor < textarea_text(text_buf, *text_len).chars().count()
+                    {
+                        *selection = None;
+                        let (next_buf, next_len) = textarea_storage_from_chars(&chars);
+                        *text_buf = next_buf;
+                        *text_len = next_len;
+                        emit = true;
+                    }
+                } else if ch != '\n' || *cursor < TEXTAREA_CAPACITY {
+                    if delete_selection_if_any(&mut chars, cursor, selection) {
+                        *selection = None;
+                    }
+                    if chars.len() < TEXTAREA_CAPACITY && *cursor <= chars.len() {
+                        let _ = chars.insert(*cursor, ch);
+                        *cursor += 1;
+                        *selection = None;
+                        let (next_buf, next_len) = textarea_storage_from_chars(&chars);
+                        *text_buf = next_buf;
+                        *text_len = next_len;
+                        emit = true;
+                    }
+                }
+            } else {
+                return Err(GuiError::NotFound);
+            }
+        }
+        if emit {
+            self.push_textarea_undo(id, before);
+            self.clear_textarea_redo_for(id);
+            self.dirty.add(rect)?;
+        }
         self.push_event(UiEvent::TextInput { id, ch })?;
         self.push_event(UiEvent::ValueChanged(id))
+    }
+
+    fn textarea_line_context(&self, id: WidgetId) -> Result<(&str, usize, usize), GuiError> {
+        let node = self.node(id).ok_or(GuiError::NotFound)?;
+        match &node.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                ..
+            } => {
+                let font = node.style.normal.font;
+                let inner_w = node.rect.w.saturating_sub(2);
+                let cols = (inner_w / font.advance()).max(1) as usize;
+                Ok((textarea_text(text_buf, *text_len), *cursor, cols))
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    fn set_textarea_cursor_with_extend(
+        &mut self,
+        id: WidgetId,
+        cursor: usize,
+        extend_selection: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor: ref mut current_cursor,
+                ref mut selection,
+                ..
+            } => {
+                let len = textarea_text(&text_buf, text_len).chars().count();
+                let next = cursor.min(len);
+                if extend_selection {
+                    let anchor = match *selection {
+                        Some((start, end)) => {
+                            if *current_cursor == start {
+                                end
+                            } else {
+                                start
+                            }
+                        }
+                        None => *current_cursor,
+                    };
+                    if anchor == next {
+                        *selection = None;
+                    } else {
+                        *selection = Some((anchor.min(next), anchor.max(next)));
+                    }
+                } else {
+                    *selection = None;
+                }
+                *current_cursor = next;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    fn capture_textarea_snapshot(&self, id: WidgetId) -> Result<TextareaSnapshot, GuiError> {
+        match self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                selection,
+                ..
+            } => Ok(TextareaSnapshot {
+                text_buf,
+                text_len,
+                cursor,
+                selection,
+            }),
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    fn apply_textarea_snapshot(&mut self, id: WidgetId, snap: TextareaSnapshot) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                text_buf: ref mut buf,
+                text_len: ref mut len,
+                cursor: ref mut c,
+                selection: ref mut sel,
+                ..
+            } => {
+                *buf = snap.text_buf;
+                *len = snap.text_len;
+                *c = snap.cursor;
+                *sel = snap.selection;
+                self.dirty.add(rect)?;
+                self.push_event(UiEvent::ValueChanged(id))
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    fn push_textarea_undo(&mut self, id: WidgetId, snapshot: TextareaSnapshot) {
+        if self.textarea_undo.len() == self.textarea_undo.capacity() {
+            self.textarea_undo.remove(0);
+        }
+        let _ = self.textarea_undo.push(TextareaHistoryEntry { id, snapshot });
+    }
+
+    fn push_textarea_redo(&mut self, id: WidgetId, snapshot: TextareaSnapshot) {
+        if self.textarea_redo.len() == self.textarea_redo.capacity() {
+            self.textarea_redo.remove(0);
+        }
+        let _ = self.textarea_redo.push(TextareaHistoryEntry { id, snapshot });
+    }
+
+    fn clear_textarea_redo_for(&mut self, id: WidgetId) {
+        let mut i = 0usize;
+        while i < self.textarea_redo.len() {
+            if self.textarea_redo[i].id == id {
+                self.textarea_redo.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    fn textarea_undo(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let Some(pos) = self.textarea_undo.iter().rposition(|entry| entry.id == id) else {
+            return Ok(());
+        };
+        let current = self.capture_textarea_snapshot(id)?;
+        let prior = self.textarea_undo.remove(pos).snapshot;
+        self.push_textarea_redo(id, current);
+        self.apply_textarea_snapshot(id, prior)
+    }
+
+    fn textarea_redo(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let Some(pos) = self.textarea_redo.iter().rposition(|entry| entry.id == id) else {
+            return Ok(());
+        };
+        let current = self.capture_textarea_snapshot(id)?;
+        let next = self.textarea_redo.remove(pos).snapshot;
+        self.push_textarea_undo(id, current);
+        self.apply_textarea_snapshot(id, next)
     }
 
     pub fn textarea_backspace(&mut self, id: WidgetId) -> Result<(), GuiError> {
@@ -1969,6 +2406,112 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn handle_input(&mut self, event: InputEvent) -> Result<(), GuiError> {
         match event {
+            InputEvent::Home => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.set_textarea_cursor_line_home(id)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::End => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.set_textarea_cursor_line_end(id)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::WordLeft => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_word(id, -1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::WordRight => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_word(id, 1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::Undo => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.textarea_undo(id)?;
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::Redo => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.textarea_redo(id)?;
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectLeft => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_select(id, -1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectRight => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_select(id, 1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectHome => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.set_textarea_cursor_line_home_select(id)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectEnd => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.set_textarea_cursor_line_end_select(id)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectWordLeft => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_word_select(id, -1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectWordRight => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.move_textarea_cursor_word_select(id, 1)?;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
             InputEvent::Up => {
                 if !self.adjust_focused_selection(-1)? {
                     self.focus_prev()?;
@@ -2063,6 +2606,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 self.inertia_scroll = Some(inertia);
             }
         }
+        self.tick_textarea_cursor_blink(dt_ms)?;
         let Some(mut pressed) = self.pressed else {
             return Ok(());
         };
@@ -2311,9 +2855,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 text_height.saturating_add(2),
             ),
             WidgetKind::TextArea {
-                text, placeholder, ..
+                text_buf,
+                text_len,
+                placeholder,
+                ..
             } => (
-                text_width(if text.is_empty() { placeholder } else { text }).saturating_add(10),
+                text_width(if text_len == 0 {
+                    placeholder
+                } else {
+                    textarea_text(&text_buf, text_len)
+                })
+                .saturating_add(10),
                 text_height.saturating_add(4),
             ),
             WidgetKind::Keyboard { keys, cols, .. } => {
@@ -2611,10 +3163,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     changed_rect = changed.then_some(node.rect);
                 }
                 WidgetKind::TextArea {
-                    text,
+                    text_buf,
+                    text_len,
                     cursor: ref mut current,
                     ..
                 } => {
+                    let text = textarea_text(&text_buf, text_len);
                     let len = text.chars().count();
                     if direction >= 0.0 {
                         let next = (*current + 1).min(len);
@@ -2899,6 +3453,53 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
+    fn set_textarea_cursor_visible(&mut self, id: Option<WidgetId>, visible: bool) {
+        let Some(id) = id else {
+            return;
+        };
+        let Some(rect) = self.absolute_rect(id) else {
+            return;
+        };
+        let Some(node) = self.node_mut(id) else {
+            return;
+        };
+        if let WidgetKind::TextArea {
+            cursor_visible: ref mut current,
+            ..
+        } = node.kind
+        {
+            *current = visible;
+            let _ = self.dirty.add(rect);
+        }
+    }
+
+    fn tick_textarea_cursor_blink(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        let Some(id) = self.focus else {
+            return Ok(());
+        };
+        let is_textarea = matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. }));
+        if !is_textarea {
+            return Ok(());
+        }
+        self.textarea_cursor_blink_elapsed_ms =
+            self.textarea_cursor_blink_elapsed_ms.saturating_add(dt_ms);
+        if self.textarea_cursor_blink_elapsed_ms < self.textarea_cursor_blink_ms {
+            return Ok(());
+        }
+        self.textarea_cursor_blink_elapsed_ms = 0;
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::TextArea {
+            cursor_visible: ref mut visible,
+            ..
+        } = node.kind
+        {
+            *visible = !*visible;
+            self.dirty.add(rect)?;
+        }
+        Ok(())
+    }
+
     fn push_event(&mut self, event: UiEvent) -> Result<(), GuiError> {
         if self.should_emit_event(event)? {
             self.events.push(event).map_err(|_| GuiError::EventsFull)?;
@@ -2975,4 +3576,165 @@ fn keyboard_char_for_layout(
             .and_then(|keys| keys.get(selected).copied())
             .unwrap_or('#'),
     })
+}
+
+fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
+    let used = (len as usize).min(TEXTAREA_CAPACITY);
+    core::str::from_utf8(&buf[..used]).unwrap_or("")
+}
+
+fn textarea_storage_from_str(text: &str) -> ([u8; TEXTAREA_CAPACITY], u8) {
+    let mut out = [0u8; TEXTAREA_CAPACITY];
+    let mut len = 0usize;
+    for ch in text.chars() {
+        let mut tmp = [0u8; 4];
+        let enc = ch.encode_utf8(&mut tmp).as_bytes();
+        if len + enc.len() > TEXTAREA_CAPACITY {
+            break;
+        }
+        out[len..len + enc.len()].copy_from_slice(enc);
+        len += enc.len();
+    }
+    (out, len as u8)
+}
+
+fn textarea_storage_from_chars(
+    chars: &heapless::Vec<char, TEXTAREA_CAPACITY>,
+) -> ([u8; TEXTAREA_CAPACITY], u8) {
+    let mut out = [0u8; TEXTAREA_CAPACITY];
+    let mut len = 0usize;
+    for ch in chars {
+        let mut tmp = [0u8; 4];
+        let enc = ch.encode_utf8(&mut tmp).as_bytes();
+        if len + enc.len() > TEXTAREA_CAPACITY {
+            break;
+        }
+        out[len..len + enc.len()].copy_from_slice(enc);
+        len += enc.len();
+    }
+    (out, len as u8)
+}
+
+fn char_at(text: &str, idx: usize) -> Option<char> {
+    text.chars().nth(idx)
+}
+
+fn prev_word_boundary(text: &str, cursor: usize) -> usize {
+    let mut pos = cursor.min(text.chars().count());
+    while pos > 0 && char_at(text, pos - 1).is_some_and(|ch| ch.is_whitespace()) {
+        pos -= 1;
+    }
+    while pos > 0 && char_at(text, pos - 1).is_some_and(|ch| !ch.is_whitespace()) {
+        pos -= 1;
+    }
+    pos
+}
+
+fn next_word_boundary(text: &str, cursor: usize) -> usize {
+    let len = text.chars().count();
+    let mut pos = cursor.min(len);
+    while pos < len && char_at(text, pos).is_some_and(|ch| !ch.is_whitespace()) {
+        pos += 1;
+    }
+    while pos < len && char_at(text, pos).is_some_and(|ch| ch.is_whitespace()) {
+        pos += 1;
+    }
+    pos
+}
+
+fn delete_selection_if_any(
+    chars: &mut heapless::Vec<char, TEXTAREA_CAPACITY>,
+    cursor: &mut usize,
+    selection: &mut Option<(usize, usize)>,
+) -> bool {
+    let Some((start, end)) = *selection else {
+        return false;
+    };
+    let start = start.min(end).min(chars.len());
+    let end = end.max(start).min(chars.len());
+    if end <= start {
+        *selection = None;
+        *cursor = start;
+        return false;
+    }
+    for _ in start..end {
+        chars.remove(start);
+    }
+    *cursor = start;
+    *selection = None;
+    true
+}
+
+fn textarea_row_col_at_cursor(text: &str, cursor: usize, wrap_cols: usize) -> (usize, usize) {
+    let mut row = 0usize;
+    let mut col = 0usize;
+    for ch in text.chars().take(cursor) {
+        if ch == '\n' {
+            row += 1;
+            col = 0;
+            continue;
+        }
+        col += 1;
+        if col >= wrap_cols {
+            row += 1;
+            col = 0;
+        }
+    }
+    (row, col)
+}
+
+fn textarea_cursor_from_row_col(text: &str, target_row: usize, target_col: usize, wrap_cols: usize) -> usize {
+    let mut row = 0usize;
+    let mut col = 0usize;
+    let mut idx = 0usize;
+    for ch in text.chars() {
+        if row == target_row && col >= target_col {
+            break;
+        }
+        if ch == '\n' {
+            if row == target_row {
+                break;
+            }
+            row += 1;
+            col = 0;
+            idx += 1;
+            continue;
+        }
+        idx += 1;
+        col += 1;
+        if col >= wrap_cols {
+            if row == target_row {
+                break;
+            }
+            row += 1;
+            col = 0;
+        }
+    }
+    idx
+}
+
+fn textarea_row_end_col(text: &str, target_row: usize, wrap_cols: usize) -> usize {
+    let mut row = 0usize;
+    let mut col = 0usize;
+    for ch in text.chars() {
+        if row == target_row {
+            if ch == '\n' {
+                break;
+            }
+            col += 1;
+            if col >= wrap_cols {
+                break;
+            }
+        } else if ch == '\n' {
+            row += 1;
+            col = 0;
+        } else {
+            col += 1;
+            if col >= wrap_cols {
+                row += 1;
+                col = 0;
+            }
+        }
+    }
+    col
 }
