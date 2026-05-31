@@ -53,6 +53,23 @@ struct InertiaScroll {
     velocity: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollPhysics {
+    pub velocity_threshold: f32,
+    pub velocity_decay: f32,
+    pub drag_velocity_blend: f32,
+}
+
+impl Default for ScrollPhysics {
+    fn default() -> Self {
+        Self {
+            velocity_threshold: 0.05,
+            velocity_decay: 0.86,
+            drag_velocity_blend: 0.4,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TextareaSnapshot {
     text_buf: [u8; TEXTAREA_CAPACITY],
@@ -86,6 +103,7 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     press_repeat_interval_ms: u32,
     pressed: Option<PressTracker>,
     inertia_scroll: Option<InertiaScroll>,
+    scroll_physics: ScrollPhysics,
     textarea_undo: Vec<TextareaHistoryEntry, NODES>,
     textarea_redo: Vec<TextareaHistoryEntry, NODES>,
     next_id: u16,
@@ -116,6 +134,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             press_repeat_interval_ms: 140,
             pressed: None,
             inertia_scroll: None,
+            scroll_physics: ScrollPhysics::default(),
             textarea_undo: Vec::new(),
             textarea_redo: Vec::new(),
             next_id: 1,
@@ -157,6 +176,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn set_press_repeat_timing(&mut self, delay_ms: u32, interval_ms: u32) {
         self.press_repeat_delay_ms = delay_ms.max(1);
         self.press_repeat_interval_ms = interval_ms.max(1);
+    }
+
+    pub fn set_scroll_physics(
+        &mut self,
+        velocity_threshold: f32,
+        velocity_decay: f32,
+        drag_velocity_blend: f32,
+    ) {
+        self.scroll_physics.velocity_threshold = velocity_threshold.max(0.001);
+        self.scroll_physics.velocity_decay = velocity_decay.clamp(0.01, 0.999);
+        self.scroll_physics.drag_velocity_blend = drag_velocity_blend.clamp(0.01, 1.0);
     }
 
     pub fn set_textarea_cursor_blink_timing(&mut self, period_ms: u32) {
@@ -2587,7 +2617,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn tick_input(&mut self, dt_ms: u32) -> Result<(), GuiError> {
         if let Some(mut inertia) = self.inertia_scroll {
-            if inertia.velocity.abs() < 0.05 {
+            if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
                 self.inertia_scroll = None;
             } else {
                 let current = self.scroll_offset(inertia.id).unwrap_or(0);
@@ -2602,7 +2632,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         })?;
                     }
                 }
-                inertia.velocity *= 0.86f32.powf((dt_ms as f32 / 16.0).max(1.0));
+                inertia.velocity *=
+                    self.scroll_physics
+                        .velocity_decay
+                        .powf((dt_ms as f32 / 16.0).max(1.0));
                 self.inertia_scroll = Some(inertia);
             }
         }
@@ -3301,7 +3334,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     fn handle_pointer_released(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
         if let Some(pressed) = self.pressed {
             if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
-                if pressed.scroll_velocity.abs() > 0.2 {
+                if pressed.scroll_velocity.abs() > self.scroll_physics.velocity_threshold {
                     self.inertia_scroll = Some(InertiaScroll {
                         id: scroll_id,
                         velocity: pressed.scroll_velocity,
@@ -3360,7 +3393,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     |_| EventPolicy::Continue,
                 )?;
             }
-            pressed.scroll_velocity = pressed.scroll_velocity * 0.6 + (dy as f32) * 0.4;
+            let blend = self.scroll_physics.drag_velocity_blend;
+            pressed.scroll_velocity = pressed.scroll_velocity * (1.0 - blend) + (dy as f32) * blend;
         }
         self.pressed = Some(pressed);
         Ok(())

@@ -2720,6 +2720,89 @@ fn drag_release_continues_scroll_with_inertia() {
 }
 
 #[test]
+fn scroll_physics_threshold_controls_inertia_start() {
+    let mut gui = GuiContext::<8, 48, 8>::new(Rect::new(0, 0, 64, 32));
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 0, 30, 20), 0, 120, Style::panel())
+        .unwrap();
+    gui.set_scroll_physics(100.0, 0.86, 0.4);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 14,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    let before_release = gui.scroll_offset(scroll).unwrap_or(0);
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.tick_input(16).unwrap();
+    let after_tick = gui.scroll_offset(scroll).unwrap_or(0);
+    assert_eq!(after_tick, before_release);
+}
+
+#[test]
+fn scroll_physics_decay_controls_inertia_persistence() {
+    let mut gui_fast_decay = GuiContext::<8, 48, 8>::new(Rect::new(0, 0, 64, 32));
+    let mut gui_slow_decay = GuiContext::<8, 48, 8>::new(Rect::new(0, 0, 64, 32));
+    let fast = gui_fast_decay
+        .add_scroll_view(Rect::new(0, 0, 30, 20), 0, 120, Style::panel())
+        .unwrap();
+    let slow = gui_slow_decay
+        .add_scroll_view(Rect::new(0, 0, 30, 20), 0, 120, Style::panel())
+        .unwrap();
+    gui_fast_decay.set_scroll_physics(0.01, 0.15, 0.5);
+    gui_slow_decay.set_scroll_physics(0.01, 0.98, 0.5);
+
+    for (gui, id) in [(&mut gui_fast_decay, fast), (&mut gui_slow_decay, slow)] {
+        gui.handle_input(InputEvent::Pointer {
+            x: 2,
+            y: 14,
+            state: PointerState::Pressed,
+            button: PointerButton::Primary,
+        })
+        .unwrap();
+        gui.handle_input(InputEvent::Pointer {
+            x: 2,
+            y: 2,
+            state: PointerState::Moved,
+            button: PointerButton::Primary,
+        })
+        .unwrap();
+        gui.handle_input(InputEvent::Pointer {
+            x: 2,
+            y: 2,
+            state: PointerState::Released,
+            button: PointerButton::Primary,
+        })
+        .unwrap();
+        let _ = id;
+    }
+
+    for _ in 0..5 {
+        gui_fast_decay.tick_input(16).unwrap();
+        gui_slow_decay.tick_input(16).unwrap();
+    }
+    let fast_offset = gui_fast_decay.scroll_offset(fast).unwrap_or(0);
+    let slow_offset = gui_slow_decay.scroll_offset(slow).unwrap_or(0);
+    assert!(slow_offset.abs() > fast_offset.abs());
+}
+
+#[test]
 fn event_filter_limits_targeted_app_events() {
     let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
     let button = gui
