@@ -277,6 +277,12 @@ impl WidgetStyle {
         }
         self
     }
+
+    pub fn resolve_interpolated(self, from: VisualState, to: VisualState, t: f32) -> Style {
+        let a = self.resolve(from);
+        let b = self.resolve(to);
+        lerp_style(a, b, t)
+    }
 }
 
 impl From<Style> for WidgetStyle {
@@ -377,6 +383,65 @@ impl Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self::dark()
+    }
+}
+
+pub fn lerp_style(a: Style, b: Style, t: f32) -> Style {
+    let t = t.clamp(0.0, 1.0);
+    let blend = |c1: Rgb565, c2: Rgb565| {
+        let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t) as u8;
+        Rgb565::new(lerp(c1.r(), c2.r()), lerp(c1.g(), c2.g()), lerp(c1.b(), c2.b()))
+    };
+    Style {
+        background: Some(blend(
+            a.background.unwrap_or(Rgb565::BLACK),
+            b.background.unwrap_or(Rgb565::BLACK),
+        )),
+        gradient: a.gradient.or(b.gradient),
+        font: a.font,
+        foreground: blend(a.foreground, b.foreground),
+        text: blend(a.text, b.text),
+        accent: blend(a.accent, b.accent),
+        opacity: (a.opacity as f32 + (b.opacity as f32 - a.opacity as f32) * t) as u8,
+        corner_radius: (a.corner_radius as f32 + (b.corner_radius as f32 - a.corner_radius as f32) * t)
+            as u8,
+        shadow: a.shadow.or(b.shadow),
+        border: Border {
+            color: blend(a.border.color, b.border.color),
+            width: (a.border.width as f32 + (b.border.width as f32 - a.border.width as f32) * t)
+                as u8,
+        },
+        padding: a.padding,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StyleTransition {
+    pub from: VisualState,
+    pub to: VisualState,
+    pub animation: crate::Animation,
+}
+
+impl StyleTransition {
+    pub const fn new(
+        from: VisualState,
+        to: VisualState,
+        duration_ms: u32,
+        easing: crate::Easing,
+    ) -> Self {
+        Self {
+            from,
+            to,
+            animation: crate::Animation::new(0.0, 1.0, duration_ms, easing),
+        }
+    }
+
+    pub fn tick(&mut self, dt_ms: u32) {
+        self.animation.tick(dt_ms);
+    }
+
+    pub fn style(&self, styles: WidgetStyle) -> Style {
+        styles.resolve_interpolated(self.from, self.to, self.animation.value())
     }
 }
 

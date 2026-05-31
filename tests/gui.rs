@@ -3,7 +3,7 @@ use core::convert::Infallible;
 use embedded_graphics_core::{
     Pixel,
     draw_target::DrawTarget,
-    geometry::{OriginDimensions, Size},
+    geometry::{OriginDimensions, Point, Size},
     pixelcolor::{Rgb565, RgbColor},
 };
 use embedded_gui::prelude::*;
@@ -265,6 +265,11 @@ fn text_alignment_draws_inside_rect() {
             align: TextAlign::Center,
             vertical_align: VerticalAlign::Top,
             wrap: TextWrap::None,
+            overflow: TextOverflow::Clip,
+            overflow_policy: TextOverflowPolicy::Global(TextOverflow::Clip),
+            kerning: false,
+            max_lines: None,
+            ellipsis: EllipsisMode::ThreeDots,
             line_spacing: 0,
         },
     )
@@ -797,6 +802,827 @@ fn tween_reaches_target() {
     assert_eq!(tween.value(), 5.0);
     assert!(tween.tick(50));
     assert_eq!(tween.value(), 10.0);
+}
+
+#[test]
+fn animation_delay_repeat_and_ping_pong_work() {
+    let mut anim = Animation::new(0.0, 100.0, 100, Easing::Linear)
+        .with_delay(50)
+        .with_repeat_mode(RepeatMode::PingPong)
+        .with_repeat_count(Some(3));
+
+    assert_eq!(anim.value(), 0.0);
+    assert_eq!(anim.tick(40), AnimationState::Running);
+    assert_eq!(anim.value(), 0.0);
+
+    anim.tick(60);
+    assert!(anim.value() > 40.0 && anim.value() < 60.0);
+
+    anim.tick(100);
+    assert!(anim.value() < 60.0);
+    assert!(!anim.is_done());
+
+    anim.tick(200);
+    assert!(anim.is_done());
+}
+
+#[test]
+fn animation_reverse_starts_from_target() {
+    let mut anim = Animation::new(0.0, 10.0, 100, Easing::Linear);
+    anim.set_reversed(true);
+    assert_eq!(anim.value(), 10.0);
+    anim.tick(50);
+    assert_eq!(anim.value(), 5.0);
+}
+
+#[test]
+fn speed_helper_calculates_duration() {
+    let ms = Animation::duration_from_speed(120.0, 60.0);
+    assert_eq!(ms, 2000);
+}
+
+#[test]
+fn animation_manager_runs_multiple_tracks_and_reclaims_slots() {
+    let mut manager = AnimationManager::<2>::new();
+    let a = manager
+        .start(Animation::new(0.0, 10.0, 100, Easing::Linear))
+        .unwrap();
+    let b = manager
+        .start(
+            Animation::new(0.0, 1.0, 100, Easing::Linear)
+                .with_repeat_mode(RepeatMode::Loop)
+                .with_repeat_count(Some(4)),
+        )
+        .unwrap();
+
+    assert_eq!(
+        manager.start(Animation::new(0.0, 5.0, 100, Easing::Linear)),
+        Err(AnimationError::Full)
+    );
+    assert_eq!(manager.active_count(), 2);
+
+    manager.tick(100);
+    assert!(manager.value(a).is_none());
+    assert!(manager.value(b).is_some());
+    assert_eq!(manager.active_count(), 1);
+
+    manager.tick(400);
+    assert!(manager.value(b).is_none());
+    assert_eq!(manager.active_count(), 0);
+}
+
+#[test]
+fn animation_manager_can_stop_track_early() {
+    let mut manager = AnimationManager::<2>::new();
+    let id = manager
+        .start(Animation::new(0.0, 10.0, 200, Easing::Linear))
+        .unwrap();
+    assert!(manager.stop(id));
+    assert!(manager.value(id).is_none());
+    assert_eq!(manager.active_count(), 0);
+}
+
+#[test]
+fn widget_animator_updates_progress_and_meter_values() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 96, 64));
+    let progress = gui
+        .add_progress_bar(Rect::new(0, 0, 50, 10), 0.0, Style::progress())
+        .unwrap();
+    let meter = gui
+        .add_meter(Rect::new(0, 12, 20, 20), 0.0, 0.0, 1.0, Style::progress())
+        .unwrap();
+    gui.clear_dirty();
+
+    let mut animator = WidgetAnimator::<4, 4>::new();
+    animator
+        .animate_progress(progress, 0.0, 1.0, 100, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_meter(meter, 0.0, 1.0, 100, Easing::Linear)
+        .unwrap();
+
+    animator.tick(50, &mut gui).unwrap();
+    assert_eq!(gui.pop_event(), None);
+    assert!(!gui.dirty_regions().is_empty());
+    gui.clear_dirty();
+
+    animator.tick(50, &mut gui).unwrap();
+    assert_eq!(animator.active_count(), 0);
+}
+
+#[test]
+fn widget_animator_reports_binding_overflow() {
+    let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 32, 16));
+    let progress = gui
+        .add_progress_bar(Rect::new(0, 0, 20, 8), 0.0, Style::progress())
+        .unwrap();
+
+    let mut animator = WidgetAnimator::<4, 1>::new();
+    animator
+        .bind_property_with_policy(
+            progress,
+            AnimatedProperty::Progress,
+            Animation::new(0.0, 1.0, 100, Easing::Linear),
+            AnimationConflictPolicy::Queue,
+        )
+        .unwrap();
+    assert_eq!(
+        animator.bind_property_with_policy(
+            progress,
+            AnimatedProperty::Progress,
+            Animation::new(0.0, 1.0, 100, Easing::Linear),
+            AnimationConflictPolicy::Queue,
+        ),
+        Err(WidgetAnimationError::BindingsFull)
+    );
+}
+
+#[test]
+fn widget_animator_ignore_policy_reports_conflict_ignored() {
+    let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 32, 16));
+    let progress = gui
+        .add_progress_bar(Rect::new(0, 0, 20, 8), 0.0, Style::progress())
+        .unwrap();
+    let mut animator = WidgetAnimator::<4, 4>::new();
+    animator
+        .bind_property_with_policy(
+            progress,
+            AnimatedProperty::Progress,
+            Animation::new(0.0, 1.0, 100, Easing::Linear),
+            AnimationConflictPolicy::Ignore,
+        )
+        .unwrap();
+    assert_eq!(
+        animator.bind_property_with_policy(
+            progress,
+            AnimatedProperty::Progress,
+            Animation::new(0.0, 1.0, 100, Easing::Linear),
+            AnimationConflictPolicy::Ignore,
+        ),
+        Err(WidgetAnimationError::ConflictIgnored)
+    );
+}
+
+#[test]
+fn widget_animator_convenience_builders_work() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let slider = gui
+        .add_slider(Rect::new(1, 14, 20, 8), 0.0, 0.0, 1.0, Style::button())
+        .unwrap();
+    let scroll = gui
+        .add_scroll_view(Rect::new(24, 1, 20, 20), 0, 100, Style::panel())
+        .unwrap();
+    let mut animator = WidgetAnimator::<8, 8>::new();
+
+    animator
+        .animate_widget_x(panel, 1, 5, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_widget_height(panel, 10, 14, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_opacity(panel, 255, 64, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_slider_value(slider, 0.0, 1.0, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_scroll_offset_y(scroll, 0, 16, 20, Easing::Linear)
+        .unwrap();
+    animator.tick(20, &mut gui).unwrap();
+
+    assert_eq!(gui.absolute_rect(panel).unwrap().x, 5);
+    assert_eq!(gui.absolute_rect(panel).unwrap().h, 14);
+    assert!(gui.slider_value(slider).unwrap() > 0.9);
+    assert_eq!(gui.scroll_offset(scroll).unwrap(), 16);
+}
+
+#[test]
+fn widget_animator_policy_aware_builders_apply_conflict_rules() {
+    let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 48, 20));
+    let panel = gui.add_panel(Rect::new(0, 0, 20, 8), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<4, 4>::new();
+    animator
+        .animate_widget_x_with_policy(panel, 0, 10, 100, Easing::Linear, AnimationConflictPolicy::Ignore)
+        .unwrap();
+    assert_eq!(
+        animator.animate_widget_x_with_policy(
+            panel,
+            0,
+            12,
+            100,
+            Easing::Linear,
+            AnimationConflictPolicy::Ignore
+        ),
+        Err(WidgetAnimationError::ConflictIgnored)
+    );
+}
+
+#[test]
+fn animation_edge_cases_cover_delay_reverse_and_id_wrap() {
+    let mut anim = Animation::new(0.0, 1.0, 0, Easing::Linear)
+        .with_delay(20)
+        .with_repeat_mode(RepeatMode::Loop)
+        .with_repeat_count(Some(2));
+    anim.set_reversed(true);
+    assert_eq!(anim.value(), 1.0);
+    anim.tick(20);
+    assert!(anim.value() <= 1.0);
+
+    let mut manager = AnimationManager::<1>::new();
+    manager.set_next_id_for_test(u16::MAX);
+    let first = manager.start(Animation::new(0.0, 1.0, 1, Easing::Linear)).unwrap();
+    assert_eq!(first.raw(), u16::MAX);
+    manager.tick(1);
+    let second = manager.start(Animation::new(0.0, 1.0, 1, Easing::Linear)).unwrap();
+    assert_eq!(second.raw(), 1);
+}
+
+#[test]
+fn widget_animator_animates_geometry_and_style_properties() {
+    let mut gui = GuiContext::<8, 8, 16>::new(Rect::new(0, 0, 96, 64));
+    let slider = gui
+        .add_slider(Rect::new(1, 1, 20, 8), 0.0, 0.0, 1.0, Style::button())
+        .unwrap();
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 12, 30, 20), 0, 120, Style::panel())
+        .unwrap();
+    let panel = gui.add_panel(Rect::new(4, 40, 20, 10), Style::panel()).unwrap();
+    gui.clear_dirty();
+
+    let mut animator = WidgetAnimator::<8, 8>::new();
+    animator
+        .bind_property(
+            slider,
+            AnimatedProperty::SliderValue,
+            Animation::new(0.0, 1.0, 100, Easing::Linear),
+        )
+        .unwrap();
+    animator
+        .bind_property(
+            scroll,
+            AnimatedProperty::ScrollOffsetY,
+            Animation::new(0.0, 50.0, 100, Easing::Linear),
+        )
+        .unwrap();
+    animator
+        .bind_property(
+            panel,
+            AnimatedProperty::WidgetX,
+            Animation::new(4.0, 10.0, 100, Easing::Linear),
+        )
+        .unwrap();
+    animator
+        .bind_property(
+            panel,
+            AnimatedProperty::Opacity,
+            Animation::new(255.0, 64.0, 100, Easing::Linear),
+        )
+        .unwrap();
+    animator.tick(100, &mut gui).unwrap();
+
+    assert!(gui.slider_value(slider).unwrap() > 0.9);
+    assert!(gui.scroll_offset(scroll).unwrap() >= 49);
+    assert_eq!(gui.absolute_rect(panel).unwrap().x, 10);
+}
+
+#[test]
+fn timeline_sequence_and_group_work() {
+    let mut seq = AnimationSequence::<4>::new();
+    seq.push_delay(10).unwrap();
+    seq.push_animation(Animation::new(0.0, 1.0, 20, Easing::Linear))
+        .unwrap();
+    let mut player = SequencePlayer::<2, 4>::new(seq);
+    player.tick(10).unwrap();
+    player.tick(1).unwrap();
+    assert!(player.active_value().is_some());
+
+    let mut group = AnimationGroup::<2>::new();
+    group
+        .push(Animation::new(0.0, 1.0, 10, Easing::Linear))
+        .unwrap();
+    group
+        .push(Animation::new(1.0, 0.0, 10, Easing::Linear))
+        .unwrap();
+    let mut manager = AnimationManager::<2>::new();
+    let ids = group.start(&mut manager).unwrap();
+    assert!(ids[0].is_some());
+    assert!(ids[1].is_some());
+}
+
+#[test]
+fn render_primitives_and_word_wrap_and_image_compile_path() {
+    let mut target = TestBuffer::new(32, 32);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 32, 32));
+    ctx.draw_line(0, 0, 10, 10, Rgb565::WHITE).unwrap();
+    ctx.stroke_circle(16, 16, 5, Rgb565::RED).unwrap();
+    ctx.fill_circle(6, 20, 3, Rgb565::GREEN).unwrap();
+    ctx.stroke_arc(16, 16, 8, 0, 90, Rgb565::BLUE).unwrap();
+    let poly = [Point::new(20, 20), Point::new(28, 20), Point::new(24, 28)];
+    ctx.fill_polygon(&poly, Rgb565::CYAN).unwrap();
+    let img = ImageRef::new(2, 2, &[0xFFFF, 0xF800, 0x07E0, 0x001F]);
+    ctx.draw_image(Rect::new(0, 24, 4, 4), img, ImageFit::Stretch)
+        .unwrap();
+    ctx.draw_text_in(
+        Rect::new(0, 0, 12, 16),
+        "HELLO WORLD",
+        TextStyle::new(Rgb565::WHITE).with_wrap(TextWrap::Word),
+    )
+    .unwrap();
+    assert!(target.count_color(Rgb565::WHITE) > 0);
+}
+
+#[test]
+fn screen_transition_runner_tracks_progress() {
+    let mut stack = ScreenStack::<4>::with_root(ScreenId::new(1)).unwrap();
+    let mut events = heapless::Vec::<ScreenLifecycleEvent, 8>::new();
+    let mut runner = ScreenTransitionRunner::new();
+    runner
+        .apply(
+            &mut stack,
+            ScreenCommand::Push(ScreenId::new(2)),
+            ScreenTransitionSpec::fade(100),
+            &mut events,
+        )
+        .unwrap();
+    runner.tick(50);
+    let active = runner.active().unwrap();
+    assert!(active.opacity_u8() > 0);
+    assert!(active.slide_offset_x(100) == 0);
+    let sample = active.sample(100);
+    assert!(sample.incoming_opacity > 0);
+    let zoom = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::Zoom,
+        progress: 0.6,
+    };
+    let zoom_sample = zoom.sample(100);
+    assert!(zoom_sample.incoming_opacity > zoom_sample.outgoing_opacity / 2);
+    runner.tick(100);
+    assert!(runner.active().is_none());
+}
+
+#[test]
+fn context_can_render_with_offset_and_opacity() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 32, 16));
+    gui.add_panel(Rect::new(1, 1, 10, 8), Style::panel()).unwrap();
+    let mut target = TestBuffer::new(32, 16);
+    gui.render_with_offset_and_opacity(&mut target, 4, 0, 128)
+        .unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn transition_compositor_renders_outgoing_and_incoming_contexts() {
+    let mut outgoing = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 32, 16));
+    let mut incoming = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 32, 16));
+    outgoing
+        .add_panel(Rect::new(1, 1, 10, 8), Style::panel())
+        .unwrap();
+    incoming
+        .add_panel(Rect::new(12, 2, 10, 8), Style::button())
+        .unwrap();
+    let mut target = TestBuffer::new(32, 16);
+
+    render_transition_pair(
+        &mut target,
+        &outgoing,
+        &incoming,
+        ActiveScreenTransition {
+            from: Some(ScreenId::new(1)),
+            to: Some(ScreenId::new(2)),
+            effect: ScreenTransitionEffect::Fade,
+            progress: 0.5,
+        },
+        32,
+    )
+    .unwrap();
+
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn keyframe_track_advances_and_finishes() {
+    let mut track = KeyframeTrack::<4>::new();
+    track
+        .push(Keyframe {
+            value: 0.5,
+            duration_ms: 20,
+            easing: Easing::Linear,
+        })
+        .unwrap();
+    track
+        .push(Keyframe {
+            value: 1.0,
+            duration_ms: 20,
+            easing: Easing::Linear,
+        })
+        .unwrap();
+    track.reset(0.0);
+    track.tick(10).unwrap();
+    assert!(track.value().unwrap() > 0.0);
+    track.tick(10).unwrap();
+    track.tick(10).unwrap();
+    assert!(track.value().unwrap() >= 0.5);
+    track.tick(10).unwrap();
+    assert!(track.is_done());
+    assert!(track.value().unwrap() >= 1.0);
+}
+
+#[test]
+fn keyframe_track_callbacks_fire_per_segment() {
+    static STARTS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+    static ENDS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+    fn on_start(_idx: usize, _from: f32, _to: f32) {
+        STARTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+    fn on_end(_idx: usize, _value: f32) {
+        ENDS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    let mut track = KeyframeTrack::<3>::new();
+    track
+        .push(Keyframe {
+            value: 0.5,
+            duration_ms: 10,
+            easing: Easing::Linear,
+        })
+        .unwrap();
+    track
+        .push(Keyframe {
+            value: 1.0,
+            duration_ms: 10,
+            easing: Easing::Linear,
+        })
+        .unwrap();
+    track.set_callbacks(KeyframeTrackCallbacks {
+        on_segment_start: Some(on_start),
+        on_segment_complete: Some(on_end),
+    });
+    track.reset(0.0);
+    track.tick(10).unwrap();
+    track.tick(10).unwrap();
+
+    assert_eq!(STARTS.load(core::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(ENDS.load(core::sync::atomic::Ordering::Relaxed), 2);
+    STARTS.store(0, core::sync::atomic::Ordering::Relaxed);
+    ENDS.store(0, core::sync::atomic::Ordering::Relaxed);
+}
+
+#[test]
+fn widget_animator_introspection_and_stop_helpers_work() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<8, 8>::new();
+    animator
+        .animate_widget_x(panel, 1, 8, 100, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_opacity(panel, 255, 64, 100, Easing::Linear)
+        .unwrap();
+    assert!(animator.is_animating_widget(panel));
+    assert!(animator.is_animating_widget_property(panel, AnimatedProperty::WidgetX));
+
+    let mut handles = heapless::Vec::<AnimationId, 8>::new();
+    assert_eq!(animator.handles_for_widget(panel, &mut handles), 2);
+    assert_eq!(animator.stop_widget_property(panel, AnimatedProperty::WidgetX), 1);
+    assert_eq!(animator.stop_widget(panel), 1);
+    assert!(!animator.is_animating_widget(panel));
+}
+
+#[test]
+fn sequence_player_can_seek_to_label() {
+    let mut seq = AnimationSequence::<6>::new();
+    seq.push_label(1).unwrap();
+    seq.push_animation(Animation::new(0.0, 0.5, 40, Easing::Linear))
+        .unwrap();
+    seq.push_label(2).unwrap();
+    seq.push_animation(Animation::new(0.5, 1.0, 40, Easing::Linear))
+        .unwrap();
+
+    let mut player = SequencePlayer::<2, 6>::new(seq);
+    player.seek_to_label(2).unwrap();
+    player.tick(20).unwrap();
+    let status = player.status();
+    assert!(status.active || status.done);
+    assert!(player.active_value().is_some());
+}
+
+#[test]
+fn widget_animator_can_snapshot_active_bindings() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<8, 8>::new();
+    animator
+        .animate_widget_x(panel, 1, 8, 100, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_opacity(panel, 255, 64, 100, Easing::Linear)
+        .unwrap();
+
+    let mut snapshots = heapless::Vec::<BindingSnapshot, 8>::new();
+    let count = animator.active_bindings(&mut snapshots);
+    assert_eq!(count, 2);
+    assert!(snapshots
+        .iter()
+        .any(|s| s.property == AnimatedProperty::WidgetX));
+    assert!(snapshots
+        .iter()
+        .any(|s| s.property == AnimatedProperty::Opacity));
+}
+
+#[test]
+fn sequence_player_loop_mode_restarts() {
+    let mut seq = AnimationSequence::<2>::new();
+    seq.push_animation(Animation::new(0.0, 1.0, 10, Easing::Linear))
+        .unwrap();
+    let mut player = SequencePlayer::<2, 2>::new(seq);
+    player.set_repeat_mode(SequenceRepeatMode::Loop);
+    player.tick(10).unwrap();
+    let first = player.status().step_idx;
+    player.tick(10).unwrap();
+    assert_eq!(first, 0);
+    assert_eq!(player.status().step_idx, 0);
+}
+
+#[test]
+fn arc_gauge_widget_renders_and_updates() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let gauge = gui
+        .add_arc_gauge(Rect::new(4, 4, 24, 24), 0.2, 0.0, 1.0, 135, 405, 2, true, Style::progress())
+        .unwrap();
+    gui.set_gauge_value(gauge, 0.8).unwrap();
+    let mut target = TestBuffer::new(64, 32);
+    gui.render(&mut target).unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn stroke_style_and_text_overflow_render_paths_work() {
+    let mut target = TestBuffer::new(32, 16);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 32, 16));
+    ctx.set_backend_caps(RenderBackendCaps {
+        color_format: ColorFormat::Rgb565,
+        supports_layers: true,
+        supports_subpixel: true,
+    });
+    assert!(ctx.backend_caps().supports_subpixel);
+    ctx.draw_line_styled(
+        0,
+        0,
+        12,
+        0,
+        StrokeStyle::new(Rgb565::WHITE)
+            .with_width(3)
+            .with_antialias_mode(AntiAliasMode::Subpixel),
+    )
+    .unwrap();
+    ctx.stroke_arc_styled(
+        16,
+        8,
+        6,
+        0,
+        180,
+        StrokeStyle::new(Rgb565::GREEN)
+            .with_width(2)
+            .with_antialias(true),
+    )
+    .unwrap();
+    ctx.draw_text_in(
+        Rect::new(0, 0, 16, 6),
+        "LONG TEXT HERE",
+        TextStyle::new(Rgb565::YELLOW)
+            .with_wrap(TextWrap::Word)
+            .with_overflow(TextOverflow::Ellipsis)
+            .with_max_lines(Some(1))
+            .with_ellipsis_mode(EllipsisMode::SingleGlyph)
+            .with_kerning(true),
+    )
+    .unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn text_overflow_policy_wrap_then_ellipsis_is_supported() {
+    let mut target = TestBuffer::new(24, 12);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 24, 12));
+    ctx.draw_text_in(
+        Rect::new(0, 0, 24, 12),
+        "ONE TWO THREE FOUR FIVE",
+        TextStyle::new(Rgb565::WHITE)
+            .with_wrap(TextWrap::Word)
+            .with_overflow_policy(TextOverflowPolicy::WrapThenEllipsis { max_lines: 2 })
+            .with_ellipsis_mode(EllipsisMode::ThreeDots),
+    )
+    .unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn render_ctx_transform_and_layer_blend_entrypoints_work() {
+    let mut target = TestBuffer::new(24, 24);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 24, 24));
+    ctx.push_layer(LayerState {
+        opacity: 200,
+        blend: BlendMode::Add,
+        backdrop: Rgb565::new(4, 8, 4),
+    });
+    ctx.translate(4.0, 2.0);
+    ctx.rotate(0.0);
+    ctx.skew(0.0, 0.0);
+    ctx.draw_line_styled(0, 0, 6, 0, StrokeStyle::new(Rgb565::RED))
+        .unwrap();
+    ctx.pop_transform();
+    ctx.pop_layer();
+
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn physics_and_path_animators_advance() {
+    let mut spring = SpringAnimator::new(0.0, 1.0);
+    let v0 = spring.value;
+    let v1 = spring.tick(16);
+    assert!(v1 > v0);
+
+    let mut inertia = InertiaAnimator::new(0.0, 10.0);
+    let i1 = inertia.tick(100);
+    let i2 = inertia.tick(100);
+    assert!(i2 > i1);
+
+    let mut path = PathAnimator::<4>::new(100, Easing::Linear);
+    path.push_point(PathPoint::new(0.0, 0.0)).unwrap();
+    path.push_point(PathPoint::new(10.0, 0.0)).unwrap();
+    path.push_point(PathPoint::new(10.0, 10.0)).unwrap();
+    path.tick(50);
+    let p = path.value().unwrap();
+    assert!(p.x >= 5.0);
+}
+
+#[test]
+fn style_transition_interpolates_between_states() {
+    let styles = WidgetStyle::new(Style::button());
+    let mut transition = StyleTransition::new(VisualState::Normal, VisualState::Focused, 100, Easing::Linear);
+    transition.tick(50);
+    let blended = transition.style(styles);
+    assert!(blended.opacity > 0);
+
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 20, 20));
+    let panel = gui
+        .add_panel(Rect::new(0, 0, 10, 10), styles)
+        .unwrap();
+    gui.apply_widget_style_transition(panel, VisualState::Normal, VisualState::Focused, 0.5)
+        .unwrap();
+}
+
+#[test]
+fn new_widgets_chart_spinner_dropdown_render_and_update() {
+    static SERIES: [f32; 5] = [0.0, 0.5, 0.2, 0.8, 0.6];
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 96, 48));
+    let chart = gui
+        .add_chart(Rect::new(0, 0, 32, 16), &SERIES, 0.0, 1.0, Style::panel())
+        .unwrap();
+    gui.set_chart_style(chart, 2, true, true).unwrap();
+    let spinner = gui
+        .add_spinner(Rect::new(34, 0, 16, 16), 0.0, Style::progress())
+        .unwrap();
+    let dropdown = gui
+        .add_dropdown(Rect::new(52, 0, 40, 16), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.tick_spinner(spinner, 16, 1.0).unwrap();
+    gui.set_dropdown_selected(dropdown, 2).unwrap();
+    assert_eq!(gui.dropdown_selected(dropdown), Some(2));
+    gui.set_focus(Some(dropdown)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.dropdown_selected(dropdown), Some(0));
+    let roller = gui
+        .add_roller(Rect::new(0, 18, 30, 20), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(roller)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.roller_selected(roller), Some(1));
+    static TABLE_ROWS: [&[&str]; 2] = [&["A", "B"], &["C", "D"]];
+    gui.add_table(Rect::new(32, 18, 40, 20), &TABLE_ROWS, Style::panel())
+        .unwrap();
+
+    let mut target = TestBuffer::new(96, 48);
+    gui.render(&mut target).unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn image_transform_and_mask_paths_render() {
+    let mut target = TestBuffer::new(24, 24);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 24, 24));
+    let image = ImageRef::new(2, 2, &[0xFFFF, 0xF800, 0x07E0, 0x001F]);
+    ctx.draw_image_transformed(Rect::new(4, 4, 8, 8), image, 1.2, 20.0)
+        .unwrap();
+    fn checker(x: i32, y: i32) -> bool {
+        ((x + y) & 1) == 0
+    }
+    ctx.fill_rect_masked(Rect::new(0, 0, 8, 8), Rgb565::BLUE, checker)
+        .unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[cfg(all(feature = "std", feature = "image-decode"))]
+#[test]
+fn ppm_decoder_and_sprite_atlas_helpers_work() {
+    let mut pixels = heapless::Vec::<u16, 16>::new();
+    let decoder = BasicImageDecoder;
+    let (w, h) = decode_image_with(
+        &decoder,
+        EncodedImageFormat::PpmAscii,
+        "P3 2 1 255 255 0 0 0 255 0",
+        &mut pixels,
+    )
+    .unwrap();
+    assert_eq!((w, h), (2, 1));
+    let auto = decode_image_auto("P3 1 1 255 255 255 255", &mut heapless::Vec::<u16, 4>::new())
+        .unwrap();
+    assert_eq!(auto, (1, 1));
+    let image = ImageRef::new(w, h, pixels.as_slice());
+    let sheet = SpriteSheet::new(image, 1, 1);
+    assert_eq!(sheet.sprite_rect(1), Rect::new(1, 0, 1, 1));
+    let entries = [ImageAtlasEntry {
+        id: 7,
+        rect: Rect::new(0, 0, 1, 1),
+    }];
+    let atlas = ImageAtlas::new(image, &entries);
+    assert_eq!(atlas.rect_for(7), Some(Rect::new(0, 0, 1, 1)));
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn layer_canvas_can_composite_into_target() {
+    let mut base = TestBuffer::new(16, 16);
+    let mut layer = LayerCanvas::new(16, 16);
+    {
+        let mut ctx = RenderCtx::new(layer.target_mut(), Rect::new(0, 0, 16, 16));
+        ctx.fill_rect(Rect::new(2, 2, 8, 8), Rgb565::GREEN).unwrap();
+    }
+    layer.composite_into(&mut base, BlendMode::Normal, 220);
+    assert!(base.digest() != 0);
+}
+
+#[test]
+fn subpixel_antialias_falls_back_without_backend_support() {
+    let mut target = TestBuffer::new(16, 8);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 16, 8));
+    ctx.set_quality(RenderQuality::Medium);
+    ctx.set_backend_caps(RenderBackendCaps {
+        color_format: ColorFormat::Rgb565,
+        supports_layers: true,
+        supports_subpixel: false,
+    });
+    ctx.draw_line_styled(
+        0,
+        1,
+        12,
+        1,
+        StrokeStyle::new(Rgb565::WHITE)
+            .with_width(2)
+            .with_antialias_mode(AntiAliasMode::Subpixel),
+    )
+    .unwrap();
+    assert!(target.digest() != 0);
+}
+
+#[test]
+fn textarea_keyboard_and_text_shaper_hooks_work() {
+    static KEYS: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
+    let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 96, 48));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 50, 14), "HELLO", "TYPE", Style::panel())
+        .unwrap();
+    let keyboard = gui
+        .add_keyboard(Rect::new(0, 16, 50, 20), &KEYS, 3, Some(textarea), Style::button())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.handle_input(InputEvent::Left).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(4));
+    gui.set_textarea_text(textarea, "HI").unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HI"));
+    gui.set_focus(Some(keyboard)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.keyboard_selected_key(keyboard), Some('B'));
+    let mut saw_target_value_change = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::ValueChanged(textarea) {
+            saw_target_value_change = true;
+            break;
+        }
+    }
+    assert!(saw_target_value_change);
+
+    let shaper = BasicTextShaper;
+    let mut shaped = heapless::Vec::<ShapedGlyph, 8>::new();
+    shaper.shape("AB", ShapingConfig::default(), &mut shaped);
+    assert_eq!(shaped.len(), 2);
 }
 
 #[test]

@@ -9,7 +9,7 @@ use embedded_graphics_core::{
 
 use heapless::Vec;
 
-use crate::{geometry::Rect, present::PresentRegion};
+use crate::{geometry::Rect, present::PresentRegion, render::BlendMode};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TestBuffer {
@@ -73,6 +73,15 @@ impl TestBuffer {
         })
     }
 
+    pub fn assert_digest_eq(&self, expected: u64, label: &str) {
+        let actual = self.digest();
+        assert_eq!(
+            actual, expected,
+            "visual digest mismatch for {}: expected {expected:#x}, got {actual:#x}",
+            label
+        );
+    }
+
     pub fn diff_bounding_region(&self, previous: &Self) -> Option<PresentRegion> {
         if self.size != previous.size {
             return Some(PresentRegion::new(
@@ -133,6 +142,78 @@ impl TestBuffer {
         }
 
         regions
+    }
+
+    pub fn composite_from(&mut self, overlay: &Self, mode: BlendMode, opacity: u8) {
+        if self.size != overlay.size {
+            return;
+        }
+        if opacity == 0 {
+            return;
+        }
+        for (idx, src) in overlay.pixels.iter().copied().enumerate() {
+            if src == Rgb565::BLACK {
+                continue;
+            }
+            let dst = self.pixels[idx];
+            let blended = blend_pixel(src, dst, mode);
+            self.pixels[idx] = lerp_pixel(dst, blended, opacity);
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LayerCanvas {
+    inner: TestBuffer,
+}
+
+impl LayerCanvas {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            inner: TestBuffer::new(width, height),
+        }
+    }
+
+    pub fn clear(&mut self, color: Rgb565) {
+        self.inner.clear_color(color);
+    }
+
+    pub fn target_mut(&mut self) -> &mut TestBuffer {
+        &mut self.inner
+    }
+
+    pub fn composite_into(&self, target: &mut TestBuffer, mode: BlendMode, opacity: u8) {
+        target.composite_from(&self.inner, mode, opacity);
+    }
+}
+
+fn lerp_pixel(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
+    let t = t as u16;
+    let inv = 255u16.saturating_sub(t);
+    let r = ((a.r() as u16 * inv) + (b.r() as u16 * t)) / 255;
+    let g = ((a.g() as u16 * inv) + (b.g() as u16 * t)) / 255;
+    let bb = ((a.b() as u16 * inv) + (b.b() as u16 * t)) / 255;
+    Rgb565::new(r as u8, g as u8, bb as u8)
+}
+
+fn blend_pixel(src: Rgb565, dst: Rgb565, mode: BlendMode) -> Rgb565 {
+    match mode {
+        BlendMode::Normal => src,
+        BlendMode::Add => Rgb565::new(
+            src.r().saturating_add(dst.r()),
+            src.g().saturating_add(dst.g()),
+            src.b().saturating_add(dst.b()),
+        ),
+        BlendMode::Multiply => Rgb565::new(
+            ((src.r() as u16 * dst.r() as u16) / 31) as u8,
+            ((src.g() as u16 * dst.g() as u16) / 63) as u8,
+            ((src.b() as u16 * dst.b() as u16) / 31) as u8,
+        ),
+        BlendMode::Screen => Rgb565::new(
+            (31 - ((31 - src.r() as u16) * (31 - dst.r() as u16) / 31)) as u8,
+            (63 - ((63 - src.g() as u16) * (63 - dst.g() as u16) / 63)) as u8,
+            (31 - ((31 - src.b() as u16) * (31 - dst.b() as u16) / 31)) as u8,
+        ),
     }
 }
 

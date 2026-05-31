@@ -46,12 +46,12 @@ fn main() {
     gui.render(&mut display).unwrap();
     gui.clear_dirty();
 
-    let mut tween = Tween::new(0.0, 1.0, 1800, Easing::Smoothstep);
+    let mut tween = Animation::new(0.0, 1.0, 900, Easing::InOutSine)
+        .with_repeat_mode(RepeatMode::PingPong)
+        .with_repeat_count(None);
 
     'running: loop {
-        if tween.tick(16) {
-            tween.reset();
-        }
+        tween.tick(16);
 
         let value = tween.value();
         gui.set_progress(progress, value).unwrap();

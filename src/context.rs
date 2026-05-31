@@ -3,6 +3,7 @@ use heapless::Vec;
 
 use crate::{
     geometry::{DirtyError, DirtyTracker, Rect},
+    image::{ImageFit, ImageRef},
     input::{
         InputEvent, PointerState, UiEvent, UiEventFilter, WidgetDispatchPolicy, WidgetEvent,
         WidgetEventKind,
@@ -11,7 +12,7 @@ use crate::{
     present::PresentRegion,
     render::{RenderCtx, RenderQuality},
     state::{ListState, ScrollState, SliderState, TabsState},
-    style::{Style, Theme, VisualState, WidgetStyle},
+    style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },
@@ -177,6 +178,21 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     ) -> Result<(), GuiError> {
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         node.style_class = class.filter(|c| *c != StyleClassId::NONE);
+        self.mark_subtree_dirty(id)
+    }
+
+    pub fn apply_widget_style_transition(
+        &mut self,
+        id: WidgetId,
+        from: VisualState,
+        to: VisualState,
+        t: f32,
+    ) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        let a = node.style.resolve(from);
+        let b = node.style.resolve(to);
+        let blended = lerp_style(a, b, t);
+        node.style = node.style.with_state_override(VisualState::Normal, blended);
         self.mark_subtree_dirty(id)
     }
 
@@ -569,6 +585,246 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_meter(rect, value, min, max, self.theme.meter)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_arc_gauge<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+        thickness: u8,
+        antialias: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::ArcGauge {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+                thickness: thickness.max(1),
+                antialias,
+            },
+            style,
+        )
+    }
+
+    pub fn add_gauge<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Gauge { value, min, max }, style)
+    }
+
+    pub fn add_gauge_needle<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::GaugeNeedle {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+            },
+            style,
+        )
+    }
+
+    pub fn add_chart<S>(
+        &mut self,
+        rect: Rect,
+        values: &'a [f32],
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Chart {
+                values,
+                min,
+                max,
+                thickness: 1,
+                fill_under: false,
+                markers: false,
+            },
+            style,
+        )
+    }
+
+    pub fn set_chart_style(
+        &mut self,
+        id: WidgetId,
+        thickness: u8,
+        fill_under: bool,
+        markers: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Chart {
+                thickness: ref mut t,
+                fill_under: ref mut fill,
+                markers: ref mut mark,
+                ..
+            } => {
+                *t = thickness.max(1);
+                *fill = fill_under;
+                *mark = markers;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn add_spinner<S>(
+        &mut self,
+        rect: Rect,
+        phase: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Spinner { phase }, style)
+    }
+
+    pub fn add_dropdown<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(rect, WidgetKind::Dropdown { items, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_roller<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(rect, WidgetKind::Roller { items, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_table<S>(
+        &mut self,
+        rect: Rect,
+        rows: &'a [&'a [&'a str]],
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Table { rows }, style)
+    }
+
+    pub fn add_textarea<S>(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        placeholder: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let cursor = text.chars().count();
+        let id = self.add_widget(
+            rect,
+            WidgetKind::TextArea {
+                text,
+                cursor,
+                placeholder,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_keyboard<S>(
+        &mut self,
+        rect: Rect,
+        keys: &'a [char],
+        cols: u8,
+        target: Option<WidgetId>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::Keyboard {
+                keys,
+                selected: 0,
+                cols: cols.max(1),
+                target,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_image<S>(
+        &mut self,
+        rect: Rect,
+        image: ImageRef<'a>,
+        fit: ImageFit,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Image { image, fit }, style)
+    }
+
     pub fn add_border<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
@@ -833,6 +1089,176 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub fn set_spinner_phase(&mut self, id: WidgetId, phase: f32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Spinner { phase: ref mut v } => {
+                *v = phase;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn tick_spinner(&mut self, id: WidgetId, dt_ms: u32, cycles_per_sec: f32) -> Result<(), GuiError> {
+        let phase = match self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::Spinner { phase } => phase + (dt_ms as f32 / 1000.0) * cycles_per_sec,
+            _ => return Err(GuiError::NotFound),
+        };
+        self.set_spinner_phase(id, phase)
+    }
+
+    pub fn set_dropdown_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Dropdown {
+                items,
+                selected: ref mut current,
+            } => {
+                *current = selected.min(items.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn dropdown_selected(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::Dropdown { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    pub fn set_roller_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Roller {
+                items,
+                selected: ref mut current,
+            } => {
+                *current = selected.min(items.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn roller_selected(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::Roller { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    pub fn set_textarea_text(&mut self, id: WidgetId, text: &'a str) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                text: ref mut current,
+                cursor: ref mut c,
+                ..
+            } => {
+                *current = text;
+                *c = (*c).min(text.chars().count());
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn textarea_text(&self, id: WidgetId) -> Option<&'a str> {
+        match self.node(id)?.kind {
+            WidgetKind::TextArea { text, .. } => Some(text),
+            _ => None,
+        }
+    }
+
+    pub fn set_textarea_cursor(&mut self, id: WidgetId, cursor: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::TextArea {
+                text,
+                cursor: ref mut current,
+                ..
+            } => {
+                *current = cursor.min(text.chars().count());
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn textarea_cursor(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::TextArea { cursor, .. } => Some(cursor),
+            _ => None,
+        }
+    }
+
+    pub fn keyboard_selected_key(&self, id: WidgetId) -> Option<char> {
+        match self.node(id)?.kind {
+            WidgetKind::Keyboard { keys, selected, .. } => keys.get(selected).copied(),
+            _ => None,
+        }
+    }
+
+    pub fn set_keyboard_target(
+        &mut self,
+        id: WidgetId,
+        target: Option<WidgetId>,
+    ) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Keyboard {
+                target: ref mut current,
+                ..
+            } => {
+                *current = target;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_gauge_value(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Gauge {
+                value: ref mut v,
+                min,
+                max,
+            }
+            | WidgetKind::ArcGauge {
+                value: ref mut v,
+                min,
+                max,
+                ..
+            }
+            | WidgetKind::GaugeNeedle {
+                value: ref mut v,
+                min,
+                max,
+                ..
+            } => {
+                *v = value.clamp(min.min(max), min.max(max));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
     pub fn set_widget_rect(&mut self, id: WidgetId, rect: Rect) -> Result<(), GuiError> {
         let old = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -840,6 +1266,39 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.dirty.add(old)?;
         self.mark_subtree_dirty(id)?;
         Ok(())
+    }
+
+    pub fn set_widget_x(&mut self, id: WidgetId, x: i32) -> Result<(), GuiError> {
+        let mut rect = self.node(id).ok_or(GuiError::NotFound)?.rect;
+        rect.x = x;
+        self.set_widget_rect(id, rect)
+    }
+
+    pub fn set_widget_y(&mut self, id: WidgetId, y: i32) -> Result<(), GuiError> {
+        let mut rect = self.node(id).ok_or(GuiError::NotFound)?.rect;
+        rect.y = y;
+        self.set_widget_rect(id, rect)
+    }
+
+    pub fn set_widget_width(&mut self, id: WidgetId, w: u32) -> Result<(), GuiError> {
+        let mut rect = self.node(id).ok_or(GuiError::NotFound)?.rect;
+        rect.w = w.max(1);
+        self.set_widget_rect(id, rect)
+    }
+
+    pub fn set_widget_height(&mut self, id: WidgetId, h: u32) -> Result<(), GuiError> {
+        let mut rect = self.node(id).ok_or(GuiError::NotFound)?.rect;
+        rect.h = h.max(1);
+        self.set_widget_rect(id, rect)
+    }
+
+    pub fn set_widget_opacity(&mut self, id: WidgetId, opacity: u8) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.opacity = opacity;
+        node.style.focused.opacity = opacity;
+        node.style.pressed.opacity = opacity;
+        node.style.disabled.opacity = opacity;
+        self.mark_subtree_dirty(id)
     }
 
     pub fn set_widget_parent(
@@ -1181,7 +1640,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     {
         let mut ctx = RenderCtx::new(target, self.viewport);
         ctx.set_quality(self.render_quality);
-        self.render_into(&mut ctx)
+        self.render_into(&mut ctx, 0, 0, 255)
     }
 
     pub fn render_dirty<D>(&self, target: &mut D) -> Result<(), D::Error>
@@ -1195,9 +1654,36 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         for dirty in self.dirty.as_slice() {
             let mut ctx = RenderCtx::with_dirty(target, self.viewport, *dirty);
             ctx.set_quality(self.render_quality);
-            self.render_into(&mut ctx)?;
+            self.render_into(&mut ctx, 0, 0, 255)?;
         }
         Ok(())
+    }
+
+    pub fn render_with_offset<D>(
+        &self,
+        target: &mut D,
+        offset_x: i32,
+        offset_y: i32,
+    ) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        self.render_with_offset_and_opacity(target, offset_x, offset_y, 255)
+    }
+
+    pub fn render_with_offset_and_opacity<D>(
+        &self,
+        target: &mut D,
+        offset_x: i32,
+        offset_y: i32,
+        opacity: u8,
+    ) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        let mut ctx = RenderCtx::new(target, self.viewport);
+        ctx.set_quality(self.render_quality);
+        self.render_into(&mut ctx, offset_x, offset_y, opacity)
     }
 
     pub fn handle_input(&mut self, event: InputEvent) -> Result<(), GuiError> {
@@ -1367,7 +1853,13 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
-    fn render_into<D>(&self, ctx: &mut RenderCtx<'_, D>) -> Result<(), D::Error>
+    fn render_into<D>(
+        &self,
+        ctx: &mut RenderCtx<'_, D>,
+        offset_x: i32,
+        offset_y: i32,
+        opacity: u8,
+    ) -> Result<(), D::Error>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
     {
@@ -1375,10 +1867,22 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             if !self.effective_visible(node.id) {
                 continue;
             }
-            let Some(rect) = self.absolute_rect(node.id) else {
+            let Some(base_rect) = self.absolute_rect(node.id) else {
                 continue;
             };
-            let clip = self.inherited_clip(node.id).unwrap_or(self.viewport);
+            let rect = Rect::new(
+                base_rect.x + offset_x,
+                base_rect.y + offset_y,
+                base_rect.w,
+                base_rect.h,
+            );
+            let base_clip = self.inherited_clip(node.id).unwrap_or(self.viewport);
+            let clip = Rect::new(
+                base_clip.x + offset_x,
+                base_clip.y + offset_y,
+                base_clip.w,
+                base_clip.h,
+            );
             if rect.intersection(clip).is_empty() {
                 continue;
             }
@@ -1397,6 +1901,13 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     let class_state = style.resolve(state);
                     render_node.style = node.style.with_state_override(state, class_state);
                 }
+            }
+            if opacity < 255 {
+                let apply = |v: u8| -> u8 { ((v as u16 * opacity as u16) / 255) as u8 };
+                render_node.style.normal.opacity = apply(render_node.style.normal.opacity);
+                render_node.style.focused.opacity = apply(render_node.style.focused.opacity);
+                render_node.style.pressed.opacity = apply(render_node.style.pressed.opacity);
+                render_node.style.disabled.opacity = apply(render_node.style.disabled.opacity);
             }
             render_node.render_at(ctx, rect, state)?;
             ctx.set_clip(old_clip);
@@ -1445,6 +1956,24 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 text_width(text).saturating_add(8),
                 text_height.saturating_add(2),
             ),
+            WidgetKind::Dropdown { items, selected } => (
+                text_width(items.get(selected).copied().unwrap_or("-")).saturating_add(10),
+                text_height.saturating_add(2),
+            ),
+            WidgetKind::TextArea {
+                text, placeholder, ..
+            } => (
+                text_width(if text.is_empty() { placeholder } else { text }).saturating_add(10),
+                text_height.saturating_add(4),
+            ),
+            WidgetKind::Keyboard { keys, cols, .. } => {
+                let cols = cols.max(1) as u32;
+                let rows = (keys.len() as u32).div_ceil(cols).max(1);
+                (
+                    cols.saturating_mul(style.font.advance().saturating_add(4)),
+                    rows.saturating_mul(style.font.line_height().saturating_add(4)),
+                )
+            }
             WidgetKind::List {
                 items,
                 visible_rows,
@@ -1624,6 +2153,37 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     changed = bump_index(current, items.len(), delta);
                     changed_rect = changed.then_some(node.rect);
                 }
+                WidgetKind::Dropdown {
+                    items,
+                    selected: ref mut current,
+                } => {
+                    if items.is_empty() {
+                        return Ok(true);
+                    }
+                    changed = bump_index(current, items.len(), delta);
+                    changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::Roller {
+                    items,
+                    selected: ref mut current,
+                } => {
+                    if items.is_empty() {
+                        return Ok(true);
+                    }
+                    changed = bump_index(current, items.len(), delta);
+                    changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::Keyboard {
+                    keys,
+                    selected: ref mut current,
+                    ..
+                } => {
+                    if keys.is_empty() {
+                        return Ok(true);
+                    }
+                    changed = bump_index(current, keys.len(), delta);
+                    changed_rect = changed.then_some(node.rect);
+                }
                 WidgetKind::List {
                     items,
                     selected: ref mut current,
@@ -1693,6 +2253,23 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     *current = state.selected;
                     changed_rect = changed.then_some(node.rect);
                 }
+                WidgetKind::TextArea {
+                    text,
+                    cursor: ref mut current,
+                    ..
+                } => {
+                    let len = text.chars().count();
+                    if direction >= 0.0 {
+                        let next = (*current + 1).min(len);
+                        changed = next != *current;
+                        *current = next;
+                    } else {
+                        let next = current.saturating_sub(1);
+                        changed = next != *current;
+                        *current = next;
+                    }
+                    changed_rect = changed.then_some(node.rect);
+                }
                 _ => return Ok(false),
             }
         }
@@ -1723,6 +2300,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     *v = !*v;
                     changed = true;
                     changed_rect = Some(node.rect);
+                }
+                WidgetKind::Keyboard {
+                    keys,
+                    selected,
+                    target,
+                    ..
+                } => {
+                    if keys.get(selected).is_some() {
+                        changed = true;
+                        changed_rect = Some(node.rect);
+                        if let Some(target) = target {
+                            let _ = self.push_event(UiEvent::ValueChanged(target));
+                        }
+                    }
                 }
                 _ => {}
             }
