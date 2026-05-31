@@ -2,9 +2,10 @@
 //! Keeps fixed-capacity, no-allocation behavior suitable for embedded targets.
 
 use heapless::Vec;
+use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 
 use crate::{
-    animation::{Animation, AnimationError, AnimationId, AnimationManager, Easing},
+    animation::{Animation, AnimationError, AnimationId, AnimationManager, Easing, PathPoint},
     context::{GuiContext, GuiError},
     widget::WidgetId,
 };
@@ -22,6 +23,15 @@ pub enum AnimatedProperty {
     Meter,
     SliderValue,
     ScrollOffsetY,
+    TabSelected,
+    DropdownSelected,
+    RollerSelected,
+    GaugeValue,
+    SpinnerPhase,
+    CornerRadius,
+    AccentR,
+    AccentG,
+    AccentB,
     WidgetX,
     WidgetY,
     WidgetWidth,
@@ -188,6 +198,81 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
             AnimatedProperty::ScrollOffsetY,
             Animation::new(from as f32, to as f32, duration_ms, easing),
             policy,
+        )
+    }
+
+    pub fn animate_tab_selected(
+        &mut self,
+        widget_id: WidgetId,
+        from: usize,
+        to: usize,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::TabSelected,
+            Animation::new(from as f32, to as f32, duration_ms, easing),
+        )
+    }
+
+    pub fn animate_dropdown_selected(
+        &mut self,
+        widget_id: WidgetId,
+        from: usize,
+        to: usize,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::DropdownSelected,
+            Animation::new(from as f32, to as f32, duration_ms, easing),
+        )
+    }
+
+    pub fn animate_roller_selected(
+        &mut self,
+        widget_id: WidgetId,
+        from: usize,
+        to: usize,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::RollerSelected,
+            Animation::new(from as f32, to as f32, duration_ms, easing),
+        )
+    }
+
+    pub fn animate_gauge_value(
+        &mut self,
+        widget_id: WidgetId,
+        from: f32,
+        to: f32,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::GaugeValue,
+            Animation::new(from, to, duration_ms, easing),
+        )
+    }
+
+    pub fn animate_spinner_phase(
+        &mut self,
+        widget_id: WidgetId,
+        from: f32,
+        to: f32,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::SpinnerPhase,
+            Animation::new(from, to, duration_ms, easing),
         )
     }
 
@@ -364,6 +449,263 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
             Animation::new(from as f32, to as f32, duration_ms, easing),
             policy,
         )
+    }
+
+    pub fn pulse_opacity(
+        &mut self,
+        widget_id: WidgetId,
+        low: u8,
+        high: u8,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        let animation = Animation::new(low as f32, high as f32, duration_ms, easing)
+            .with_repeat_mode(crate::animation::RepeatMode::PingPong)
+            .with_repeat_count(None);
+        self.bind_property(widget_id, AnimatedProperty::Opacity, animation)
+    }
+
+    pub fn ping_pong_progress(
+        &mut self,
+        widget_id: WidgetId,
+        from: f32,
+        to: f32,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        let animation = Animation::new(from, to, duration_ms, easing)
+            .with_repeat_mode(crate::animation::RepeatMode::PingPong)
+            .with_repeat_count(None);
+        self.bind_property(widget_id, AnimatedProperty::Progress, animation)
+    }
+
+    pub fn animate_corner_radius(
+        &mut self,
+        widget_id: WidgetId,
+        from: u8,
+        to: u8,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        self.bind_property(
+            widget_id,
+            AnimatedProperty::CornerRadius,
+            Animation::new(from as f32, to as f32, duration_ms, easing),
+        )
+    }
+
+    pub fn animate_accent_color(
+        &mut self,
+        widget_id: WidgetId,
+        from: Rgb565,
+        to: Rgb565,
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<[AnimationId; 3], WidgetAnimationError> {
+        let mut ids = [AnimationId::new(0); 3];
+        let mut started = Vec::<AnimationId, 3>::new();
+        let r = self.bind_property(
+            widget_id,
+            AnimatedProperty::AccentR,
+            Animation::new(from.r() as f32, to.r() as f32, duration_ms, easing),
+        )?;
+        ids[0] = r;
+        let _ = started.push(r);
+        let g = match self.bind_property(
+            widget_id,
+            AnimatedProperty::AccentG,
+            Animation::new(from.g() as f32, to.g() as f32, duration_ms, easing),
+        ) {
+            Ok(v) => v,
+            Err(err) => {
+                for id in started {
+                    let _ = self.stop(id);
+                }
+                return Err(err);
+            }
+        };
+        ids[1] = g;
+        let _ = started.push(g);
+        let b = match self.bind_property(
+            widget_id,
+            AnimatedProperty::AccentB,
+            Animation::new(from.b() as f32, to.b() as f32, duration_ms, easing),
+        ) {
+            Ok(v) => v,
+            Err(err) => {
+                for id in started {
+                    let _ = self.stop(id);
+                }
+                return Err(err);
+            }
+        };
+        ids[2] = b;
+        Ok(ids)
+    }
+
+    pub fn animate_widget_path(
+        &mut self,
+        widget_id: WidgetId,
+        points: &[PathPoint],
+        duration_ms: u32,
+        easing: Easing,
+    ) -> Result<(AnimationId, AnimationId), WidgetAnimationError> {
+        self.animate_widget_path_with_policy(
+            widget_id,
+            points,
+            duration_ms,
+            easing,
+            AnimationConflictPolicy::Replace,
+        )
+    }
+
+    pub fn animate_widget_path_with_policy(
+        &mut self,
+        widget_id: WidgetId,
+        points: &[PathPoint],
+        duration_ms: u32,
+        easing: Easing,
+        policy: AnimationConflictPolicy,
+    ) -> Result<(AnimationId, AnimationId), WidgetAnimationError> {
+        if points.len() < 2 {
+            return Err(WidgetAnimationError::ConflictIgnored);
+        }
+        let segs = (points.len() - 1) as u32;
+        let seg_duration = (duration_ms / segs).max(1);
+        let mut ids = Vec::<AnimationId, BINDINGS>::new();
+        let mut first_x = AnimationId::new(0);
+        let mut first_y = AnimationId::new(0);
+
+        for i in 0..(points.len() - 1) {
+            let from = points[i];
+            let to = points[i + 1];
+            let delay = seg_duration.saturating_mul(i as u32);
+            let x_anim = Animation::new(from.x, to.x, seg_duration, easing).with_delay(delay);
+            let y_anim = Animation::new(from.y, to.y, seg_duration, easing).with_delay(delay);
+            let step_policy = if i == 0 {
+                policy
+            } else {
+                AnimationConflictPolicy::Queue
+            };
+            let x_id = match self.bind_property_with_policy(
+                widget_id,
+                AnimatedProperty::WidgetX,
+                x_anim,
+                step_policy,
+            ) {
+                Ok(id) => id,
+                Err(err) => {
+                    for id in ids {
+                        let _ = self.stop(id);
+                    }
+                    return Err(err);
+                }
+            };
+            let _ = ids.push(x_id);
+            let y_id = match self.bind_property_with_policy(
+                widget_id,
+                AnimatedProperty::WidgetY,
+                y_anim,
+                step_policy,
+            ) {
+                Ok(id) => id,
+                Err(err) => {
+                    for id in ids {
+                        let _ = self.stop(id);
+                    }
+                    return Err(err);
+                }
+            };
+            let _ = ids.push(y_id);
+            if i == 0 {
+                first_x = x_id;
+                first_y = y_id;
+            }
+        }
+        Ok((first_x, first_y))
+    }
+
+    pub fn stagger_widget_x(
+        &mut self,
+        widget_ids: &[WidgetId],
+        from: i32,
+        to: i32,
+        duration_ms: u32,
+        stagger_ms: u32,
+        easing: Easing,
+    ) -> Result<usize, WidgetAnimationError> {
+        let mut created = 0usize;
+        let mut started = Vec::<AnimationId, BINDINGS>::new();
+        for (idx, id) in widget_ids.iter().copied().enumerate() {
+            let delay = stagger_ms.saturating_mul(idx as u32);
+            let animation = Animation::new(from as f32, to as f32, duration_ms, easing).with_delay(delay);
+            match self.bind_property_with_policy(
+                id,
+                AnimatedProperty::WidgetX,
+                animation,
+                AnimationConflictPolicy::Replace,
+            ) {
+                Ok(track) => {
+                    let _ = started.push(track);
+                    created += 1;
+                }
+                Err(err) => {
+                    for track in started {
+                        let _ = self.stop(track);
+                    }
+                    return Err(err);
+                }
+            }
+        }
+        Ok(created)
+    }
+
+    pub fn preset_fade_in_up(
+        &mut self,
+        widget_id: WidgetId,
+        from_y: i32,
+        to_y: i32,
+        duration_ms: u32,
+    ) -> Result<(AnimationId, AnimationId), WidgetAnimationError> {
+        let y = self.animate_widget_y(widget_id, from_y, to_y, duration_ms, Easing::OutCubic)?;
+        let alpha = self.animate_opacity(widget_id, 0, 255, duration_ms, Easing::OutSine)?;
+        Ok((y, alpha))
+    }
+
+    pub fn preset_attention_shake(
+        &mut self,
+        widget_id: WidgetId,
+        base_x: i32,
+        amplitude: i32,
+        duration_ms: u32,
+    ) -> Result<(AnimationId, AnimationId), WidgetAnimationError> {
+        let step = (duration_ms / 3).max(1);
+        let a = self.bind_property_with_policy(
+            widget_id,
+            AnimatedProperty::WidgetX,
+            Animation::new(base_x as f32, (base_x + amplitude) as f32, step, Easing::InOutSine),
+            AnimationConflictPolicy::Replace,
+        )?;
+        let b = self.bind_property_with_policy(
+            widget_id,
+            AnimatedProperty::WidgetX,
+            Animation::new(
+                (base_x + amplitude) as f32,
+                (base_x - amplitude) as f32,
+                step,
+                Easing::InOutSine,
+            )
+            .with_delay(step),
+            AnimationConflictPolicy::Queue,
+        )?;
+        self.bind_property_with_policy(
+            widget_id,
+            AnimatedProperty::WidgetX,
+            Animation::new((base_x - amplitude) as f32, base_x as f32, step, Easing::InOutSine)
+                .with_delay(step.saturating_mul(2)),
+            AnimationConflictPolicy::Queue,
+        )?;
+        Ok((a, b))
     }
 
     pub fn bind_property_with_policy(
@@ -576,6 +918,56 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                 AnimatedProperty::ScrollOffsetY => {
                     gui.set_scroll_offset(binding.widget_id, value.round() as i32)?
                 }
+                AnimatedProperty::TabSelected => {
+                    gui.set_tab_selected(binding.widget_id, value.max(0.0).round() as usize)?
+                }
+                AnimatedProperty::DropdownSelected => {
+                    gui.set_dropdown_selected(binding.widget_id, value.max(0.0).round() as usize)?
+                }
+                AnimatedProperty::RollerSelected => {
+                    gui.set_roller_selected(binding.widget_id, value.max(0.0).round() as usize)?
+                }
+                AnimatedProperty::GaugeValue => gui.set_gauge_value(binding.widget_id, value)?,
+                AnimatedProperty::SpinnerPhase => gui.set_spinner_phase(binding.widget_id, value)?,
+                AnimatedProperty::CornerRadius => gui.set_widget_corner_radius(
+                    binding.widget_id,
+                    value.clamp(0.0, 255.0).round() as u8,
+                )?,
+                AnimatedProperty::AccentR
+                | AnimatedProperty::AccentG
+                | AnimatedProperty::AccentB => {
+                    let node = gui
+                        .widgets()
+                        .iter()
+                        .find(|node| node.id == binding.widget_id)
+                        .ok_or(GuiError::NotFound)?;
+                    let mut accent = node.style.normal.accent;
+                    match binding.property {
+                        AnimatedProperty::AccentR => {
+                            accent = Rgb565::new(
+                                value.clamp(0.0, 31.0).round() as u8,
+                                accent.g(),
+                                accent.b(),
+                            );
+                        }
+                        AnimatedProperty::AccentG => {
+                            accent = Rgb565::new(
+                                accent.r(),
+                                value.clamp(0.0, 63.0).round() as u8,
+                                accent.b(),
+                            );
+                        }
+                        AnimatedProperty::AccentB => {
+                            accent = Rgb565::new(
+                                accent.r(),
+                                accent.g(),
+                                value.clamp(0.0, 31.0).round() as u8,
+                            );
+                        }
+                        _ => {}
+                    }
+                    gui.set_widget_accent(binding.widget_id, accent)?;
+                }
                 AnimatedProperty::WidgetX => gui.set_widget_x(binding.widget_id, value.round() as i32)?,
                 AnimatedProperty::WidgetY => gui.set_widget_y(binding.widget_id, value.round() as i32)?,
                 AnimatedProperty::WidgetWidth => {
@@ -607,5 +999,100 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
 impl From<AnimationError> for WidgetAnimationError {
     fn from(_: AnimationError) -> Self {
         Self::AnimationsFull
+    }
+}
+
+pub mod presets {
+    use embedded_graphics_core::pixelcolor::Rgb565;
+
+    use super::{Easing, PathPoint, WidgetAnimationError, WidgetAnimator, WidgetId};
+
+    pub fn entrance_fade_in_up<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        from_y: i32,
+        to_y: i32,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.preset_fade_in_up(widget_id, from_y, to_y, duration_ms)?;
+        Ok(())
+    }
+
+    pub fn attention_shake<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        base_x: i32,
+        amplitude: i32,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.preset_attention_shake(widget_id, base_x, amplitude, duration_ms)?;
+        Ok(())
+    }
+
+    pub fn style_breathe<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        low_opacity: u8,
+        high_opacity: u8,
+        low_radius: u8,
+        high_radius: u8,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.pulse_opacity(
+            widget_id,
+            low_opacity,
+            high_opacity,
+            duration_ms,
+            Easing::InOutSine,
+        )?;
+        animator.animate_corner_radius(
+            widget_id,
+            low_radius,
+            high_radius,
+            duration_ms,
+            Easing::InOutSine,
+        )?;
+        Ok(())
+    }
+
+    pub fn style_accent_cycle<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        from: Rgb565,
+        to: Rgb565,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.animate_accent_color(widget_id, from, to, duration_ms, Easing::InOutSine)?;
+        Ok(())
+    }
+
+    pub fn path_float_loop<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        center_x: i32,
+        center_y: i32,
+        radius: i32,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        let points = [
+            PathPoint::new(center_x as f32, (center_y - radius) as f32),
+            PathPoint::new((center_x + radius) as f32, center_y as f32),
+            PathPoint::new(center_x as f32, (center_y + radius) as f32),
+            PathPoint::new((center_x - radius) as f32, center_y as f32),
+            PathPoint::new(center_x as f32, (center_y - radius) as f32),
+        ];
+        animator.animate_widget_path(widget_id, &points, duration_ms, Easing::InOutSine)?;
+        Ok(())
+    }
+
+    pub fn orchestrate_stagger_x<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_ids: &[WidgetId],
+        from: i32,
+        to: i32,
+        duration_ms: u32,
+        stagger_ms: u32,
+    ) -> Result<usize, WidgetAnimationError> {
+        animator.stagger_widget_x(widget_ids, from, to, duration_ms, stagger_ms, Easing::OutSine)
     }
 }
