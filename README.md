@@ -16,6 +16,23 @@ gui.add_progress_bar(Rect::new(4, 18, 80, 8), 0.6, Style::progress())?;
 gui.render(&mut display)?;
 ```
 
+## Animation Quickstart
+
+`embedded-gui` includes fixed-capacity animation primitives that stay `no_std` friendly.
+
+```rust
+use embedded_gui::prelude::*;
+
+let mut animator = WidgetAnimator::<8, 8>::new();
+let progress = gui.add_progress_bar(Rect::new(4, 18, 80, 8), 0.0, Style::progress())?;
+animator.animate_progress(progress, 0.0, 1.0, 600, Easing::InOutSine)?;
+
+// In your frame loop:
+animator.tick(16, &mut gui)?;
+gui.render_dirty(&mut display)?;
+gui.clear_dirty();
+```
+
 ## Font Glyph Overrides
 
 The build pipeline supports external glyph overrides from:

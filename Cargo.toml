@@ -10,6 +10,7 @@ categories = ["embedded", "gui", "no-std"]
 [features]
 default = ["std"]
 std = []
+image-decode = ["std"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"

@@ -156,6 +156,7 @@ impl<'a> Line<'a> {
             .unwrap_or(CHAR_WIDTH)
             .max(1);
         let limit_width = max_width.max(min_advance);
+        let mut last_ws_break = None;
 
         for (ch, style) in self
             .spans
@@ -166,12 +167,20 @@ impl<'a> Line<'a> {
             if ch == '\n' {
                 return (len, true);
             }
-            if matches!(wrap, TextWrap::Character) {
+            if matches!(wrap, TextWrap::Character | TextWrap::Word) {
                 let advance = style.font.advance();
                 if len > 0 && width.saturating_add(advance) > limit_width {
+                    if matches!(wrap, TextWrap::Word) {
+                        if let Some(idx) = last_ws_break {
+                            return (idx, false);
+                        }
+                    }
                     return (len, false);
                 }
                 width = width.saturating_add(advance);
+            }
+            if matches!(wrap, TextWrap::Word) && ch.is_whitespace() {
+                last_ws_break = Some(len + 1);
             }
             len += 1;
         }
@@ -251,6 +260,68 @@ impl<'a> Text<'a> {
             width: widest.min(max_width),
             height: lines as u32 * max_line_height
                 + lines.saturating_sub(1) as u32 * self.line_spacing as u32,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextDirection {
+    Ltr,
+    Rtl,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShapingConfig {
+    pub direction: TextDirection,
+    pub language_tag: Option<&'static str>,
+    pub enable_ligatures: bool,
+}
+
+impl Default for ShapingConfig {
+    fn default() -> Self {
+        Self {
+            direction: TextDirection::Ltr,
+            language_tag: None,
+            enable_ligatures: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShapedGlyph {
+    pub ch: char,
+    pub x_advance: i16,
+}
+
+pub trait TextShaper {
+    fn shape<const N: usize>(
+        &self,
+        text: &str,
+        config: ShapingConfig,
+        out: &mut heapless::Vec<ShapedGlyph, N>,
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BasicTextShaper;
+
+impl TextShaper for BasicTextShaper {
+    fn shape<const N: usize>(
+        &self,
+        text: &str,
+        config: ShapingConfig,
+        out: &mut heapless::Vec<ShapedGlyph, N>,
+    ) {
+        out.clear();
+        let iter = text.chars();
+        if matches!(config.direction, TextDirection::Rtl) {
+            for ch in iter.rev() {
+                let _ = out.push(ShapedGlyph { ch, x_advance: 1 });
+            }
+        } else {
+            for ch in iter {
+                let _ = out.push(ShapedGlyph { ch, x_advance: 1 });
+            }
         }
     }
 }

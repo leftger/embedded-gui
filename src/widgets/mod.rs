@@ -3,7 +3,8 @@ use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
-    render::{RenderCtx, TextAlign, TextStyle, TextWrap, VerticalAlign},
+    image::{ImageFit, ImageRef},
+    render::{RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},
 };
@@ -64,12 +65,79 @@ pub enum WidgetKind<'a> {
         min: f32,
         max: f32,
     },
+    ArcGauge {
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+        thickness: u8,
+        antialias: bool,
+    },
+    Gauge {
+        value: f32,
+        min: f32,
+        max: f32,
+    },
+    GaugeNeedle {
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+    },
+    Chart {
+        values: &'a [f32],
+        min: f32,
+        max: f32,
+        thickness: u8,
+        fill_under: bool,
+        markers: bool,
+    },
+    Spinner {
+        phase: f32,
+    },
+    Dropdown {
+        items: &'a [&'a str],
+        selected: usize,
+    },
+    Roller {
+        items: &'a [&'a str],
+        selected: usize,
+    },
+    Table {
+        rows: &'a [&'a [&'a str]],
+    },
+    TextArea {
+        text: &'a str,
+        cursor: usize,
+        placeholder: &'a str,
+    },
+    Keyboard {
+        keys: &'a [char],
+        selected: usize,
+        cols: u8,
+        alt_keys: Option<&'a [char]>,
+        layout: KeyboardLayout,
+        target: Option<WidgetId>,
+    },
+    Image {
+        image: ImageRef<'a>,
+        fit: ImageFit,
+    },
     Border,
     Spacer,
     Menu {
         items: &'a [&'a str],
         selected: usize,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyboardLayout {
+    Normal,
+    Shift,
+    Symbols,
 }
 
 impl WidgetKind<'_> {
@@ -84,6 +152,10 @@ impl WidgetKind<'_> {
                 | Self::List { .. }
                 | Self::ScrollView { .. }
                 | Self::Tabs { .. }
+                | Self::Dropdown { .. }
+                | Self::Roller { .. }
+                | Self::TextArea { .. }
+                | Self::Keyboard { .. }
                 | Self::Menu { .. }
         )
     }
@@ -215,6 +287,61 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Meter { value, min, max } => {
                 render_meter(ctx, rect, value, min, max, self.style, state)
             }
+            WidgetKind::ArcGauge {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+                thickness,
+                antialias,
+            } => render_arc_gauge(
+                ctx, rect, value, min, max, start_deg, end_deg, thickness, antialias, self.style, state,
+            ),
+            WidgetKind::Gauge { value, min, max } => {
+                render_gauge(ctx, rect, value, min, max, self.style, state)
+            }
+            WidgetKind::GaugeNeedle {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+            } => render_gauge_needle(ctx, rect, value, min, max, start_deg, end_deg, self.style, state),
+            WidgetKind::Chart {
+                values,
+                min,
+                max,
+                thickness,
+                fill_under,
+                markers,
+            } => {
+                render_chart(
+                    ctx, rect, values, min, max, thickness, fill_under, markers, self.style, state,
+                )
+            }
+            WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
+            WidgetKind::Dropdown { items, selected } => {
+                render_dropdown(ctx, rect, items, selected, self.style, state)
+            }
+            WidgetKind::Roller { items, selected } => {
+                render_roller(ctx, rect, items, selected, self.style, state)
+            }
+            WidgetKind::Table { rows } => render_table(ctx, rect, rows, self.style, state),
+            WidgetKind::TextArea {
+                text,
+                cursor,
+                placeholder,
+            } => render_textarea(ctx, rect, text, cursor, placeholder, self.style, state),
+            WidgetKind::Keyboard {
+                keys,
+                selected,
+                cols,
+                alt_keys,
+                layout,
+                ..
+            } => render_keyboard(ctx, rect, keys, selected, cols, alt_keys, layout, self.style, state),
+            WidgetKind::Image { image, fit } => render_image(ctx, rect, image, fit, self.style, state),
             WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
             WidgetKind::Spacer => Ok(()),
             WidgetKind::Menu { items, selected } => {
@@ -539,6 +666,13 @@ where
                 align: TextAlign::Left,
                 vertical_align: VerticalAlign::Middle,
                 wrap: TextWrap::None,
+                overflow: crate::render::TextOverflow::Clip,
+                overflow_policy: crate::render::TextOverflowPolicy::Global(
+                    crate::render::TextOverflow::Clip,
+                ),
+                kerning: false,
+                max_lines: None,
+                ellipsis: crate::render::EllipsisMode::ThreeDots,
                 line_spacing: 0,
             },
         )?;
@@ -639,6 +773,13 @@ where
             align: TextAlign::Center,
             vertical_align: VerticalAlign::Middle,
             wrap: TextWrap::Character,
+            overflow: crate::render::TextOverflow::Clip,
+            overflow_policy: crate::render::TextOverflowPolicy::Global(
+                crate::render::TextOverflow::Clip,
+            ),
+            kerning: false,
+            max_lines: None,
+            ellipsis: crate::render::EllipsisMode::ThreeDots,
             line_spacing: 1,
         },
     )
@@ -671,6 +812,13 @@ where
             align: TextAlign::Center,
             vertical_align: VerticalAlign::Middle,
             wrap: TextWrap::Character,
+            overflow: crate::render::TextOverflow::Clip,
+            overflow_policy: crate::render::TextOverflowPolicy::Global(
+                crate::render::TextOverflow::Clip,
+            ),
+            kerning: false,
+            max_lines: None,
+            ellipsis: crate::render::EllipsisMode::ThreeDots,
             line_spacing: 0,
         },
     )
@@ -718,6 +866,419 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn render_arc_gauge<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    start_deg: i32,
+    end_deg: i32,
+    thickness: u8,
+    antialias: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let cx = inner.x + inner.w as i32 / 2;
+    let cy = inner.y + inner.h as i32 / 2;
+    let radius = (inner.w.min(inner.h) / 2).saturating_sub(1);
+    ctx.stroke_arc_styled(
+        cx,
+        cy,
+        radius,
+        start_deg,
+        end_deg,
+        StrokeStyle::new(Rgb565::new(5, 8, 8))
+            .with_width(thickness)
+            .with_antialias(antialias),
+    )?;
+    let range = (max - min).max(f32::EPSILON);
+    let t = ((value - min) / range).clamp(0.0, 1.0);
+    let active_end = start_deg + (((end_deg - start_deg) as f32) * t) as i32;
+    ctx.stroke_arc_styled(
+        cx,
+        cy,
+        radius,
+        start_deg,
+        active_end,
+        StrokeStyle::new(style.accent)
+            .with_width(thickness)
+            .with_antialias(antialias),
+    )
+}
+
+fn render_gauge<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    render_arc_gauge(ctx, rect, value, min, max, 135, 405, 2, true, style, state)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_gauge_needle<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    start_deg: i32,
+    end_deg: i32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let cx = inner.x + inner.w as i32 / 2;
+    let cy = inner.y + inner.h as i32 / 2;
+    let radius = (inner.w.min(inner.h) / 2).saturating_sub(2);
+    ctx.stroke_arc_styled(
+        cx,
+        cy,
+        radius,
+        start_deg,
+        end_deg,
+        StrokeStyle::new(Rgb565::new(8, 10, 10)).with_width(1),
+    )?;
+    let range = (max - min).max(f32::EPSILON);
+    let t = ((value - min) / range).clamp(0.0, 1.0);
+    let angle = (start_deg as f32 + (end_deg - start_deg) as f32 * t).to_radians();
+    let nx = cx + (radius as f32 * angle.cos()) as i32;
+    let ny = cy + (radius as f32 * angle.sin()) as i32;
+    ctx.draw_line_styled(
+        cx,
+        cy,
+        nx,
+        ny,
+        StrokeStyle::new(style.accent)
+            .with_width(2)
+            .with_antialias(true)
+            .with_cap(crate::render::StrokeCap::Round),
+    )?;
+    ctx.fill_circle(cx, cy, 2, style.accent)
+}
+
+fn render_chart<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    values: &[f32],
+    min: f32,
+    max: f32,
+    thickness: u8,
+    fill_under: bool,
+    markers: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if values.len() < 2 {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let range = (max - min).max(f32::EPSILON);
+    let dx = (inner.w.saturating_sub(1) as f32) / (values.len().saturating_sub(1) as f32);
+    for i in 1..values.len() {
+        let v0 = ((values[i - 1] - min) / range).clamp(0.0, 1.0);
+        let v1 = ((values[i] - min) / range).clamp(0.0, 1.0);
+        let x0 = inner.x + ((i - 1) as f32 * dx) as i32;
+        let x1 = inner.x + (i as f32 * dx) as i32;
+        let y0 = inner.bottom() - 1 - (v0 * (inner.h.saturating_sub(1)) as f32) as i32;
+        let y1 = inner.bottom() - 1 - (v1 * (inner.h.saturating_sub(1)) as f32) as i32;
+        if fill_under {
+            let base = inner.bottom() - 1;
+            ctx.fill_polygon(
+                &[
+                    embedded_graphics_core::geometry::Point::new(x0, base),
+                    embedded_graphics_core::geometry::Point::new(x0, y0),
+                    embedded_graphics_core::geometry::Point::new(x1, y1),
+                    embedded_graphics_core::geometry::Point::new(x1, base),
+                ],
+                Rgb565::new(2, 8, 2),
+            )?;
+        }
+        ctx.draw_line_styled(
+            x0,
+            y0,
+            x1,
+            y1,
+            StrokeStyle::new(style.accent)
+                .with_width(thickness.max(1))
+                .with_antialias(true),
+        )?;
+        if markers {
+            ctx.fill_circle(x0, y0, 1, style.accent)?;
+            ctx.fill_circle(x1, y1, 1, style.accent)?;
+        }
+    }
+    Ok(())
+}
+
+fn render_spinner<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    phase: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let cx = inner.x + inner.w as i32 / 2;
+    let cy = inner.y + inner.h as i32 / 2;
+    let radius = (inner.w.min(inner.h) / 2).saturating_sub(1);
+    let base = ((phase.fract() * 360.0) as i32).rem_euclid(360);
+    ctx.stroke_arc_styled(
+        cx,
+        cy,
+        radius,
+        base,
+        base + 120,
+        StrokeStyle::new(style.accent).with_width(2).with_antialias(true),
+    )
+}
+
+fn render_dropdown<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let text = items.get(selected).copied().unwrap_or("-");
+    ctx.draw_text_in(
+        Rect::new(inner.x, inner.y, inner.w.saturating_sub(8), inner.h),
+        text,
+        TextStyle::new(style.text).with_font(style.font),
+    )?;
+    ctx.draw_text_in(
+        Rect::new(inner.right() - 7, inner.y, 7, inner.h),
+        "v",
+        TextStyle::new(style.accent).with_font(style.font).centered(),
+    )
+}
+
+fn render_roller<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if items.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let prev = items[(selected + items.len() - 1) % items.len()];
+    let cur = items[selected];
+    let next = items[(selected + 1) % items.len()];
+    let row_h = (inner.h / 3).max(1);
+    let rows = [prev, cur, next];
+    for (idx, text) in rows.iter().enumerate() {
+        let row = Rect::new(inner.x, inner.y + (idx as u32 * row_h) as i32, inner.w, row_h);
+        if idx == 1 {
+            ctx.fill_rect(row, style.accent)?;
+        }
+        ctx.draw_text_in(
+            row,
+            text,
+            TextStyle::new(style.text).with_font(style.font).centered(),
+        )?;
+    }
+    Ok(())
+}
+
+fn render_table<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    rows: &[&[&str]],
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let row_h = (inner.h / rows.len() as u32).max(1);
+    for (r, cols) in rows.iter().enumerate() {
+        let col_count = cols.len().max(1);
+        let col_w = (inner.w / col_count as u32).max(1);
+        for (c, text) in cols.iter().enumerate() {
+            let cell = Rect::new(
+                inner.x + (c as u32 * col_w) as i32,
+                inner.y + (r as u32 * row_h) as i32,
+                col_w,
+                row_h,
+            );
+            ctx.stroke_rect(cell, Border::one(style.border.color))?;
+            ctx.draw_text_in(
+                cell.inset(EdgeInsets::all(1)),
+                text,
+                TextStyle::new(style.text).with_font(style.font),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn render_textarea<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    text: &str,
+    cursor: usize,
+    placeholder: &str,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect).inset(EdgeInsets::all(1));
+    let shown = if text.is_empty() { placeholder } else { text };
+    let color = if text.is_empty() {
+        Rgb565::new(
+            style.text.r().saturating_sub(8),
+            style.text.g().saturating_sub(10),
+            style.text.b().saturating_sub(8),
+        )
+    } else {
+        style.text
+    };
+    ctx.draw_text_in(inner, shown, TextStyle::new(color).with_font(style.font))?;
+    let chars = text.chars().count();
+    let cursor = cursor.min(chars);
+    let x = inner.x + (cursor as u32 * style.font.advance()) as i32;
+    let caret = Rect::new(x, inner.y, 1, style.font.line_height().min(inner.h));
+    ctx.fill_rect(caret, style.accent)
+}
+
+fn render_keyboard<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    keys: &[char],
+    selected: usize,
+    cols: u8,
+    alt_keys: Option<&[char]>,
+    layout: KeyboardLayout,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect).inset(EdgeInsets::all(1));
+    let cols = cols.max(1) as usize;
+    let rows = keys.len().div_ceil(cols).max(1);
+    let cell_w = (inner.w / cols as u32).max(1);
+    let cell_h = (inner.h / rows as u32).max(1);
+    for (idx, key) in keys.iter().copied().enumerate() {
+        let col = idx % cols;
+        let row = idx / cols;
+        let cell = Rect::new(
+            inner.x + (col as u32 * cell_w) as i32,
+            inner.y + (row as u32 * cell_h) as i32,
+            cell_w,
+            cell_h,
+        );
+        if idx == selected.min(keys.len() - 1) {
+            ctx.fill_rect(cell, style.accent)?;
+        }
+        let rendered = keyboard_key_for_layout(key, idx, keys, alt_keys, layout);
+        let mut label = [0u8; 4];
+        let text = rendered.encode_utf8(&mut label);
+        ctx.draw_text_in(
+            cell.inset(EdgeInsets::all(1)),
+            text,
+            TextStyle::new(style.text).with_font(style.font).centered(),
+        )?;
+    }
+    Ok(())
+}
+
+fn keyboard_key_for_layout(
+    base: char,
+    idx: usize,
+    base_keys: &[char],
+    alt_keys: Option<&[char]>,
+    layout: KeyboardLayout,
+) -> char {
+    match layout {
+        KeyboardLayout::Normal => base,
+        KeyboardLayout::Shift => {
+            if base.is_ascii_alphabetic() {
+                base.to_ascii_uppercase()
+            } else {
+                base
+            }
+        }
+        KeyboardLayout::Symbols => alt_keys
+            .and_then(|keys| keys.get(idx).copied())
+            .or_else(|| {
+                const FALLBACK: [char; 10] = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'];
+                FALLBACK.get(idx % FALLBACK.len()).copied()
+            })
+            .unwrap_or_else(|| base_keys.get(idx).copied().unwrap_or(base)),
+    }
+}
+
 fn render_menu<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -755,11 +1316,35 @@ where
                 align: TextAlign::Left,
                 vertical_align: VerticalAlign::Middle,
                 wrap: TextWrap::None,
+                overflow: crate::render::TextOverflow::Clip,
+                overflow_policy: crate::render::TextOverflowPolicy::Global(
+                    crate::render::TextOverflow::Clip,
+                ),
+                kerning: false,
+                max_lines: None,
+                ellipsis: crate::render::EllipsisMode::ThreeDots,
                 line_spacing: 0,
             },
         )?;
     }
     Ok(())
+}
+
+fn render_image<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    image: ImageRef<'_>,
+    fit: ImageFit,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    ctx.draw_image(block.inner(rect), image, fit)
 }
 
 fn draw_i32_right<D>(
@@ -800,6 +1385,13 @@ where
             align: TextAlign::Right,
             vertical_align: VerticalAlign::Middle,
             wrap: TextWrap::None,
+            overflow: crate::render::TextOverflow::Clip,
+            overflow_policy: crate::render::TextOverflowPolicy::Global(
+                crate::render::TextOverflow::Clip,
+            ),
+            kerning: false,
+            max_lines: None,
+            ellipsis: crate::render::EllipsisMode::ThreeDots,
             line_spacing: 0,
         },
     )
