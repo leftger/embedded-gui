@@ -1,4 +1,7 @@
+use core::fmt::Write;
+
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
+use heapless::String;
 
 use crate::{
     block::Block,
@@ -73,11 +76,17 @@ pub enum WidgetKind<'a> {
         end_deg: i32,
         thickness: u8,
         antialias: bool,
+        major_ticks: u8,
+        minor_ticks: u8,
+        show_value: bool,
     },
     Gauge {
         value: f32,
         min: f32,
         max: f32,
+        major_ticks: u8,
+        minor_ticks: u8,
+        show_value: bool,
     },
     GaugeNeedle {
         value: f32,
@@ -93,6 +102,10 @@ pub enum WidgetKind<'a> {
         thickness: u8,
         fill_under: bool,
         markers: bool,
+        mode: ChartMode,
+        show_grid: bool,
+        show_axes: bool,
+        show_labels: bool,
     },
     Spinner {
         phase: f32,
@@ -107,6 +120,9 @@ pub enum WidgetKind<'a> {
     },
     Table {
         rows: &'a [&'a [&'a str]],
+        separators: bool,
+        cell_padding: u8,
+        align: TextAlign,
     },
     TextArea {
         text: &'a str,
@@ -131,6 +147,12 @@ pub enum WidgetKind<'a> {
         items: &'a [&'a str],
         selected: usize,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChartMode {
+    Line,
+    Bars,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -295,11 +317,45 @@ impl<'a> WidgetNode<'a> {
                 end_deg,
                 thickness,
                 antialias,
+                major_ticks,
+                minor_ticks,
+                show_value,
             } => render_arc_gauge(
-                ctx, rect, value, min, max, start_deg, end_deg, thickness, antialias, self.style, state,
+                ctx,
+                rect,
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+                thickness,
+                antialias,
+                major_ticks,
+                minor_ticks,
+                show_value,
+                self.style,
+                state,
             ),
-            WidgetKind::Gauge { value, min, max } => {
-                render_gauge(ctx, rect, value, min, max, self.style, state)
+            WidgetKind::Gauge {
+                value,
+                min,
+                max,
+                major_ticks,
+                minor_ticks,
+                show_value,
+            } => {
+                render_gauge(
+                    ctx,
+                    rect,
+                    value,
+                    min,
+                    max,
+                    major_ticks,
+                    minor_ticks,
+                    show_value,
+                    self.style,
+                    state,
+                )
             }
             WidgetKind::GaugeNeedle {
                 value,
@@ -315,9 +371,26 @@ impl<'a> WidgetNode<'a> {
                 thickness,
                 fill_under,
                 markers,
+                mode,
+                show_grid,
+                show_axes,
+                show_labels,
             } => {
                 render_chart(
-                    ctx, rect, values, min, max, thickness, fill_under, markers, self.style, state,
+                    ctx,
+                    rect,
+                    values,
+                    min,
+                    max,
+                    thickness,
+                    fill_under,
+                    markers,
+                    mode,
+                    show_grid,
+                    show_axes,
+                    show_labels,
+                    self.style,
+                    state,
                 )
             }
             WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
@@ -327,7 +400,21 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Roller { items, selected } => {
                 render_roller(ctx, rect, items, selected, self.style, state)
             }
-            WidgetKind::Table { rows } => render_table(ctx, rect, rows, self.style, state),
+            WidgetKind::Table {
+                rows,
+                separators,
+                cell_padding,
+                align,
+            } => render_table(
+                ctx,
+                rect,
+                rows,
+                separators,
+                cell_padding,
+                align,
+                self.style,
+                state,
+            ),
             WidgetKind::TextArea {
                 text,
                 cursor,
@@ -877,6 +964,9 @@ fn render_arc_gauge<D>(
     end_deg: i32,
     thickness: u8,
     antialias: bool,
+    major_ticks: u8,
+    minor_ticks: u8,
+    show_value: bool,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -890,13 +980,25 @@ where
     let cx = inner.x + inner.w as i32 / 2;
     let cy = inner.y + inner.h as i32 / 2;
     let radius = (inner.w.min(inner.h) / 2).saturating_sub(1);
+    let track = Rgb565::new(5, 8, 8);
+    draw_arc_ticks(
+        ctx,
+        cx,
+        cy,
+        radius.saturating_sub((thickness.max(1) / 2) as u32),
+        start_deg,
+        end_deg,
+        major_ticks,
+        minor_ticks,
+        track,
+    )?;
     ctx.stroke_arc_styled(
         cx,
         cy,
         radius,
         start_deg,
         end_deg,
-        StrokeStyle::new(Rgb565::new(5, 8, 8))
+        StrokeStyle::new(track)
             .with_width(thickness)
             .with_antialias(antialias),
     )?;
@@ -912,7 +1014,11 @@ where
         StrokeStyle::new(style.accent)
             .with_width(thickness)
             .with_antialias(antialias),
-    )
+    )?;
+    if show_value {
+        draw_gauge_value_label(ctx, inner, value, min, max, style)?;
+    }
+    Ok(())
 }
 
 fn render_gauge<D>(
@@ -921,13 +1027,31 @@ fn render_gauge<D>(
     value: f32,
     min: f32,
     max: f32,
+    major_ticks: u8,
+    minor_ticks: u8,
+    show_value: bool,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
 {
-    render_arc_gauge(ctx, rect, value, min, max, 135, 405, 2, true, style, state)
+    render_arc_gauge(
+        ctx,
+        rect,
+        value,
+        min,
+        max,
+        135,
+        405,
+        2,
+        true,
+        major_ticks,
+        minor_ticks,
+        show_value,
+        style,
+        state,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -987,6 +1111,10 @@ fn render_chart<D>(
     thickness: u8,
     fill_under: bool,
     markers: bool,
+    mode: ChartMode,
+    show_grid: bool,
+    show_axes: bool,
+    show_labels: bool,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -1000,39 +1128,113 @@ where
         return Ok(());
     }
     let inner = block.inner(rect);
-    let range = (max - min).max(f32::EPSILON);
-    let dx = (inner.w.saturating_sub(1) as f32) / (values.len().saturating_sub(1) as f32);
-    for i in 1..values.len() {
-        let v0 = ((values[i - 1] - min) / range).clamp(0.0, 1.0);
-        let v1 = ((values[i] - min) / range).clamp(0.0, 1.0);
-        let x0 = inner.x + ((i - 1) as f32 * dx) as i32;
-        let x1 = inner.x + (i as f32 * dx) as i32;
-        let y0 = inner.bottom() - 1 - (v0 * (inner.h.saturating_sub(1)) as f32) as i32;
-        let y1 = inner.bottom() - 1 - (v1 * (inner.h.saturating_sub(1)) as f32) as i32;
-        if fill_under {
-            let base = inner.bottom() - 1;
-            ctx.fill_polygon(
-                &[
-                    embedded_graphics_core::geometry::Point::new(x0, base),
-                    embedded_graphics_core::geometry::Point::new(x0, y0),
-                    embedded_graphics_core::geometry::Point::new(x1, y1),
-                    embedded_graphics_core::geometry::Point::new(x1, base),
-                ],
-                Rgb565::new(2, 8, 2),
+    if show_grid {
+        for row in [1u32, 2, 3] {
+            let y = inner.y + ((inner.h.saturating_sub(1) * row) / 4) as i32;
+            ctx.draw_line_styled(
+                inner.x,
+                y,
+                inner.right().saturating_sub(1),
+                y,
+                StrokeStyle::new(Rgb565::new(6, 10, 10)).with_width(1),
             )?;
         }
+    }
+    if show_axes {
+        let axis = Rgb565::new(12, 18, 18);
         ctx.draw_line_styled(
-            x0,
-            y0,
-            x1,
-            y1,
-            StrokeStyle::new(style.accent)
-                .with_width(thickness.max(1))
-                .with_antialias(true),
+            inner.x,
+            inner.y,
+            inner.x,
+            inner.bottom().saturating_sub(1),
+            StrokeStyle::new(axis).with_width(1),
         )?;
-        if markers {
-            ctx.fill_circle(x0, y0, 1, style.accent)?;
-            ctx.fill_circle(x1, y1, 1, style.accent)?;
+        ctx.draw_line_styled(
+            inner.x,
+            inner.bottom().saturating_sub(1),
+            inner.right().saturating_sub(1),
+            inner.bottom().saturating_sub(1),
+            StrokeStyle::new(axis).with_width(1),
+        )?;
+    }
+    if show_labels {
+        let mut max_label: String<12> = String::new();
+        let _ = write!(&mut max_label, "{:.1}", max);
+        let mut min_label: String<12> = String::new();
+        let _ = write!(&mut min_label, "{:.1}", min);
+        ctx.draw_text_in(
+            Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(2), style.font.line_height()),
+            max_label.as_str(),
+            TextStyle::new(style.text).with_font(style.font),
+        )?;
+        ctx.draw_text_in(
+            Rect::new(
+                inner.x + 1,
+                inner.bottom().saturating_sub(style.font.line_height() as i32),
+                inner.w.saturating_sub(2),
+                style.font.line_height(),
+            ),
+            min_label.as_str(),
+            TextStyle::new(style.text).with_font(style.font),
+        )?;
+    }
+    let range = (max - min).max(f32::EPSILON);
+    match mode {
+        ChartMode::Line => {
+            let dx = (inner.w.saturating_sub(1) as f32) / (values.len().saturating_sub(1) as f32);
+            for i in 1..values.len() {
+                let v0 = ((values[i - 1] - min) / range).clamp(0.0, 1.0);
+                let v1 = ((values[i] - min) / range).clamp(0.0, 1.0);
+                let x0 = inner.x + ((i - 1) as f32 * dx) as i32;
+                let x1 = inner.x + (i as f32 * dx) as i32;
+                let y0 = inner.bottom() - 1 - (v0 * (inner.h.saturating_sub(1)) as f32) as i32;
+                let y1 = inner.bottom() - 1 - (v1 * (inner.h.saturating_sub(1)) as f32) as i32;
+                if fill_under {
+                    let base = inner.bottom() - 1;
+                    ctx.fill_polygon(
+                        &[
+                            embedded_graphics_core::geometry::Point::new(x0, base),
+                            embedded_graphics_core::geometry::Point::new(x0, y0),
+                            embedded_graphics_core::geometry::Point::new(x1, y1),
+                            embedded_graphics_core::geometry::Point::new(x1, base),
+                        ],
+                        Rgb565::new(2, 8, 2),
+                    )?;
+                }
+                ctx.draw_line_styled(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    StrokeStyle::new(style.accent)
+                        .with_width(thickness.max(1))
+                        .with_antialias(true),
+                )?;
+                if markers {
+                    ctx.fill_circle(x0, y0, 1, style.accent)?;
+                    ctx.fill_circle(x1, y1, 1, style.accent)?;
+                }
+            }
+        }
+        ChartMode::Bars => {
+            let count = values.len() as u32;
+            let gap = 1u32;
+            let bar_w = inner
+                .w
+                .saturating_sub(gap.saturating_mul(count.saturating_sub(1)))
+                .max(count)
+                / count;
+            for (i, value) in values.iter().copied().enumerate() {
+                let t = ((value - min) / range).clamp(0.0, 1.0);
+                let h = (t * inner.h.saturating_sub(1) as f32) as u32;
+                let x = inner.x + (i as u32 * (bar_w + gap)) as i32;
+                let y = inner.bottom().saturating_sub(h as i32 + 1);
+                let bar = Rect::new(x, y, bar_w.max(1), h.max(1));
+                ctx.fill_rect(bar, style.accent)?;
+                if markers {
+                    ctx.fill_circle(x + (bar_w / 2) as i32, y, 1, style.text)?;
+                }
+            }
         }
     }
     Ok(())
@@ -1135,6 +1337,9 @@ fn render_table<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
     rows: &[&[&str]],
+    separators: bool,
+    cell_padding: u8,
+    align: TextAlign,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -1149,25 +1354,101 @@ where
     }
     let inner = block.inner(rect);
     let row_h = (inner.h / rows.len() as u32).max(1);
+    let max_cols = rows.iter().map(|row| row.len()).max().unwrap_or(1).max(1);
+    let col_w = (inner.w / max_cols as u32).max(1);
     for (r, cols) in rows.iter().enumerate() {
-        let col_count = cols.len().max(1);
-        let col_w = (inner.w / col_count as u32).max(1);
-        for (c, text) in cols.iter().enumerate() {
+        for c in 0..max_cols {
+            let text = cols.get(c).copied().unwrap_or("");
             let cell = Rect::new(
                 inner.x + (c as u32 * col_w) as i32,
                 inner.y + (r as u32 * row_h) as i32,
                 col_w,
                 row_h,
             );
-            ctx.stroke_rect(cell, Border::one(style.border.color))?;
+            if separators {
+                ctx.stroke_rect(cell, Border::one(style.border.color))?;
+            }
             ctx.draw_text_in(
-                cell.inset(EdgeInsets::all(1)),
+                cell.inset(EdgeInsets::all(cell_padding as i16)),
                 text,
-                TextStyle::new(style.text).with_font(style.font),
+                TextStyle::new(style.text)
+                    .with_font(style.font)
+                    .with_align(align),
             )?;
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_arc_ticks<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    cx: i32,
+    cy: i32,
+    radius: u32,
+    start_deg: i32,
+    end_deg: i32,
+    major_ticks: u8,
+    minor_ticks: u8,
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let major_ticks = major_ticks.max(1);
+    let minor_ticks = minor_ticks.max(1);
+    let total_steps = (major_ticks as u32).saturating_mul(minor_ticks as u32);
+    for step in 0..=total_steps {
+        let t = if total_steps == 0 {
+            0.0
+        } else {
+            step as f32 / total_steps as f32
+        };
+        let angle = (start_deg as f32 + (end_deg - start_deg) as f32 * t).to_radians();
+        let is_major = step % minor_ticks as u32 == 0;
+        let tick_len = if is_major { 4 } else { 2 };
+        let outer_x = cx + (radius as f32 * angle.cos()) as i32;
+        let outer_y = cy + (radius as f32 * angle.sin()) as i32;
+        let inner_x = cx + ((radius.saturating_sub(tick_len)) as f32 * angle.cos()) as i32;
+        let inner_y = cy + ((radius.saturating_sub(tick_len)) as f32 * angle.sin()) as i32;
+        ctx.draw_line_styled(
+            inner_x,
+            inner_y,
+            outer_x,
+            outer_y,
+            StrokeStyle::new(color).with_width(1),
+        )?;
+    }
+    Ok(())
+}
+
+fn draw_gauge_value_label<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    inner: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    style: Style,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let range = (max - min).max(f32::EPSILON);
+    let percent = (((value - min) / range).clamp(0.0, 1.0) * 100.0).round() as i32;
+    let mut label: String<8> = String::new();
+    let _ = write!(&mut label, "{}%", percent);
+    ctx.draw_text_in(
+        Rect::new(
+            inner.x,
+            inner.y + (inner.h as i32 / 2) - (style.font.line_height() as i32 / 2),
+            inner.w,
+            style.font.line_height(),
+        ),
+        label.as_str(),
+        TextStyle::new(style.text)
+            .with_font(style.font)
+            .with_align(TextAlign::Center),
+    )
 }
 
 fn render_textarea<D>(
