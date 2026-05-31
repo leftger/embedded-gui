@@ -1486,6 +1486,8 @@ fn new_widgets_chart_spinner_dropdown_render_and_update() {
         .add_chart(Rect::new(0, 0, 32, 16), &SERIES, 0.0, 1.0, Style::panel())
         .unwrap();
     gui.set_chart_style(chart, 2, true, true).unwrap();
+    gui.set_chart_decoration(chart, ChartMode::Bars, true, true, true)
+        .unwrap();
     let spinner = gui
         .add_spinner(Rect::new(34, 0, 16, 16), 0.0, Style::progress())
         .unwrap();
@@ -1505,12 +1507,60 @@ fn new_widgets_chart_spinner_dropdown_render_and_update() {
     gui.handle_input(InputEvent::Down).unwrap();
     assert_eq!(gui.roller_selected(roller), Some(1));
     static TABLE_ROWS: [&[&str]; 2] = [&["A", "B"], &["C", "D"]];
-    gui.add_table(Rect::new(32, 18, 40, 20), &TABLE_ROWS, Style::panel())
+    let table = gui
+        .add_table(Rect::new(32, 18, 40, 20), &TABLE_ROWS, Style::panel())
         .unwrap();
+    gui.set_table_style(table, true, 2, TextAlign::Center).unwrap();
+    let gauge = gui
+        .add_gauge(Rect::new(74, 18, 22, 22), 0.4, 0.0, 1.0, Style::progress())
+        .unwrap();
+    gui.set_gauge_ticks(gauge, 5, 2, true).unwrap();
 
     let mut target = TestBuffer::new(96, 48);
     gui.render(&mut target).unwrap();
     assert!(target.digest() != 0);
+}
+
+#[test]
+fn clipping_respects_clip_children_flag_and_scroll_marks_subtree_dirty() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let parent = gui
+        .add_panel(Rect::new(4, 4, 16, 12), Style::panel())
+        .unwrap();
+    let child = gui
+        .add_label(Rect::new(14, 0, 24, 8), "OVERFLOW", Style::label())
+        .unwrap();
+    gui.add_child(parent, child).unwrap();
+    gui.clear_dirty();
+
+    let mut clipped = MockTarget::new(64, 32);
+    gui.render(&mut clipped).unwrap();
+    let clipped_outside = clipped
+        .pixels
+        .iter()
+        .any(|&(x, y, _)| x > 20 && y >= 4 && y <= 16);
+
+    gui.remove_flag(parent, WidgetFlags::CLIP_CHILDREN).unwrap();
+    let mut unclipped = MockTarget::new(64, 32);
+    gui.render(&mut unclipped).unwrap();
+    let unclipped_outside = unclipped
+        .pixels
+        .iter()
+        .any(|&(x, y, _)| x > 20 && y >= 4 && y <= 16);
+
+    assert!(!clipped_outside);
+    assert!(unclipped_outside);
+
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 20, 24, 10), 0, 30, Style::panel())
+        .unwrap();
+    let nested = gui
+        .add_label(Rect::new(1, 1, 16, 6), "SCROLL", Style::label())
+        .unwrap();
+    gui.add_child(scroll, nested).unwrap();
+    gui.clear_dirty();
+    gui.set_scroll_offset(scroll, 8).unwrap();
+    assert!(!gui.dirty_regions().is_empty());
 }
 
 #[test]
@@ -2012,6 +2062,67 @@ fn pointer_release_emits_release_events() {
 
     assert_eq!(gui.pop_event(), Some(UiEvent::Released(button)));
     assert_eq!(gui.pop_event(), Some(UiEvent::PointerReleased(button)));
+}
+
+#[test]
+fn pointer_long_press_emits_once_after_threshold() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_long_press_threshold_ms(20);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.tick_input(19).unwrap();
+    assert_eq!(gui.pop_event(), None);
+
+    gui.tick_input(1).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::LongPressed(button)));
+    assert_eq!(gui.pop_event(), None);
+
+    gui.tick_input(50).unwrap();
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn pointer_release_cancels_pending_long_press() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let _button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_long_press_threshold_ms(30);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.tick_input(10).unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.tick_input(40).unwrap();
+    assert_eq!(gui.pop_event(), None);
 }
 
 #[test]
