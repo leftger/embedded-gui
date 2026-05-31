@@ -33,11 +33,24 @@ impl From<DirtyError> for GuiError {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct PressTracker {
     id: WidgetId,
+    start_x: i32,
+    start_y: i32,
+    last_x: i32,
+    last_y: i32,
     elapsed_ms: u32,
     long_emitted: bool,
+    gesture_emitted: bool,
+    repeat_elapsed_ms: u32,
+    scroll_velocity: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct InertiaScroll {
+    id: WidgetId,
+    velocity: f32,
 }
 
 pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
@@ -53,7 +66,10 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     active_focus_group: Option<FocusGroupId>,
     render_quality: RenderQuality,
     long_press_ms: u32,
+    press_repeat_delay_ms: u32,
+    press_repeat_interval_ms: u32,
     pressed: Option<PressTracker>,
+    inertia_scroll: Option<InertiaScroll>,
     next_id: u16,
 }
 
@@ -76,7 +92,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             active_focus_group: None,
             render_quality: RenderQuality::High,
             long_press_ms: 500,
+            press_repeat_delay_ms: 650,
+            press_repeat_interval_ms: 140,
             pressed: None,
+            inertia_scroll: None,
             next_id: 1,
         }
     }
@@ -98,6 +117,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.class_styles.clear();
         self.focus = None;
         self.pressed = None;
+        self.inertia_scroll = None;
         self.dirty.mark_all(self.viewport)?;
         Ok(())
     }
@@ -108,6 +128,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn set_long_press_threshold_ms(&mut self, threshold_ms: u32) {
         self.long_press_ms = threshold_ms.max(1);
+    }
+
+    pub fn set_press_repeat_timing(&mut self, delay_ms: u32, interval_ms: u32) {
+        self.press_repeat_delay_ms = delay_ms.max(1);
+        self.press_repeat_interval_ms = interval_ms.max(1);
     }
 
     pub fn widgets(&self) -> &[WidgetNode<'a>] {
@@ -797,7 +822,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         S: Into<WidgetStyle>,
     {
         let selected = selected.min(items.len().saturating_sub(1));
-        let id = self.add_widget(rect, WidgetKind::Dropdown { items, selected }, style)?;
+        let id = self.add_widget(
+            rect,
+            WidgetKind::Dropdown {
+                items,
+                selected,
+                open: false,
+            },
+            style,
+        )?;
         self.ensure_focus();
         Ok(id)
     }
@@ -1235,6 +1268,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             WidgetKind::Dropdown {
                 items,
                 selected: ref mut current,
+                ..
             } => {
                 *current = selected.min(items.len().saturating_sub(1));
                 self.dirty.add(rect)?;
@@ -1247,6 +1281,36 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn dropdown_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::Dropdown { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    pub fn set_dropdown_open(&mut self, id: WidgetId, open: bool) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Dropdown {
+                open: ref mut is_open,
+                ..
+            } => {
+                if *is_open != open {
+                    *is_open = open;
+                    self.dirty.add(rect)?;
+                    self.push_event(if open {
+                        UiEvent::Opened(id)
+                    } else {
+                        UiEvent::Closed(id)
+                    })?;
+                }
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn dropdown_open(&self, id: WidgetId) -> Option<bool> {
+        match self.node(id)?.kind {
+            WidgetKind::Dropdown { open, .. } => Some(open),
             _ => None,
         }
     }
@@ -1326,6 +1390,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             WidgetKind::TextArea { cursor, .. } => Some(cursor),
             _ => None,
         }
+    }
+
+    pub fn textarea_insert_char(&mut self, id: WidgetId, ch: char) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        self.push_event(UiEvent::TextInput { id, ch })?;
+        self.push_event(UiEvent::ValueChanged(id))
+    }
+
+    pub fn textarea_backspace(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.textarea_insert_char(id, '\u{8}')
+    }
+
+    pub fn textarea_delete_forward(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.textarea_insert_char(id, '\u{7f}')
     }
 
     pub fn keyboard_selected_key(&self, id: WidgetId) -> Option<char> {
@@ -1483,6 +1561,24 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.opacity = opacity;
         node.style.pressed.opacity = opacity;
         node.style.disabled.opacity = opacity;
+        self.mark_subtree_dirty(id)
+    }
+
+    pub fn set_widget_corner_radius(&mut self, id: WidgetId, radius: u8) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.corner_radius = radius;
+        node.style.focused.corner_radius = radius;
+        node.style.pressed.corner_radius = radius;
+        node.style.disabled.corner_radius = radius;
+        self.mark_subtree_dirty(id)
+    }
+
+    pub fn set_widget_accent(&mut self, id: WidgetId, accent: Rgb565) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.accent = accent;
+        node.style.focused.accent = accent;
+        node.style.pressed.accent = accent;
+        node.style.disabled.accent = accent;
         self.mark_subtree_dirty(id)
     }
 
@@ -1915,7 +2011,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 }
                 Ok(())
             }
-            InputEvent::Back => self.push_event(UiEvent::Back),
+            InputEvent::Back => {
+                if let Some(id) = self.focus {
+                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                        self.textarea_backspace(id)?;
+                        return Ok(());
+                    }
+                }
+                self.push_event(UiEvent::Back)
+            }
             InputEvent::Pointer {
                 x,
                 y,
@@ -1928,29 +2032,64 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 state: PointerState::Released,
                 ..
             } => self.handle_pointer_released(x, y),
+            InputEvent::Pointer {
+                x,
+                y,
+                state: PointerState::Moved,
+                ..
+            } => self.handle_pointer_moved(x, y),
             _ => Ok(()),
         }
     }
 
     pub fn tick_input(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        if let Some(mut inertia) = self.inertia_scroll {
+            if inertia.velocity.abs() < 0.05 {
+                self.inertia_scroll = None;
+            } else {
+                let current = self.scroll_offset(inertia.id).unwrap_or(0);
+                let delta = (inertia.velocity * (dt_ms as f32 / 16.0)).round() as i32;
+                if delta != 0 {
+                    let next = current.saturating_sub(delta);
+                    if next != current {
+                        self.set_scroll_offset(inertia.id, next)?;
+                        self.push_event(UiEvent::Scroll {
+                            id: inertia.id,
+                            delta: next - current,
+                        })?;
+                    }
+                }
+                inertia.velocity *= 0.86f32.powf((dt_ms as f32 / 16.0).max(1.0));
+                self.inertia_scroll = Some(inertia);
+            }
+        }
         let Some(mut pressed) = self.pressed else {
             return Ok(());
         };
-        if pressed.long_emitted {
-            return Ok(());
-        }
         if !self.effective_visible(pressed.id) || !self.effective_enabled(pressed.id) {
             self.pressed = None;
             return Ok(());
         }
         pressed.elapsed_ms = pressed.elapsed_ms.saturating_add(dt_ms);
-        if pressed.elapsed_ms >= self.long_press_ms {
+        pressed.repeat_elapsed_ms = pressed.repeat_elapsed_ms.saturating_add(dt_ms);
+        if !pressed.long_emitted && pressed.elapsed_ms >= self.long_press_ms {
             let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
             self.dispatch_widget_event(pressed.id, WidgetEventKind::LongPressed, &mut events, |_| {
                 EventPolicy::Continue
             })?;
             self.push_event(UiEvent::LongPressed(pressed.id))?;
             pressed.long_emitted = true;
+        }
+        if pressed.repeat_elapsed_ms >= self.press_repeat_delay_ms
+            && self.repeatable_widget(pressed.id)
+            && pressed.long_emitted
+        {
+            let intervals = (pressed.repeat_elapsed_ms - self.press_repeat_delay_ms)
+                / self.press_repeat_interval_ms;
+            if intervals > 0 {
+                self.dispatch_repeat_activation(pressed.id)?;
+                pressed.repeat_elapsed_ms = self.press_repeat_delay_ms;
+            }
         }
         self.pressed = Some(pressed);
         Ok(())
@@ -2165,7 +2304,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 text_width(text).saturating_add(8),
                 text_height.saturating_add(2),
             ),
-            WidgetKind::Dropdown { items, selected } => (
+            WidgetKind::Dropdown {
+                items, selected, ..
+            } => (
                 text_width(items.get(selected).copied().unwrap_or("-")).saturating_add(10),
                 text_height.saturating_add(2),
             ),
@@ -2368,7 +2509,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 WidgetKind::Dropdown {
                     items,
                     selected: ref mut current,
+                    open,
                 } => {
+                    if !open {
+                        return Ok(false);
+                    }
                     if items.is_empty() {
                         return Ok(true);
                     }
@@ -2498,6 +2643,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     fn activate_focused(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let mut changed_rect = None;
         let mut changed = false;
+        let mut dropdown_state_event = None;
 
         if let Some(node) = self.node_mut(id) {
             match node.kind {
@@ -2530,8 +2676,36 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         }
                     }
                 }
+                WidgetKind::Dropdown {
+                    open: ref mut is_open,
+                    ..
+                } => {
+                    *is_open = !*is_open;
+                    changed = true;
+                    changed_rect = Some(node.rect);
+                    dropdown_state_event = Some(*is_open);
+                }
                 _ => {}
             }
+        }
+
+        if let Some(open) = dropdown_state_event {
+            let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+            self.dispatch_widget_event(
+                id,
+                if open {
+                    WidgetEventKind::Opened
+                } else {
+                    WidgetEventKind::Closed
+                },
+                &mut events,
+                |_| EventPolicy::Continue,
+            )?;
+            self.push_event(if open {
+                UiEvent::Opened(id)
+            } else {
+                UiEvent::Closed(id)
+            })?;
         }
 
         if let Some(rect) = changed_rect {
@@ -2549,46 +2723,40 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     fn handle_pointer_pressed(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
-        let hit = self
-            .widgets
-            .iter()
-            .rev()
-            .find(|node| {
-                node.clickable()
-                    && self.effective_visible(node.id)
-                    && self.effective_enabled(node.id)
-                    && self
-                        .absolute_rect(node.id)
-                        .is_some_and(|rect| rect.contains(x, y))
-            })
-            .map(|node| node.id);
+        let hit = self.pointer_hit(x, y, true);
 
         if let Some(id) = hit {
             self.dispatch_activation(id, true)?;
             self.pressed = Some(PressTracker {
                 id,
+                start_x: x,
+                start_y: y,
+                last_x: x,
+                last_y: y,
                 elapsed_ms: 0,
                 long_emitted: false,
+                gesture_emitted: false,
+                repeat_elapsed_ms: 0,
+                scroll_velocity: 0.0,
             });
+            self.inertia_scroll = None;
         }
         Ok(())
     }
 
     fn handle_pointer_released(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
+        if let Some(pressed) = self.pressed {
+            if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
+                if pressed.scroll_velocity.abs() > 0.2 {
+                    self.inertia_scroll = Some(InertiaScroll {
+                        id: scroll_id,
+                        velocity: pressed.scroll_velocity,
+                    });
+                }
+            }
+        }
         self.pressed = None;
-        let hit = self
-            .widgets
-            .iter()
-            .rev()
-            .find(|node| {
-                node.clickable()
-                    && self.effective_visible(node.id)
-                    && self.effective_enabled(node.id)
-                    && self
-                        .absolute_rect(node.id)
-                        .is_some_and(|rect| rect.contains(x, y))
-            })
-            .map(|node| node.id);
+        let hit = self.pointer_hit(x, y, true);
         if let Some(id) = hit {
             let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
             self.dispatch_widget_event(id, WidgetEventKind::Released, &mut events, |_| {
@@ -2597,6 +2765,50 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             self.push_event(UiEvent::Released(id))?;
             self.push_event(UiEvent::PointerReleased(id))?;
         }
+        Ok(())
+    }
+
+    fn handle_pointer_moved(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
+        let Some(mut pressed) = self.pressed else {
+            return Ok(());
+        };
+        let dy = y - pressed.last_y;
+        pressed.last_x = x;
+        pressed.last_y = y;
+
+        let moved_from_start =
+            (x - pressed.start_x).unsigned_abs() + (y - pressed.start_y).unsigned_abs();
+        if !pressed.gesture_emitted && moved_from_start >= 6 {
+            let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+            self.dispatch_widget_event(pressed.id, WidgetEventKind::Gesture, &mut events, |_| {
+                EventPolicy::Continue
+            })?;
+            self.push_event(UiEvent::Gesture(pressed.id))?;
+            pressed.gesture_emitted = true;
+        }
+
+        if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
+            let current = self.scroll_offset(scroll_id).unwrap_or(0);
+            let next = current.saturating_sub(dy);
+            if next != current {
+                self.set_scroll_offset(scroll_id, next)?;
+                self.push_event(UiEvent::Scroll {
+                    id: scroll_id,
+                    delta: next - current,
+                })?;
+                let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+                self.dispatch_widget_event(
+                    scroll_id,
+                    WidgetEventKind::Scroll {
+                        delta: next - current,
+                    },
+                    &mut events,
+                    |_| EventPolicy::Continue,
+                )?;
+            }
+            pressed.scroll_velocity = pressed.scroll_velocity * 0.6 + (dy as f32) * 0.4;
+        }
+        self.pressed = Some(pressed);
         Ok(())
     }
 
@@ -2620,6 +2832,53 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.push_event(UiEvent::Clicked(id))?;
         self.push_event(UiEvent::Activate(id))?;
         Ok(())
+    }
+
+    fn dispatch_repeat_activation(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+        self.dispatch_widget_event(id, WidgetEventKind::Clicked, &mut events, |_| {
+            EventPolicy::Continue
+        })?;
+        self.push_event(UiEvent::Clicked(id))?;
+        self.push_event(UiEvent::Activate(id))
+    }
+
+    fn repeatable_widget(&self, id: WidgetId) -> bool {
+        self.node(id).is_some_and(|node| {
+            matches!(node.kind, WidgetKind::Button(_) | WidgetKind::IconButton { .. })
+        })
+    }
+
+    fn pointer_hit(&self, x: i32, y: i32, clickable_only: bool) -> Option<WidgetId> {
+        self.widgets
+            .iter()
+            .rev()
+            .find(|node| {
+                (!clickable_only || node.clickable())
+                    && self.effective_visible(node.id)
+                    && self.effective_enabled(node.id)
+                    && self
+                        .absolute_rect(node.id)
+                        .is_some_and(|rect| rect.contains(x, y))
+            })
+            .map(|node| node.id)
+    }
+
+    fn scrollable_ancestor(&self, id: WidgetId) -> Option<WidgetId> {
+        let mut current = Some(id);
+        let mut depth = 0usize;
+        while let Some(widget_id) = current {
+            if depth >= NODES {
+                return None;
+            }
+            let node = self.node(widget_id)?;
+            if node.scrollable() {
+                return Some(widget_id);
+            }
+            current = node.parent;
+            depth += 1;
+        }
+        None
     }
 
     fn mark_focus_pair(
