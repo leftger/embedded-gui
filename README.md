@@ -33,6 +33,18 @@ gui.render_dirty(&mut display)?;
 gui.clear_dirty();
 ```
 
+## Textarea Editing Input
+
+Textarea widgets now support editor-style navigation and mutation events:
+
+- `InputEvent::WordLeft` / `InputEvent::WordRight`
+- `InputEvent::Home` / `InputEvent::End`
+- `InputEvent::Select*` expansion variants
+- `InputEvent::Undo` / `InputEvent::Redo`
+- selection-replace behavior on typing/backspace/delete
+
+See `docs/textarea-input-keybindings.md` for mappings and a loop snippet.
+
 ## Font Glyph Overrides
 
 The build pipeline supports external glyph overrides from:

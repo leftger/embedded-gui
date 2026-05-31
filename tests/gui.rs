@@ -2338,6 +2338,244 @@ fn textarea_edit_hooks_emit_text_input_events() {
 }
 
 #[test]
+fn textarea_edit_operations_mutate_internal_text() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 50, 14), "HELLO", "TYPE", Style::panel())
+        .unwrap();
+
+    gui.set_textarea_cursor(textarea, 5).unwrap();
+    gui.textarea_insert_char(textarea, '!').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO!"));
+
+    gui.textarea_backspace(textarea).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO"));
+
+    gui.set_textarea_cursor(textarea, 0).unwrap();
+    gui.textarea_delete_forward(textarea).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ELLO"));
+}
+
+#[test]
+fn textarea_cursor_word_navigation_helpers_work() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "ONE  TWO THREE", "TYPE", Style::panel())
+        .unwrap();
+
+    gui.set_textarea_cursor_home(textarea).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(0));
+
+    gui.move_textarea_cursor_word(textarea, 1).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(5));
+
+    gui.move_textarea_cursor_word(textarea, 1).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(9));
+
+    gui.move_textarea_cursor_word(textarea, -1).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(5));
+
+    gui.set_textarea_cursor_end(textarea).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(14));
+}
+
+#[test]
+fn textarea_selection_and_cursor_blink_state_work() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+
+    gui.set_textarea_selection(textarea, 8, 2).unwrap();
+    assert_eq!(gui.textarea_selection(textarea), Some((2, 8)));
+    gui.clear_textarea_selection(textarea).unwrap();
+    assert_eq!(gui.textarea_selection(textarea), None);
+
+    gui.set_textarea_cursor_blink_timing(10);
+    assert_eq!(gui.textarea_cursor_visible(textarea), Some(true));
+    gui.tick_input(10).unwrap();
+    assert_eq!(gui.textarea_cursor_visible(textarea), Some(false));
+    gui.tick_input(10).unwrap();
+    assert_eq!(gui.textarea_cursor_visible(textarea), Some(true));
+}
+
+#[test]
+fn textarea_insert_replaces_selected_range() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .unwrap();
+
+    gui.set_textarea_selection(textarea, 6, 11).unwrap();
+    gui.set_textarea_cursor(textarea, 11).unwrap();
+    gui.textarea_insert_char(textarea, '!').unwrap();
+
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO !"));
+    assert_eq!(gui.textarea_selection(textarea), None);
+}
+
+#[test]
+fn textarea_line_home_end_follow_wrapped_rows() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 18, 14), "ABCDEFGH", "TYPE", Style::panel())
+        .unwrap();
+
+    gui.set_textarea_cursor(textarea, 6).unwrap();
+    gui.set_textarea_cursor_line_home(textarea).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(4));
+
+    gui.set_textarea_cursor(textarea, 5).unwrap();
+    gui.set_textarea_cursor_line_end(textarea).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+}
+
+#[test]
+fn textarea_navigation_input_events_drive_editor_cursor() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 18, 14), "ONE TWO THREE", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_cursor(textarea, 11).unwrap();
+
+    gui.handle_input(InputEvent::WordLeft).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+
+    gui.handle_input(InputEvent::WordRight).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(13));
+
+    gui.set_textarea_cursor(textarea, 6).unwrap();
+    gui.handle_input(InputEvent::Home).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(4));
+
+    gui.handle_input(InputEvent::End).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+}
+
+#[test]
+fn textarea_selection_navigation_events_expand_and_clear_selection() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 24, 14), "ONE TWO THREE", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_cursor(textarea, 4).unwrap();
+
+    gui.handle_input(InputEvent::SelectWordRight).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+    assert_eq!(gui.textarea_selection(textarea), Some((4, 8)));
+
+    gui.handle_input(InputEvent::SelectEnd).unwrap();
+    assert_eq!(gui.textarea_selection(textarea), Some((4, 10)));
+
+    gui.handle_input(InputEvent::WordLeft).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+    assert_eq!(gui.textarea_selection(textarea), None);
+}
+
+#[test]
+fn textarea_undo_redo_restores_mutation_history() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "AB", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_cursor_end(textarea).unwrap();
+
+    gui.textarea_insert_char(textarea, 'C').unwrap();
+    gui.textarea_insert_char(textarea, 'D').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABCD"));
+
+    gui.handle_input(InputEvent::Undo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABC"));
+    gui.handle_input(InputEvent::Undo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("AB"));
+
+    gui.handle_input(InputEvent::Redo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABC"));
+    gui.handle_input(InputEvent::Redo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABCD"));
+}
+
+#[test]
+fn textarea_read_only_blocks_mutation_ops() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "LOCKED", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_textarea_capabilities(textarea, true, false, true).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.textarea_insert_char(textarea, '!').unwrap();
+    gui.textarea_backspace(textarea).unwrap();
+    gui.textarea_delete_forward(textarea).unwrap();
+
+    assert_eq!(gui.textarea_text(textarea), Some("LOCKED"));
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn textarea_single_line_rejects_newline_insert() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "ONE", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_textarea_capabilities(textarea, false, true, true).unwrap();
+    gui.set_textarea_cursor_end(textarea).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.textarea_insert_char(textarea, '\n').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ONE"));
+    assert_eq!(gui.pop_event(), None);
+
+    gui.textarea_insert_char(textarea, 'X').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ONEX"));
+}
+
+#[test]
+fn text_alignment_accounts_for_kerning_width() {
+    let mut without_kerning = TestBuffer::new(20, 8);
+    let mut with_kerning = TestBuffer::new(20, 8);
+    let rect = Rect::new(0, 0, 20, 8);
+
+    {
+        let mut ctx = RenderCtx::new(&mut without_kerning, rect);
+        ctx.draw_text_in(
+            rect,
+            "AV",
+            TextStyle::new(Rgb565::WHITE)
+                .with_font(FontId::Tiny3x5)
+                .with_align(TextAlign::Right),
+        )
+        .unwrap();
+    }
+
+    {
+        let mut ctx = RenderCtx::new(&mut with_kerning, rect);
+        ctx.draw_text_in(
+            rect,
+            "AV",
+            TextStyle::new(Rgb565::WHITE)
+                .with_font(FontId::Tiny3x5)
+                .with_align(TextAlign::Right)
+                .with_kerning(true),
+        )
+        .unwrap();
+    }
+
+    let left_no_kerning = (0..20)
+        .find(|&x| (0..8).any(|y| without_kerning.pixel_at(x, y) == Some(Rgb565::WHITE)))
+        .unwrap_or(20);
+    let left_with_kerning = (0..20)
+        .find(|&x| (0..8).any(|y| with_kerning.pixel_at(x, y) == Some(Rgb565::WHITE)))
+        .unwrap_or(20);
+
+    assert!(left_with_kerning > left_no_kerning);
+}
+
+#[test]
 fn pointer_move_emits_gesture_once_after_threshold() {
     let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
     let button = gui

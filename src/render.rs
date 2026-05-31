@@ -808,7 +808,7 @@ where
                     draw_len = len - ellipsis_width;
                 }
             }
-            let line_w = draw_len as u32 * advance;
+            let line_w = self.substring_width(text, start, draw_len, font, style.kerning);
             let x = match style.align {
                 TextAlign::Left => rect.x,
                 TextAlign::Center => rect.x + rect.w.saturating_sub(line_w) as i32 / 2,
@@ -831,7 +831,7 @@ where
                     EllipsisMode::SingleGlyph => ".",
                 };
                 self.draw_text_with_font(
-                    x + (draw_len as i32 * advance as i32),
+                    x + line_w as i32,
                     y,
                     token,
                     style.color,
@@ -1293,6 +1293,29 @@ where
             prev = Some(ch);
         }
         Ok(())
+    }
+
+    fn substring_width(
+        &self,
+        text: &str,
+        start: usize,
+        len: usize,
+        font: FontId,
+        kerning: bool,
+    ) -> u32 {
+        let mut width = 0u32;
+        let mut prev = None;
+        for ch in text.chars().skip(start).take(len) {
+            width = width.saturating_add(font.advance());
+            let adjust = kerning_adjust(prev, ch, kerning);
+            if adjust < 0 {
+                width = width.saturating_sub((-adjust) as u32);
+            } else {
+                width = width.saturating_add(adjust as u32);
+            }
+            prev = Some(ch);
+        }
+        width
     }
 
     fn draw_line_segment_in(
