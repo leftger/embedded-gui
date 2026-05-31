@@ -47,6 +47,10 @@ pub enum UiEvent {
     PointerPressed(WidgetId),
     PointerReleased(WidgetId),
     ValueChanged(WidgetId),
+    TextInput {
+        id: WidgetId,
+        ch: char,
+    },
     Focused(WidgetId),
     Defocused(WidgetId),
     Scroll {
@@ -118,6 +122,7 @@ impl UiEvent {
             | Self::PointerPressed(id)
             | Self::PointerReleased(id)
             | Self::ValueChanged(id)
+            | Self::TextInput { id, .. }
             | Self::Focused(id)
             | Self::Defocused(id)
             | Self::LayoutChanged(id)
@@ -139,7 +144,7 @@ impl UiEvent {
             | Self::LongPressed(_) => UiEventFilter::ACTIVATE,
             Self::Back => UiEventFilter::BACK,
             Self::PointerPressed(_) | Self::PointerReleased(_) => UiEventFilter::POINTER,
-            Self::ValueChanged(_) => UiEventFilter::VALUE,
+            Self::ValueChanged(_) | Self::TextInput { .. } => UiEventFilter::VALUE,
             Self::Scroll { .. } => UiEventFilter::SCROLL,
             Self::LayoutChanged(_) => UiEventFilter::LAYOUT,
             Self::StyleChanged(_) => UiEventFilter::STYLE,
