@@ -1,0 +1,6 @@
+# External overrides for medium font source table.
+# Same 3x5 row format; renderer expands per FontId.
+
+?:111,001,010,000,010
+!:010,010,010,000,010
+*:000,101,010,101,000

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Pre-commit hook: format staged Rust files and run the test suite.
+#
+# Activation (one-time per clone):
+#   git config core.hooksPath .githooks
+#
+# Behaviour:
+#   1. Runs `cargo fmt --all` and re-stages any files that were already staged.
+#   2. Runs `cargo test` to catch compile errors and failing tests before the
+#      commit lands. Only triggered when at least one .rs or Cargo.toml file is
+#      staged — pure doc/asset commits are unaffected.
+set -euo pipefail
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "pre-commit: cargo not found, skipping." >&2
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Collect staged Rust-related files.
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [[ -z "$staged_files" ]]; then
+  exit 0
+fi
+
+rust_related=()
+while IFS= read -r file; do
+  if [[ "$file" == *.rs ]] || [[ "$file" == "Cargo.toml" ]]; then
+    rust_related+=("$file")
+  fi
+done <<< "$staged_files"
+
+if [[ "${#rust_related[@]}" -eq 0 ]]; then
+  exit 0
+fi
+
+echo "pre-commit: running cargo fmt --all"
+cargo fmt --all
+
+echo "pre-commit: staging rustfmt updates"
+git add -- "${rust_related[@]}"
+
+echo "pre-commit: running cargo test"
+cargo test

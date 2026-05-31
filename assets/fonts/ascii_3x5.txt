@@ -1,0 +1,10 @@
+# Format:
+# key:row0,row1,row2,row3,row4
+# - key is a single character or `space`
+# - each row is a 3-bit bitmap using 0/1
+#
+# These entries override the built-in defaults used by build.rs.
+
+?:111,001,010,000,010
+!:010,010,010,000,010
+@:111,101,111,100,011

@@ -1,0 +1,835 @@
+use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
+
+use crate::{
+    block::Block,
+    geometry::{EdgeInsets, Rect},
+    render::{RenderCtx, TextAlign, TextStyle, TextWrap, VerticalAlign},
+    style::{Border, Style, VisualState, WidgetStyle},
+    widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},
+};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WidgetKind<'a> {
+    Panel,
+    Label(&'a str),
+    Button(&'a str),
+    ProgressBar {
+        value: f32,
+    },
+    Toggle {
+        label: &'a str,
+        on: bool,
+    },
+    Checkbox {
+        label: &'a str,
+        checked: bool,
+    },
+    Slider {
+        value: f32,
+        min: f32,
+        max: f32,
+    },
+    ValueLabel {
+        label: &'a str,
+        value: i32,
+    },
+    IconButton {
+        icon: char,
+        label: &'a str,
+    },
+    List {
+        items: &'a [&'a str],
+        selected: usize,
+        offset: usize,
+        visible_rows: usize,
+    },
+    ScrollView {
+        offset_y: i32,
+        content_h: u32,
+    },
+    Tabs {
+        labels: &'a [&'a str],
+        selected: usize,
+    },
+    Dialog {
+        title: &'a str,
+        body: &'a str,
+    },
+    Toast {
+        text: &'a str,
+        ttl_ms: u32,
+    },
+    Meter {
+        value: f32,
+        min: f32,
+        max: f32,
+    },
+    Border,
+    Spacer,
+    Menu {
+        items: &'a [&'a str],
+        selected: usize,
+    },
+}
+
+impl WidgetKind<'_> {
+    pub const fn focusable(self) -> bool {
+        matches!(
+            self,
+            Self::Button(_)
+                | Self::Toggle { .. }
+                | Self::Checkbox { .. }
+                | Self::Slider { .. }
+                | Self::IconButton { .. }
+                | Self::List { .. }
+                | Self::ScrollView { .. }
+                | Self::Tabs { .. }
+                | Self::Menu { .. }
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WidgetNode<'a> {
+    pub id: WidgetId,
+    pub parent: Option<WidgetId>,
+    pub style_class: Option<StyleClassId>,
+    pub focus_group: FocusGroupId,
+    pub rect: Rect,
+    pub style: WidgetStyle,
+    pub kind: WidgetKind<'a>,
+    pub flags: WidgetFlags,
+}
+
+impl<'a> WidgetNode<'a> {
+    pub fn new<S>(id: WidgetId, rect: Rect, kind: WidgetKind<'a>, style: S) -> Self
+    where
+        S: Into<WidgetStyle>,
+    {
+        Self {
+            id,
+            parent: None,
+            style_class: None,
+            focus_group: FocusGroupId::ROOT,
+            rect,
+            style: style.into(),
+            kind,
+            flags: default_flags(kind),
+        }
+    }
+
+    pub const fn hidden(&self) -> bool {
+        self.flags.contains(WidgetFlags::HIDDEN)
+    }
+
+    pub const fn disabled(&self) -> bool {
+        self.flags.contains(WidgetFlags::DISABLED)
+    }
+
+    pub const fn clickable(&self) -> bool {
+        self.flags.contains(WidgetFlags::CLICKABLE)
+    }
+
+    pub const fn scrollable(&self) -> bool {
+        self.flags.contains(WidgetFlags::SCROLLABLE)
+    }
+
+    pub const fn clips_children(&self) -> bool {
+        self.flags.contains(WidgetFlags::CLIP_CHILDREN)
+    }
+
+    pub const fn focusable(&self) -> bool {
+        !self.hidden() && !self.disabled() && self.flags.contains(WidgetFlags::FOCUSABLE)
+    }
+
+    pub fn render<D>(&self, ctx: &mut RenderCtx<'_, D>, state: VisualState) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        self.render_at(ctx, self.rect, state)
+    }
+
+    pub fn render_at<D>(
+        &self,
+        ctx: &mut RenderCtx<'_, D>,
+        rect: Rect,
+        state: VisualState,
+    ) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        if self.hidden() {
+            return Ok(());
+        }
+
+        match self.kind {
+            WidgetKind::Panel => render_panel(ctx, rect, self.style, state),
+            WidgetKind::Label(text) => render_label(ctx, rect, text, self.style),
+            WidgetKind::Button(text) => render_button(ctx, rect, text, self.style, state),
+            WidgetKind::ProgressBar { value } => {
+                render_progress(ctx, rect, value, self.style, state)
+            }
+            WidgetKind::Toggle { label, on } => {
+                render_toggle(ctx, rect, label, on, self.style, state)
+            }
+            WidgetKind::Checkbox { label, checked } => {
+                render_checkbox(ctx, rect, label, checked, self.style, state)
+            }
+            WidgetKind::Slider { value, min, max } => {
+                render_slider(ctx, rect, value, min, max, self.style, state)
+            }
+            WidgetKind::ValueLabel { label, value } => {
+                render_value_label(ctx, rect, label, value, self.style, state)
+            }
+            WidgetKind::IconButton { icon, label } => {
+                render_icon_button(ctx, rect, icon, label, self.style, state)
+            }
+            WidgetKind::List {
+                items,
+                selected,
+                offset,
+                visible_rows,
+            } => render_list(
+                ctx,
+                rect,
+                items,
+                selected,
+                offset,
+                visible_rows,
+                self.style,
+                state,
+            ),
+            WidgetKind::ScrollView {
+                offset_y,
+                content_h,
+            } => render_scroll_view(ctx, rect, offset_y, content_h, self.style, state),
+            WidgetKind::Tabs { labels, selected } => {
+                render_tabs(ctx, rect, labels, selected, self.style, state)
+            }
+            WidgetKind::Dialog { title, body } => {
+                render_dialog(ctx, rect, title, body, self.style, state)
+            }
+            WidgetKind::Toast { text, ttl_ms } => {
+                render_toast(ctx, rect, text, ttl_ms, self.style, state)
+            }
+            WidgetKind::Meter { value, min, max } => {
+                render_meter(ctx, rect, value, min, max, self.style, state)
+            }
+            WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
+            WidgetKind::Spacer => Ok(()),
+            WidgetKind::Menu { items, selected } => {
+                render_menu(ctx, rect, items, selected, self.style, state)
+            }
+        }
+    }
+}
+
+const fn default_flags(kind: WidgetKind<'_>) -> WidgetFlags {
+    let mut flags = WidgetFlags::from_bits(
+        WidgetFlags::CLIP_CHILDREN.bits() | WidgetFlags::EVENT_BUBBLE.bits(),
+    );
+    if kind.focusable() {
+        flags = WidgetFlags::from_bits(
+            flags.bits() | WidgetFlags::FOCUSABLE.bits() | WidgetFlags::CLICKABLE.bits(),
+        );
+    }
+    if matches!(kind, WidgetKind::ScrollView { .. }) {
+        flags = WidgetFlags::from_bits(flags.bits() | WidgetFlags::SCROLLABLE.bits());
+    }
+    flags
+}
+
+fn render_panel<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    Block::styled(style).render(rect, ctx)
+}
+
+fn render_label<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    text: &str,
+    style: WidgetStyle,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(VisualState::Normal);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    ctx.draw_text_in(
+        inner,
+        text,
+        TextStyle::new(style.text).with_font(style.font),
+    )
+}
+
+fn render_button<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    text: &str,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let active_style = style.resolve(state);
+    let block = Block::styled(active_style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    ctx.draw_text_in(
+        inner,
+        text,
+        TextStyle::new(active_style.text)
+            .with_font(active_style.font)
+            .centered(),
+    )
+}
+
+fn render_progress<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let fill_w = ((inner.w as f32 * value.clamp(0.0, 1.0)) as u32).min(inner.w);
+    if fill_w > 0 {
+        let color = if matches!(state, VisualState::Focused) {
+            style.accent
+        } else {
+            style.foreground
+        };
+        ctx.fill_rect(Rect::new(inner.x, inner.y, fill_w, inner.h), color)?;
+    }
+    Ok(())
+}
+
+fn render_toggle<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    label: &str,
+    on: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let knob_w = (inner.w / 4).max(8).min(inner.w);
+    let track = Rect::new(
+        inner.right() - knob_w as i32 - 2,
+        inner.y + 1,
+        knob_w,
+        inner.h.saturating_sub(2),
+    );
+    ctx.fill_rect(
+        track,
+        if on {
+            style.accent
+        } else {
+            Rgb565::new(7, 10, 10)
+        },
+    )?;
+    ctx.draw_text_in(
+        Rect::new(
+            inner.x,
+            inner.y,
+            inner.w.saturating_sub(knob_w + 4),
+            inner.h,
+        ),
+        label,
+        TextStyle::new(style.text).with_font(style.font),
+    )
+}
+
+fn render_checkbox<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    label: &str,
+    checked: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let box_size = inner.h.min(8);
+    let box_rect = Rect::new(
+        inner.x,
+        inner.y + (inner.h.saturating_sub(box_size) as i32 / 2),
+        box_size,
+        box_size,
+    );
+    ctx.stroke_rect(box_rect, Border::one(style.text))?;
+    if checked && box_size > 4 {
+        ctx.fill_rect(
+            box_rect.inset(crate::geometry::EdgeInsets::all(2)),
+            style.accent,
+        )?;
+    }
+    ctx.draw_text_in(
+        Rect::new(
+            inner.x + box_size as i32 + 3,
+            inner.y,
+            inner.w.saturating_sub(box_size + 3),
+            inner.h,
+        ),
+        label,
+        TextStyle::new(style.text).with_font(style.font),
+    )
+}
+
+fn render_slider<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let range = (max - min).max(f32::EPSILON);
+    let t = ((value - min) / range).clamp(0.0, 1.0);
+    let track_y = inner.y + inner.h as i32 / 2;
+    ctx.fill_rect(Rect::new(inner.x, track_y, inner.w, 1), style.text)?;
+    let knob_x = inner.x + ((inner.w.saturating_sub(3) as f32 * t) as i32);
+    ctx.fill_rect(Rect::new(knob_x, track_y - 2, 3, 5), style.accent)
+}
+
+fn render_value_label<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    label: &str,
+    value: i32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    ctx.draw_text_in(
+        Rect::new(inner.x, inner.y, inner.w / 2, inner.h),
+        label,
+        TextStyle::new(style.text).with_font(style.font),
+    )?;
+    draw_i32_right(
+        ctx,
+        Rect::new(
+            inner.x + (inner.w / 2) as i32,
+            inner.y,
+            inner.w - inner.w / 2,
+            inner.h,
+        ),
+        value,
+        style.accent,
+    )
+}
+
+fn render_icon_button<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    icon: char,
+    label: &str,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let mut icon_buf = [0u8; 4];
+    let icon_str = icon.encode_utf8(&mut icon_buf);
+    ctx.draw_text_in(
+        Rect::new(inner.x, inner.y, 8, inner.h),
+        icon_str,
+        TextStyle::new(style.accent)
+            .with_font(style.font)
+            .centered(),
+    )?;
+    ctx.draw_text_in(
+        Rect::new(inner.x + 10, inner.y, inner.w.saturating_sub(10), inner.h),
+        label,
+        TextStyle::new(style.text).with_font(style.font),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_list<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    offset: usize,
+    visible_rows: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if items.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let rows = visible_rows.max(1).min(items.len());
+    let row_h = (inner.h / rows as u32).max(1);
+    for row_idx in 0..rows {
+        let item_idx = offset.saturating_add(row_idx);
+        if item_idx >= items.len() {
+            break;
+        }
+        let row = Rect::new(
+            inner.x,
+            inner.y + (row_idx as u32 * row_h) as i32,
+            inner.w,
+            row_h,
+        );
+        if item_idx == selected {
+            ctx.fill_rect(row, style.accent)?;
+        }
+        ctx.draw_text_in(
+            row.inset(crate::geometry::EdgeInsets::symmetric(2, 1)),
+            items[item_idx],
+            TextStyle {
+                color: style.text,
+                font: style.font,
+                opacity: style.opacity,
+                align: TextAlign::Left,
+                vertical_align: VerticalAlign::Middle,
+                wrap: TextWrap::None,
+                line_spacing: 0,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn render_scroll_view<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    offset_y: i32,
+    content_h: u32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if content_h > rect.h {
+        let inner = block.inner(rect);
+        let thumb_h = ((inner.h as u64 * inner.h as u64) / content_h.max(1) as u64)
+            .max(4)
+            .min(inner.h as u64) as u32;
+        let max_offset = content_h.saturating_sub(inner.h).max(1) as i32;
+        let y = inner.y
+            + ((inner.h.saturating_sub(thumb_h) as i32 * offset_y.clamp(0, max_offset))
+                / max_offset);
+        ctx.fill_rect(Rect::new(inner.right() - 3, y, 2, thumb_h), style.accent)?;
+    }
+    Ok(())
+}
+
+fn render_tabs<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    labels: &[&str],
+    selected: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if labels.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let tab_w = (inner.w / labels.len() as u32).max(1);
+    for (idx, label) in labels.iter().enumerate() {
+        let tab = Rect::new(
+            inner.x + (idx as u32 * tab_w) as i32,
+            inner.y,
+            tab_w,
+            inner.h,
+        );
+        if idx == selected {
+            ctx.fill_rect(tab, style.accent)?;
+        }
+        ctx.draw_text_in(
+            tab.inset(EdgeInsets::all(1)),
+            label,
+            TextStyle::new(style.text).with_font(style.font).centered(),
+        )?;
+    }
+    Ok(())
+}
+
+fn render_dialog<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    title: &str,
+    body: &str,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style)
+        .title(title)
+        .title_align(TextAlign::Center);
+    block.render(rect, ctx)?;
+    let inner = block.content_area(rect);
+    ctx.draw_text_in(
+        inner,
+        body,
+        TextStyle {
+            color: style.text,
+            font: style.font,
+            opacity: style.opacity,
+            align: TextAlign::Center,
+            vertical_align: VerticalAlign::Middle,
+            wrap: TextWrap::Character,
+            line_spacing: 1,
+        },
+    )
+}
+
+fn render_toast<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    text: &str,
+    ttl_ms: u32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    if ttl_ms == 0 {
+        return Ok(());
+    }
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    ctx.draw_text_in(
+        block.inner(rect),
+        text,
+        TextStyle {
+            color: style.text,
+            font: style.font,
+            opacity: style.opacity,
+            align: TextAlign::Center,
+            vertical_align: VerticalAlign::Middle,
+            wrap: TextWrap::Character,
+            line_spacing: 0,
+        },
+    )
+}
+
+fn render_meter<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let range = (max - min).max(f32::EPSILON);
+    let t = ((value - min) / range).clamp(0.0, 1.0);
+    let bars = 10usize;
+    let gap = 1u32;
+    let bar_w = inner
+        .w
+        .saturating_sub(gap * (bars as u32 - 1))
+        .max(bars as u32)
+        / bars as u32;
+    for i in 0..bars {
+        let x = inner.x + (i as u32 * (bar_w + gap)) as i32;
+        let active = (i as f32) < t * bars as f32;
+        let h = ((inner.h as f32 * (i + 1) as f32 / bars as f32) as u32).max(1);
+        let y = inner.bottom() - h as i32;
+        ctx.fill_rect(
+            Rect::new(x, y, bar_w, h),
+            if active {
+                style.accent
+            } else {
+                Rgb565::new(5, 8, 8)
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn render_menu<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let inner = block.inner(rect);
+    let row_h = (inner.h / items.len() as u32).max(1);
+    for (i, item) in items.iter().enumerate() {
+        let row = Rect::new(inner.x, inner.y + (i as u32 * row_h) as i32, inner.w, row_h);
+        let is_selected = i == selected;
+        if is_selected {
+            ctx.fill_rect(row, style.accent)?;
+        }
+        ctx.draw_text_in(
+            row.inset(crate::geometry::EdgeInsets::symmetric(2, 1)),
+            item,
+            TextStyle {
+                color: style.text,
+                font: style.font,
+                opacity: style.opacity,
+                align: TextAlign::Left,
+                vertical_align: VerticalAlign::Middle,
+                wrap: TextWrap::None,
+                line_spacing: 0,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn draw_i32_right<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    value: i32,
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let mut buf = [0u8; 12];
+    let mut n = value.unsigned_abs();
+    let negative = value < 0;
+    let mut pos = buf.len();
+    if n == 0 {
+        pos -= 1;
+        buf[pos] = b'0';
+    } else {
+        while n > 0 && pos > usize::from(negative) {
+            pos -= 1;
+            buf[pos] = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+    }
+    if negative && pos > 0 {
+        pos -= 1;
+        buf[pos] = b'-';
+    }
+    let text = core::str::from_utf8(&buf[pos..]).unwrap_or("?");
+    ctx.draw_text_in(
+        rect,
+        text,
+        TextStyle {
+            color,
+            font: crate::font::FontId::Tiny3x5,
+            opacity: 255,
+            align: TextAlign::Right,
+            vertical_align: VerticalAlign::Middle,
+            wrap: TextWrap::None,
+            line_spacing: 0,
+        },
+    )
+}
+
+impl Default for WidgetKind<'_> {
+    fn default() -> Self {
+        Self::Spacer
+    }
+}
+
+impl Default for WidgetNode<'_> {
+    fn default() -> Self {
+        Self::new(
+            WidgetId::new(0),
+            Rect::empty(),
+            WidgetKind::Spacer,
+            WidgetStyle::new(Style {
+                background: None,
+                gradient: None,
+                font: crate::font::FontId::Tiny3x5,
+                foreground: Rgb565::WHITE,
+                text: Rgb565::WHITE,
+                accent: Rgb565::WHITE,
+                opacity: 255,
+                corner_radius: 0,
+                shadow: None,
+                border: Border::none(),
+                padding: crate::geometry::EdgeInsets::all(0),
+            }),
+        )
+    }
+}

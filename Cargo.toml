@@ -1,0 +1,23 @@
+[package]
+name = "embedded-gui"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "no_std GUI and HUD primitives for embedded-graphics displays"
+keywords = ["embedded-graphics", "gui", "hud", "embedded", "no_std"]
+categories = ["embedded", "gui", "no-std"]
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+embedded-graphics-core = "0.4.1"
+heapless = "0.9"
+
+[dev-dependencies]
+embedded-3dgfx = { path = "../embedded-3dgfx" }
+embedded-graphics = "0.8"
+embedded-graphics-framebuf = "0.3"
+embedded-graphics-simulator = "0.8"
+nalgebra = { version = "0.34", default-features = false, features = ["std"] }
