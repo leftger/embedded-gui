@@ -113,6 +113,7 @@ pub enum WidgetKind<'a> {
     Dropdown {
         items: &'a [&'a str],
         selected: usize,
+        open: bool,
     },
     Roller {
         items: &'a [&'a str],
@@ -394,8 +395,12 @@ impl<'a> WidgetNode<'a> {
                 )
             }
             WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
-            WidgetKind::Dropdown { items, selected } => {
-                render_dropdown(ctx, rect, items, selected, self.style, state)
+            WidgetKind::Dropdown {
+                items,
+                selected,
+                open,
+            } => {
+                render_dropdown(ctx, rect, items, selected, open, self.style, state)
             }
             WidgetKind::Roller { items, selected } => {
                 render_roller(ctx, rect, items, selected, self.style, state)
@@ -1273,6 +1278,7 @@ fn render_dropdown<D>(
     rect: Rect,
     items: &[&str],
     selected: usize,
+    open: bool,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
@@ -1283,7 +1289,11 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     let inner = block.inner(rect);
-    let text = items.get(selected).copied().unwrap_or("-");
+    let text = if open {
+        items.get(selected).copied().unwrap_or("-")
+    } else {
+        items.get(selected).copied().unwrap_or("-")
+    };
     ctx.draw_text_in(
         Rect::new(inner.x, inner.y, inner.w.saturating_sub(8), inner.h),
         text,
@@ -1291,9 +1301,35 @@ where
     )?;
     ctx.draw_text_in(
         Rect::new(inner.right() - 7, inner.y, 7, inner.h),
-        "v",
+        if open { "^" } else { "v" },
         TextStyle::new(style.accent).with_font(style.font).centered(),
-    )
+    )?;
+    if open {
+        let row_h = style.font.line_height().max(6);
+        let popup_h = (row_h.saturating_mul(items.len() as u32)).min(40).max(row_h);
+        let popup = Rect::new(inner.x, inner.bottom() as i32 + 1, inner.w, popup_h);
+        ctx.fill_rect(popup, style.background.unwrap_or(Rgb565::new(8, 12, 16)))?;
+        ctx.stroke_rect(popup, Border::one(style.border.color))?;
+        let visible = (popup_h / row_h).max(1) as usize;
+        let start = selected.saturating_sub(visible / 2).min(items.len().saturating_sub(visible));
+        for (i, item) in items.iter().enumerate().skip(start).take(visible) {
+            let row = Rect::new(
+                popup.x + 1,
+                popup.y + ((i - start) as u32 * row_h) as i32,
+                popup.w.saturating_sub(2),
+                row_h,
+            );
+            if i == selected {
+                ctx.fill_rect(row, style.accent)?;
+            }
+            ctx.draw_text_in(
+                row.inset(EdgeInsets::all(1)),
+                item,
+                TextStyle::new(style.text).with_font(style.font),
+            )?;
+        }
+    }
+    Ok(())
 }
 
 fn render_roller<D>(

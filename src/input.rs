@@ -44,8 +44,11 @@ pub enum UiEvent {
     Released(WidgetId),
     Clicked(WidgetId),
     LongPressed(WidgetId),
+    Opened(WidgetId),
+    Closed(WidgetId),
     PointerPressed(WidgetId),
     PointerReleased(WidgetId),
+    Gesture(WidgetId),
     ValueChanged(WidgetId),
     TextInput {
         id: WidgetId,
@@ -119,8 +122,11 @@ impl UiEvent {
             | Self::Released(id)
             | Self::Clicked(id)
             | Self::LongPressed(id)
+            | Self::Opened(id)
+            | Self::Closed(id)
             | Self::PointerPressed(id)
             | Self::PointerReleased(id)
+            | Self::Gesture(id)
             | Self::ValueChanged(id)
             | Self::TextInput { id, .. }
             | Self::Focused(id)
@@ -141,9 +147,13 @@ impl UiEvent {
             | Self::Pressed(_)
             | Self::Released(_)
             | Self::Clicked(_)
-            | Self::LongPressed(_) => UiEventFilter::ACTIVATE,
+            | Self::LongPressed(_)
+            | Self::Opened(_)
+            | Self::Closed(_) => UiEventFilter::ACTIVATE,
             Self::Back => UiEventFilter::BACK,
-            Self::PointerPressed(_) | Self::PointerReleased(_) => UiEventFilter::POINTER,
+            Self::PointerPressed(_) | Self::PointerReleased(_) | Self::Gesture(_) => {
+                UiEventFilter::POINTER
+            }
             Self::ValueChanged(_) | Self::TextInput { .. } => UiEventFilter::VALUE,
             Self::Scroll { .. } => UiEventFilter::SCROLL,
             Self::LayoutChanged(_) => UiEventFilter::LAYOUT,
@@ -158,6 +168,8 @@ pub enum WidgetEventKind {
     Released,
     Clicked,
     LongPressed,
+    Opened,
+    Closed,
     ValueChanged,
     Focused,
     Defocused,
@@ -214,7 +226,9 @@ impl WidgetEventKind {
     pub const fn filter(self) -> WidgetEventFilter {
         match self {
             Self::Pressed | Self::Released | Self::Gesture => WidgetEventFilter::POINTER,
-            Self::Clicked | Self::LongPressed => WidgetEventFilter::ACTIVATE,
+            Self::Clicked | Self::LongPressed | Self::Opened | Self::Closed => {
+                WidgetEventFilter::ACTIVATE
+            }
             Self::ValueChanged => WidgetEventFilter::VALUE,
             Self::Focused | Self::Defocused => WidgetEventFilter::FOCUS,
             Self::Scroll { .. } => WidgetEventFilter::SCROLL,
