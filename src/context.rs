@@ -10,13 +10,13 @@ use crate::{
     },
     layout::{Axis, LayoutItem, LinearLayout},
     present::PresentRegion,
-    render::{RenderCtx, RenderQuality},
+    render::{RenderCtx, RenderQuality, TextAlign},
     state::{ListState, ScrollState, SliderState, TabsState},
     style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },
-    widgets::{KeyboardLayout, WidgetKind, WidgetNode},
+    widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +33,13 @@ impl From<DirtyError> for GuiError {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PressTracker {
+    id: WidgetId,
+    elapsed_ms: u32,
+    long_emitted: bool,
+}
+
 pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
     viewport: Rect,
     widgets: Vec<WidgetNode<'a>, NODES>,
@@ -45,6 +52,8 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     focus: Option<WidgetId>,
     active_focus_group: Option<FocusGroupId>,
     render_quality: RenderQuality,
+    long_press_ms: u32,
+    pressed: Option<PressTracker>,
     next_id: u16,
 }
 
@@ -66,6 +75,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             focus: None,
             active_focus_group: None,
             render_quality: RenderQuality::High,
+            long_press_ms: 500,
+            pressed: None,
             next_id: 1,
         }
     }
@@ -86,8 +97,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.dispatch_policies.clear();
         self.class_styles.clear();
         self.focus = None;
+        self.pressed = None;
         self.dirty.mark_all(self.viewport)?;
         Ok(())
+    }
+
+    pub const fn long_press_threshold_ms(&self) -> u32 {
+        self.long_press_ms
+    }
+
+    pub fn set_long_press_threshold_ms(&mut self, threshold_ms: u32) {
+        self.long_press_ms = threshold_ms.max(1);
     }
 
     pub fn widgets(&self) -> &[WidgetNode<'a>] {
@@ -611,6 +631,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 end_deg,
                 thickness: thickness.max(1),
                 antialias,
+                major_ticks: 6,
+                minor_ticks: 2,
+                show_value: false,
             },
             style,
         )
@@ -627,7 +650,18 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         S: Into<WidgetStyle>,
     {
-        self.add_widget(rect, WidgetKind::Gauge { value, min, max }, style)
+        self.add_widget(
+            rect,
+            WidgetKind::Gauge {
+                value,
+                min,
+                max,
+                major_ticks: 6,
+                minor_ticks: 2,
+                show_value: false,
+            },
+            style,
+        )
     }
 
     pub fn add_gauge_needle<S>(
@@ -676,6 +710,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 thickness: 1,
                 fill_under: false,
                 markers: false,
+                mode: ChartMode::Line,
+                show_grid: false,
+                show_axes: false,
+                show_labels: false,
             },
             style,
         )
@@ -700,6 +738,35 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 *t = thickness.max(1);
                 *fill = fill_under;
                 *mark = markers;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_chart_decoration(
+        &mut self,
+        id: WidgetId,
+        mode: ChartMode,
+        show_grid: bool,
+        show_axes: bool,
+        show_labels: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Chart {
+                mode: ref mut chart_mode,
+                show_grid: ref mut grid,
+                show_axes: ref mut axes,
+                show_labels: ref mut labels,
+                ..
+            } => {
+                *chart_mode = mode;
+                *grid = show_grid;
+                *axes = show_axes;
+                *labels = show_labels;
                 self.dirty.add(rect)?;
                 Ok(())
             }
@@ -760,7 +827,42 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         S: Into<WidgetStyle>,
     {
-        self.add_widget(rect, WidgetKind::Table { rows }, style)
+        self.add_widget(
+            rect,
+            WidgetKind::Table {
+                rows,
+                separators: true,
+                cell_padding: 1,
+                align: TextAlign::Left,
+            },
+            style,
+        )
+    }
+
+    pub fn set_table_style(
+        &mut self,
+        id: WidgetId,
+        separators: bool,
+        cell_padding: u8,
+        align: TextAlign,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Table {
+                separators: ref mut cell_sep,
+                cell_padding: ref mut pad,
+                align: ref mut table_align,
+                ..
+            } => {
+                *cell_sep = separators;
+                *pad = cell_padding.min(6);
+                *table_align = align;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
     }
 
     pub fn add_textarea<S>(
@@ -1017,7 +1119,6 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     pub fn set_scroll_offset(&mut self, id: WidgetId, offset_y: i32) -> Result<(), GuiError> {
-        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
             WidgetKind::ScrollView {
@@ -1027,7 +1128,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 let mut state = ScrollState::new(*v, content_h);
                 state.set_offset(offset_y);
                 *v = state.offset_y;
-                self.dirty.add(rect)?;
+                self.mark_subtree_dirty(id)?;
                 Ok(())
             }
             _ => Err(GuiError::NotFound),
@@ -1289,6 +1390,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 value: ref mut v,
                 min,
                 max,
+                ..
             }
             | WidgetKind::ArcGauge {
                 value: ref mut v,
@@ -1303,6 +1405,38 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 ..
             } => {
                 *v = value.clamp(min.min(max), min.max(max));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_gauge_ticks(
+        &mut self,
+        id: WidgetId,
+        major_ticks: u8,
+        minor_ticks: u8,
+        show_value: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Gauge {
+                major_ticks: ref mut major,
+                minor_ticks: ref mut minor,
+                show_value: ref mut show,
+                ..
+            }
+            | WidgetKind::ArcGauge {
+                major_ticks: ref mut major,
+                minor_ticks: ref mut minor,
+                show_value: ref mut show,
+                ..
+            } => {
+                *major = major_ticks.max(1);
+                *minor = minor_ticks.max(1);
+                *show = show_value;
                 self.dirty.add(rect)?;
                 Ok(())
             }
@@ -1798,6 +1932,30 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub fn tick_input(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        let Some(mut pressed) = self.pressed else {
+            return Ok(());
+        };
+        if pressed.long_emitted {
+            return Ok(());
+        }
+        if !self.effective_visible(pressed.id) || !self.effective_enabled(pressed.id) {
+            self.pressed = None;
+            return Ok(());
+        }
+        pressed.elapsed_ms = pressed.elapsed_ms.saturating_add(dt_ms);
+        if pressed.elapsed_ms >= self.long_press_ms {
+            let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+            self.dispatch_widget_event(pressed.id, WidgetEventKind::LongPressed, &mut events, |_| {
+                EventPolicy::Continue
+            })?;
+            self.push_event(UiEvent::LongPressed(pressed.id))?;
+            pressed.long_emitted = true;
+        }
+        self.pressed = Some(pressed);
+        Ok(())
+    }
+
     pub fn pop_event(&mut self) -> Option<UiEvent> {
         if self.events.is_empty() {
             None
@@ -2096,7 +2254,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             current = self.node(widget_id)?.parent;
         }
         for widget_id in chain.iter().rev().copied() {
-            clip = clip.intersection(self.absolute_rect(widget_id)?);
+            let node = self.node(widget_id)?;
+            if widget_id == id || node.clips_children() {
+                clip = clip.intersection(self.absolute_rect(widget_id)?);
+            }
             if clip.is_empty() {
                 return None;
             }
@@ -2404,11 +2565,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
         if let Some(id) = hit {
             self.dispatch_activation(id, true)?;
+            self.pressed = Some(PressTracker {
+                id,
+                elapsed_ms: 0,
+                long_emitted: false,
+            });
         }
         Ok(())
     }
 
     fn handle_pointer_released(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
+        self.pressed = None;
         let hit = self
             .widgets
             .iter()
