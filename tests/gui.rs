@@ -1020,6 +1020,149 @@ fn widget_animator_policy_aware_builders_apply_conflict_rules() {
 }
 
 #[test]
+fn widget_animator_extended_property_builders_work() {
+    static TABS: [&str; 3] = ["A", "B", "C"];
+    static ITEMS: [&str; 4] = ["ONE", "TWO", "THREE", "FOUR"];
+    let mut gui = GuiContext::<20, 20, 20>::new(Rect::new(0, 0, 140, 80));
+    let tabs = gui
+        .add_tabs(Rect::new(0, 0, 60, 12), &TABS, 0, Style::button())
+        .unwrap();
+    let dropdown = gui
+        .add_dropdown(Rect::new(62, 0, 56, 12), &ITEMS, 0, Style::button())
+        .unwrap();
+    let roller = gui
+        .add_roller(Rect::new(0, 14, 40, 24), &ITEMS, 0, Style::button())
+        .unwrap();
+    let gauge = gui
+        .add_gauge(Rect::new(42, 14, 24, 24), 0.0, 0.0, 1.0, Style::progress())
+        .unwrap();
+    let spinner = gui
+        .add_spinner(Rect::new(68, 14, 16, 16), 0.0, Style::progress())
+        .unwrap();
+    let progress = gui
+        .add_progress_bar(Rect::new(0, 42, 84, 8), 0.0, Style::progress())
+        .unwrap();
+    let card = gui
+        .add_panel(Rect::new(86, 14, 30, 20), Style::panel())
+        .unwrap();
+
+    let mut animator = WidgetAnimator::<24, 24>::new();
+    animator
+        .animate_tab_selected(tabs, 0, 2, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_dropdown_selected(dropdown, 0, 3, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_roller_selected(roller, 0, 2, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_gauge_value(gauge, 0.0, 1.0, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_spinner_phase(spinner, 0.0, 1.0, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .ping_pong_progress(progress, 0.0, 1.0, 20, Easing::InOutSine)
+        .unwrap();
+    animator
+        .pulse_opacity(card, 32, 200, 20, Easing::InOutSine)
+        .unwrap();
+
+    animator.tick(20, &mut gui).unwrap();
+    assert_eq!(gui.tab_selected(tabs), Some(1));
+    assert!(gui.dropdown_selected(dropdown).is_some());
+    assert!(gui.roller_selected(roller).is_some());
+
+    animator.tick(20, &mut gui).unwrap();
+    assert_eq!(gui.tab_selected(tabs), Some(2));
+    assert_eq!(gui.dropdown_selected(dropdown), Some(3));
+    assert_eq!(gui.roller_selected(roller), Some(2));
+}
+
+#[test]
+fn widget_animator_stagger_path_and_presets_work() {
+    let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 120, 80));
+    let a = gui.add_panel(Rect::new(0, 0, 16, 10), Style::panel()).unwrap();
+    let b = gui.add_panel(Rect::new(0, 12, 16, 10), Style::panel()).unwrap();
+    let c = gui.add_panel(Rect::new(0, 24, 16, 10), Style::panel()).unwrap();
+    let focus = gui.add_panel(Rect::new(10, 40, 20, 12), Style::panel()).unwrap();
+
+    let mut animator = WidgetAnimator::<32, 32>::new();
+    assert_eq!(
+        animator
+            .stagger_widget_x(&[a, b, c], 0, 20, 30, 10, Easing::Linear)
+            .unwrap(),
+        3
+    );
+
+    let path = [
+        PathPoint::new(10.0, 40.0),
+        PathPoint::new(20.0, 46.0),
+        PathPoint::new(34.0, 42.0),
+    ];
+    animator
+        .animate_widget_path(focus, &path, 60, Easing::InOutSine)
+        .unwrap();
+    animator.preset_fade_in_up(focus, 46, 40, 40).unwrap();
+    animator.preset_attention_shake(focus, 34, 2, 40).unwrap();
+    animator
+        .animate_corner_radius(focus, 0, 4, 40, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_accent_color(
+            focus,
+            Rgb565::new(0, 20, 10),
+            Rgb565::new(20, 55, 5),
+            40,
+            Easing::Linear,
+        )
+        .unwrap();
+
+    animator.tick(10, &mut gui).unwrap();
+    assert_eq!(gui.absolute_rect(a).unwrap().x, 7);
+    assert_eq!(gui.absolute_rect(b).unwrap().x, 0);
+    animator.tick(10, &mut gui).unwrap();
+    assert!(gui.absolute_rect(b).unwrap().x > 0);
+    animator.tick(40, &mut gui).unwrap();
+    let focus_node = gui.widgets().iter().find(|w| w.id == focus).unwrap();
+    assert!(focus_node.style.normal.corner_radius >= 3);
+}
+
+#[test]
+fn animation_presets_namespace_helpers_work() {
+    let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 120, 80));
+    let a = gui.add_panel(Rect::new(4, 4, 18, 10), Style::panel()).unwrap();
+    let b = gui.add_panel(Rect::new(4, 18, 18, 10), Style::panel()).unwrap();
+    let c = gui.add_panel(Rect::new(4, 32, 18, 10), Style::panel()).unwrap();
+    let focus = gui.add_panel(Rect::new(40, 20, 22, 12), Style::panel()).unwrap();
+
+    let mut animator = WidgetAnimator::<32, 32>::new();
+    assert_eq!(
+        presets::orchestrate_stagger_x(&mut animator, &[a, b, c], 4, 24, 40, 10).unwrap(),
+        3
+    );
+    presets::entrance_fade_in_up(&mut animator, focus, 30, 20, 40).unwrap();
+    presets::attention_shake(&mut animator, focus, 40, 2, 40).unwrap();
+    presets::style_breathe(&mut animator, focus, 96, 200, 0, 4, 40).unwrap();
+    presets::style_accent_cycle(
+        &mut animator,
+        focus,
+        Rgb565::new(0, 20, 10),
+        Rgb565::new(20, 55, 5),
+        40,
+    )
+    .unwrap();
+    presets::path_float_loop(&mut animator, focus, 40, 20, 2, 40).unwrap();
+
+    animator.tick(10, &mut gui).unwrap();
+    assert!(gui.absolute_rect(a).unwrap().x > 4);
+    animator.tick(40, &mut gui).unwrap();
+    let node = gui.widgets().iter().find(|w| w.id == focus).unwrap();
+    assert!(node.style.normal.corner_radius >= 3);
+}
+
+#[test]
 fn animation_edge_cases_cover_delay_reverse_and_id_wrap() {
     let mut anim = Animation::new(0.0, 1.0, 0, Easing::Linear)
         .with_delay(20)
@@ -1481,7 +1624,7 @@ fn style_transition_interpolates_between_states() {
 fn new_widgets_chart_spinner_dropdown_render_and_update() {
     static SERIES: [f32; 5] = [0.0, 0.5, 0.2, 0.8, 0.6];
     static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
-    let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 96, 48));
+    let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 96, 48));
     let chart = gui
         .add_chart(Rect::new(0, 0, 32, 16), &SERIES, 0.0, 1.0, Style::panel())
         .unwrap();
@@ -1498,8 +1641,12 @@ fn new_widgets_chart_spinner_dropdown_render_and_update() {
     gui.set_dropdown_selected(dropdown, 2).unwrap();
     assert_eq!(gui.dropdown_selected(dropdown), Some(2));
     gui.set_focus(Some(dropdown)).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.dropdown_open(dropdown), Some(true));
     gui.handle_input(InputEvent::Down).unwrap();
     assert_eq!(gui.dropdown_selected(dropdown), Some(0));
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.dropdown_open(dropdown), Some(false));
     let roller = gui
         .add_roller(Rect::new(0, 18, 30, 20), &ITEMS, 0, Style::button())
         .unwrap();
@@ -1725,7 +1872,7 @@ fn render_digest_stays_stable() {
             ^ ((c.b() as u64) << 48)
     });
 
-    assert_eq!(digest, 4_248_994_834_688_788_393);
+    assert_eq!(digest, 15_293_939_628_664_047_529);
 }
 
 #[test]
@@ -2123,6 +2270,215 @@ fn pointer_release_cancels_pending_long_press() {
 
     gui.tick_input(40).unwrap();
     assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn dropdown_emits_open_close_events() {
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 0, 40, 12), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(dropdown)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    let mut saw_opened = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::Opened(dropdown) {
+            saw_opened = true;
+            break;
+        }
+    }
+    assert!(saw_opened);
+    assert_eq!(gui.dropdown_open(dropdown), Some(true));
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    let mut saw_closed = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::Closed(dropdown) {
+            saw_closed = true;
+            break;
+        }
+    }
+    assert!(saw_closed);
+    assert_eq!(gui.dropdown_open(dropdown), Some(false));
+}
+
+#[test]
+fn textarea_edit_hooks_emit_text_input_events() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 50, 14), "HELLO", "TYPE", Style::panel())
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.textarea_insert_char(textarea, 'x').unwrap();
+    gui.textarea_backspace(textarea).unwrap();
+    gui.textarea_delete_forward(textarea).unwrap();
+
+    assert_eq!(gui.pop_event(), Some(UiEvent::TextInput { id: textarea, ch: 'x' }));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
+    assert_eq!(
+        gui.pop_event(),
+        Some(UiEvent::TextInput {
+            id: textarea,
+            ch: '\u{8}'
+        })
+    );
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
+    assert_eq!(
+        gui.pop_event(),
+        Some(UiEvent::TextInput {
+            id: textarea,
+            ch: '\u{7f}'
+        })
+    );
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
+}
+
+#[test]
+fn pointer_move_emits_gesture_once_after_threshold() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 4,
+        y: 4,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert_eq!(gui.pop_event(), None);
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 10,
+        y: 4,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Gesture(button)));
+    assert_eq!(gui.pop_event(), None);
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 14,
+        y: 4,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn scrollable_drag_emits_scroll_event() {
+    let mut gui = GuiContext::<8, 24, 8>::new(Rect::new(0, 0, 64, 32));
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 0, 30, 20), 0, 80, Style::panel())
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 8,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    let mut saw_scroll = false;
+    while let Some(event) = gui.pop_event() {
+        if matches!(event, UiEvent::Scroll { id, delta } if id == scroll && delta != 0) {
+            saw_scroll = true;
+            break;
+        }
+    }
+    assert!(saw_scroll);
+}
+
+#[test]
+fn long_press_repeat_emits_repeated_activate_for_button() {
+    let mut gui = GuiContext::<4, 32, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_long_press_threshold_ms(10);
+    gui.set_press_repeat_timing(20, 10);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.tick_input(10).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::LongPressed(button)));
+    assert_eq!(gui.pop_event(), None);
+
+    gui.tick_input(20).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Clicked(button)));
+    assert_eq!(gui.pop_event(), Some(UiEvent::Activate(button)));
+}
+
+#[test]
+fn drag_release_continues_scroll_with_inertia() {
+    let mut gui = GuiContext::<8, 48, 8>::new(Rect::new(0, 0, 64, 32));
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 0, 30, 20), 0, 120, Style::panel())
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 14,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    let before_release = gui.scroll_offset(scroll).unwrap_or(0);
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.tick_input(16).unwrap();
+    let after_tick = gui.scroll_offset(scroll).unwrap_or(0);
+    assert_ne!(after_tick, before_release);
 }
 
 #[test]

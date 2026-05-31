@@ -1386,10 +1386,9 @@ where
             }
             FontId::Medium4x7 => {
                 for (row, bits) in glyph.iter().enumerate() {
-                    let y_row = row as i32 + (row as i32 / 2);
                     for col in 0..3 {
                         if bits & (1 << (2 - col)) != 0 {
-                            self.pixel(x + col, y + y_row, color, opacity)?;
+                            self.pixel(x + col, y + row as i32, color, opacity)?;
                         }
                     }
                 }
