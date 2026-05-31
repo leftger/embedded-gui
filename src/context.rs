@@ -84,6 +84,14 @@ struct TextareaHistoryEntry {
     snapshot: TextareaSnapshot,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct StateTransition {
+    id: WidgetId,
+    from: VisualState,
+    to: VisualState,
+    elapsed_ms: u32,
+}
+
 pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
     viewport: Rect,
     widgets: Vec<WidgetNode<'a>, NODES>,
@@ -104,6 +112,8 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     pressed: Option<PressTracker>,
     inertia_scroll: Option<InertiaScroll>,
     scroll_physics: ScrollPhysics,
+    state_transition_ms: u32,
+    state_transitions: Vec<StateTransition, NODES>,
     textarea_undo: Vec<TextareaHistoryEntry, NODES>,
     textarea_redo: Vec<TextareaHistoryEntry, NODES>,
     next_id: u16,
@@ -135,6 +145,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             pressed: None,
             inertia_scroll: None,
             scroll_physics: ScrollPhysics::default(),
+            state_transition_ms: 0,
+            state_transitions: Vec::new(),
             textarea_undo: Vec::new(),
             textarea_redo: Vec::new(),
             next_id: 1,
@@ -159,6 +171,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.focus = None;
         self.pressed = None;
         self.inertia_scroll = None;
+        self.state_transitions.clear();
         self.textarea_undo.clear();
         self.textarea_redo.clear();
         self.dirty.mark_all(self.viewport)?;
@@ -187,6 +200,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.scroll_physics.velocity_threshold = velocity_threshold.max(0.001);
         self.scroll_physics.velocity_decay = velocity_decay.clamp(0.01, 0.999);
         self.scroll_physics.drag_velocity_blend = drag_velocity_blend.clamp(0.01, 1.0);
+    }
+
+    pub fn set_state_transition_duration_ms(&mut self, duration_ms: u32) {
+        self.state_transition_ms = duration_ms;
+        if duration_ms == 0 {
+            self.state_transitions.clear();
+        }
+    }
+
+    pub fn active_state_transitions(&self) -> usize {
+        self.state_transitions.len()
     }
 
     pub fn set_textarea_cursor_blink_timing(&mut self, period_ms: u32) {
@@ -328,6 +352,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.textarea_cursor_blink_elapsed_ms = 0;
         self.set_textarea_cursor_visible(old, true);
         self.set_textarea_cursor_visible(focus, true);
+        self.start_focus_transitions(old, focus);
         self.mark_focus_pair(old, focus)?;
         if let Some(id) = old {
             self.push_event(UiEvent::Defocused(id))?;
@@ -2616,6 +2641,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     pub fn tick_input(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        self.tick_state_transitions(dt_ms)?;
         if let Some(mut inertia) = self.inertia_scroll {
             if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
                 self.inertia_scroll = None;
@@ -2826,6 +2852,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     let class_state = style.resolve(state);
                     render_node.style = node.style.with_state_override(state, class_state);
                 }
+            }
+            if let Some((from, to, t)) = self.state_transition_progress(node.id) {
+                let blended = lerp_style(render_node.style.resolve(from), render_node.style.resolve(to), t);
+                render_node.style = render_node.style.with_state_override(state, blended);
             }
             if opacity < 255 {
                 let apply = |v: u8| -> u8 { ((v as u16 * opacity as u16) / 255) as u8 };
@@ -3485,6 +3515,81 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
         }
         Ok(())
+    }
+
+    fn start_focus_transitions(&mut self, old: Option<WidgetId>, new: Option<WidgetId>) {
+        if self.state_transition_ms == 0 {
+            return;
+        }
+        if let Some(id) = old {
+            self.start_state_transition(id, VisualState::Focused, VisualState::Normal);
+        }
+        if let Some(id) = new {
+            self.start_state_transition(id, VisualState::Normal, VisualState::Focused);
+        }
+    }
+
+    fn start_state_transition(&mut self, id: WidgetId, from: VisualState, to: VisualState) {
+        if self.state_transition_ms == 0 || from == to {
+            return;
+        }
+        if let Some(entry) = self.state_transitions.iter_mut().find(|entry| entry.id == id) {
+            *entry = StateTransition {
+                id,
+                from,
+                to,
+                elapsed_ms: 0,
+            };
+            return;
+        }
+        if self.state_transitions.len() == self.state_transitions.capacity() {
+            self.state_transitions.remove(0);
+        }
+        let _ = self.state_transitions.push(StateTransition {
+            id,
+            from,
+            to,
+            elapsed_ms: 0,
+        });
+    }
+
+    fn tick_state_transitions(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        if self.state_transitions.is_empty() || self.state_transition_ms == 0 {
+            return Ok(());
+        }
+        let mut i = 0usize;
+        while i < self.state_transitions.len() {
+            let mut remove = false;
+            let id;
+            {
+                let entry = &mut self.state_transitions[i];
+                entry.elapsed_ms = entry.elapsed_ms.saturating_add(dt_ms);
+                if entry.elapsed_ms >= self.state_transition_ms {
+                    remove = true;
+                }
+                id = entry.id;
+            }
+            if let Some(rect) = self.absolute_rect(id) {
+                self.dirty.add(rect)?;
+            }
+            if remove {
+                self.state_transitions.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn state_transition_progress(&self, id: WidgetId) -> Option<(VisualState, VisualState, f32)> {
+        let duration = self.state_transition_ms.max(1);
+        self.state_transitions
+            .iter()
+            .find(|entry| entry.id == id)
+            .map(|entry| {
+                let t = (entry.elapsed_ms as f32 / duration as f32).clamp(0.0, 1.0);
+                (entry.from, entry.to, t)
+            })
     }
 
     fn set_textarea_cursor_visible(&mut self, id: Option<WidgetId>, visible: bool) {

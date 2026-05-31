@@ -2803,6 +2803,42 @@ fn scroll_physics_decay_controls_inertia_persistence() {
 }
 
 #[test]
+fn focus_state_transitions_progress_and_complete() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let first = gui
+        .add_button(Rect::new(0, 0, 20, 10), "A", Style::button())
+        .unwrap();
+    let second = gui
+        .add_button(Rect::new(0, 12, 20, 10), "B", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(30);
+    gui.set_focus(Some(first)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.set_focus(Some(second)).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+    gui.tick_input(10).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+    gui.tick_input(40).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
+fn zero_duration_disables_state_transition_queue() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let first = gui
+        .add_button(Rect::new(0, 0, 20, 10), "A", Style::button())
+        .unwrap();
+    let second = gui
+        .add_button(Rect::new(0, 12, 20, 10), "B", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(0);
+    gui.set_focus(Some(first)).unwrap();
+    gui.set_focus(Some(second)).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
 fn event_filter_limits_targeted_app_events() {
     let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
     let button = gui
