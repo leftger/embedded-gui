@@ -830,13 +830,7 @@ where
                     EllipsisMode::ThreeDots => "...",
                     EllipsisMode::SingleGlyph => ".",
                 };
-                self.draw_text_with_font(
-                    x + line_w as i32,
-                    y,
-                    token,
-                    style.color,
-                    font,
-                )?;
+                self.draw_text_with_font(x + line_w as i32, y, token, style.color, font)?;
             }
             y += line_step as i32;
             rendered_lines = rendered_lines.saturating_add(1);
@@ -1077,12 +1071,7 @@ where
         image: ImageRef<'_>,
         fit: ImageFit,
     ) -> Result<(), D::Error> {
-        self.draw_image_region(
-            rect,
-            image,
-            fit,
-            Rect::new(0, 0, image.width, image.height),
-        )
+        self.draw_image_region(rect, image, fit, Rect::new(0, 0, image.width, image.height))
     }
 
     pub fn draw_image_region(
@@ -1154,7 +1143,9 @@ where
                 if sx < 0.0 || sy < 0.0 || sx >= image.width as f32 || sy >= image.height as f32 {
                     continue;
                 }
-                let idx = (sy as usize).saturating_mul(src_w).saturating_add(sx as usize);
+                let idx = (sy as usize)
+                    .saturating_mul(src_w)
+                    .saturating_add(sx as usize);
                 if let Some(raw) = image.pixels.get(idx) {
                     let color = Rgb565::new(
                         ((raw >> 11) & 0x1F) as u8,

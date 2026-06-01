@@ -278,7 +278,12 @@ fn reveal_clip(
     let top = (cy - radius).clamp(0, viewport_h as i32);
     let right = (cx + radius).clamp(0, viewport_w as i32);
     let bottom = (cy + radius).clamp(0, viewport_h as i32);
-    Rect::new(left, top, (right - left).max(0) as u32, (bottom - top).max(0) as u32)
+    Rect::new(
+        left,
+        top,
+        (right - left).max(0) as u32,
+        (bottom - top).max(0) as u32,
+    )
 }
 
 fn origin_point(viewport_w: u32, viewport_h: u32, origin: ScreenTransitionOrigin) -> (i32, i32) {
@@ -299,7 +304,12 @@ fn origin_point(viewport_w: u32, viewport_h: u32, origin: ScreenTransitionOrigin
     }
 }
 
-fn wipe_clip(viewport_w: u32, viewport_h: u32, progress: f32, effect: ScreenTransitionEffect) -> Rect {
+fn wipe_clip(
+    viewport_w: u32,
+    viewport_h: u32,
+    progress: f32,
+    effect: ScreenTransitionEffect,
+) -> Rect {
     let w = viewport_w as i32;
     let h = viewport_h as i32;
     let p = progress.clamp(0.0, 1.0);
@@ -388,13 +398,7 @@ impl Default for ScreenTransitionRunner {
     }
 }
 
-pub fn render_transition_pair<
-    'a,
-    D,
-    const NODES: usize,
-    const EVENTS: usize,
-    const DIRTY: usize,
->(
+pub fn render_transition_pair<'a, D, const NODES: usize, const EVENTS: usize, const DIRTY: usize>(
     target: &mut D,
     outgoing: &GuiContext<'a, NODES, EVENTS, DIRTY>,
     incoming: &GuiContext<'a, NODES, EVENTS, DIRTY>,
@@ -403,7 +407,9 @@ pub fn render_transition_pair<
     viewport_h: u32,
 ) -> Result<(), D::Error>
 where
-    D: embedded_graphics_core::draw_target::DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+    D: embedded_graphics_core::draw_target::DrawTarget<
+            Color = embedded_graphics_core::pixelcolor::Rgb565,
+        >,
 {
     let sample = active.sample(viewport_w, viewport_h);
     if let Some(clip) = sample.outgoing_clip {

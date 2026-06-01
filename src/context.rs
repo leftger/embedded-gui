@@ -16,7 +16,7 @@ use crate::{
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },
-    widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode, TEXTAREA_CAPACITY},
+    widgets::{ChartMode, KeyboardLayout, TEXTAREA_CAPACITY, WidgetKind, WidgetNode},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1092,12 +1092,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn add_spinner<S>(
-        &mut self,
-        rect: Rect,
-        phase: f32,
-        style: S,
-    ) -> Result<WidgetId, GuiError>
+    pub fn add_spinner<S>(&mut self, rect: Rect, phase: f32, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
     {
@@ -1553,7 +1548,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn tick_spinner(&mut self, id: WidgetId, dt_ms: u32, cycles_per_sec: f32) -> Result<(), GuiError> {
+    pub fn tick_spinner(
+        &mut self,
+        id: WidgetId,
+        dt_ms: u32,
+        cycles_per_sec: f32,
+    ) -> Result<(), GuiError> {
         let phase = match self.node(id).ok_or(GuiError::NotFound)?.kind {
             WidgetKind::Spinner { phase } => phase + (dt_ms as f32 / 1000.0) * cycles_per_sec,
             _ => return Err(GuiError::NotFound),
@@ -1904,7 +1904,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         chars.remove(*cursor - 1);
                         *cursor -= 1;
                     }
-                    if removed_selection || *cursor != original_cursor || chars.len() != original_len {
+                    if removed_selection
+                        || *cursor != original_cursor
+                        || chars.len() != original_len
+                    {
                         *selection = None;
                         let (next_buf, next_len) = textarea_storage_from_chars(&chars);
                         *text_buf = next_buf;
@@ -2032,7 +2035,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    fn apply_textarea_snapshot(&mut self, id: WidgetId, snap: TextareaSnapshot) -> Result<(), GuiError> {
+    fn apply_textarea_snapshot(
+        &mut self,
+        id: WidgetId,
+        snap: TextareaSnapshot,
+    ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
@@ -2058,14 +2065,18 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         if self.textarea_undo.len() == self.textarea_undo.capacity() {
             self.textarea_undo.remove(0);
         }
-        let _ = self.textarea_undo.push(TextareaHistoryEntry { id, snapshot });
+        let _ = self
+            .textarea_undo
+            .push(TextareaHistoryEntry { id, snapshot });
     }
 
     fn push_textarea_redo(&mut self, id: WidgetId, snapshot: TextareaSnapshot) {
         if self.textarea_redo.len() == self.textarea_redo.capacity() {
             self.textarea_redo.remove(0);
         }
-        let _ = self.textarea_redo.push(TextareaHistoryEntry { id, snapshot });
+        let _ = self
+            .textarea_redo
+            .push(TextareaHistoryEntry { id, snapshot });
     }
 
     fn clear_textarea_redo_for(&mut self, id: WidgetId) {
@@ -2127,7 +2138,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn set_keyboard_layout(&mut self, id: WidgetId, layout: KeyboardLayout) -> Result<(), GuiError> {
+    pub fn set_keyboard_layout(
+        &mut self,
+        id: WidgetId,
+        layout: KeyboardLayout,
+    ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
@@ -2701,7 +2716,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         match event {
             InputEvent::Home => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.set_textarea_cursor_line_home(id)?;
                         return Ok(());
                     }
@@ -2710,7 +2728,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::End => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.set_textarea_cursor_line_end(id)?;
                         return Ok(());
                     }
@@ -2719,7 +2740,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::WordLeft => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_word(id, -1)?;
                         return Ok(());
                     }
@@ -2728,7 +2752,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::WordRight => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_word(id, 1)?;
                         return Ok(());
                     }
@@ -2737,7 +2764,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::Undo => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.textarea_undo(id)?;
                     }
                 }
@@ -2745,7 +2775,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::Redo => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.textarea_redo(id)?;
                     }
                 }
@@ -2753,7 +2786,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectLeft => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_select(id, -1)?;
                         return Ok(());
                     }
@@ -2762,7 +2798,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectRight => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_select(id, 1)?;
                         return Ok(());
                     }
@@ -2771,7 +2810,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectHome => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.set_textarea_cursor_line_home_select(id)?;
                         return Ok(());
                     }
@@ -2780,7 +2822,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectEnd => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.set_textarea_cursor_line_end_select(id)?;
                         return Ok(());
                     }
@@ -2789,7 +2834,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectWordLeft => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_word_select(id, -1)?;
                         return Ok(());
                     }
@@ -2798,7 +2846,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectWordRight => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                    if matches!(
+                        self.node(id).map(|n| n.kind),
+                        Some(WidgetKind::TextArea { .. })
+                    ) {
                         self.move_textarea_cursor_word_select(id, 1)?;
                         return Ok(());
                     }
@@ -2873,7 +2924,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             InputEvent::Back => {
                 if let Some(id) = self.focus {
                     match self.key_bindings_for(id).back {
-                        KeyBindingAction::Default | KeyBindingAction::Back => self.handle_back_action(),
+                        KeyBindingAction::Default | KeyBindingAction::Back => {
+                            self.handle_back_action()
+                        }
                         KeyBindingAction::Activate => self.handle_select_activation(id),
                         KeyBindingAction::Ignore => Ok(()),
                     }
@@ -2952,10 +3005,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         })?;
                     }
                 }
-                inertia.velocity *=
-                    self.scroll_physics
-                        .velocity_decay
-                        .powf((dt_ms as f32 / 16.0).max(1.0));
+                inertia.velocity *= self
+                    .scroll_physics
+                    .velocity_decay
+                    .powf((dt_ms as f32 / 16.0).max(1.0));
                 self.inertia_scroll = Some(inertia);
             }
         }
@@ -2972,9 +3025,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         pressed.repeat_elapsed_ms = pressed.repeat_elapsed_ms.saturating_add(dt_ms);
         if !pressed.long_emitted && pressed.elapsed_ms >= timing.long_press_ms {
             let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
-            self.dispatch_widget_event(pressed.id, WidgetEventKind::LongPressed, &mut events, |_| {
-                EventPolicy::Continue
-            })?;
+            self.dispatch_widget_event(
+                pressed.id,
+                WidgetEventKind::LongPressed,
+                &mut events,
+                |_| EventPolicy::Continue,
+            )?;
             self.push_event(UiEvent::LongPressed(pressed.id))?;
             pressed.long_emitted = true;
         }
@@ -2982,8 +3038,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             && self.repeatable_widget(pressed.id)
             && pressed.long_emitted
         {
-            let intervals = (pressed.repeat_elapsed_ms - timing.repeat_delay_ms)
-                / timing.repeat_interval_ms;
+            let intervals =
+                (pressed.repeat_elapsed_ms - timing.repeat_delay_ms) / timing.repeat_interval_ms;
             if intervals > 0 {
                 self.dispatch_repeat_activation(pressed.id)?;
                 pressed.repeat_elapsed_ms = timing.repeat_delay_ms;
@@ -3155,7 +3211,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     .map(|style| style.resolve(vs))
                     .unwrap_or_else(|| render_node.style.resolve(vs))
             };
-            let active_style = if let Some((from, to, t)) = self.state_transition_progress(node.id) {
+            let active_style = if let Some((from, to, t)) = self.state_transition_progress(node.id)
+            {
                 lerp_style(resolve_state_style(from), resolve_state_style(to), t)
             } else {
                 resolve_state_style(state)
@@ -3816,7 +3873,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     fn repeatable_widget(&self, id: WidgetId) -> bool {
         self.node(id).is_some_and(|node| {
-            matches!(node.kind, WidgetKind::Button(_) | WidgetKind::IconButton { .. })
+            matches!(
+                node.kind,
+                WidgetKind::Button(_) | WidgetKind::IconButton { .. }
+            )
         })
     }
 
@@ -3886,7 +3946,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         if self.state_transition_ms == 0 || from == to {
             return;
         }
-        if let Some(entry) = self.state_transitions.iter_mut().find(|entry| entry.id == id) {
+        if let Some(entry) = self
+            .state_transitions
+            .iter_mut()
+            .find(|entry| entry.id == id)
+        {
             *entry = StateTransition {
                 id,
                 from,
@@ -3983,7 +4047,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let Some(id) = self.focus else {
             return Ok(());
         };
-        let is_textarea = matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. }));
+        let is_textarea = matches!(
+            self.node(id).map(|n| n.kind),
+            Some(WidgetKind::TextArea { .. })
+        );
         if !is_textarea {
             return Ok(());
         }
@@ -4105,11 +4172,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     fn handle_back_action(&mut self) -> Result<(), GuiError> {
         if let Some(id) = self.focus {
-            if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+            if matches!(
+                self.node(id).map(|n| n.kind),
+                Some(WidgetKind::TextArea { .. })
+            ) {
                 self.textarea_backspace(id)?;
                 return Ok(());
             }
-            if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::Dropdown { open: true, .. })) {
+            if matches!(
+                self.node(id).map(|n| n.kind),
+                Some(WidgetKind::Dropdown { open: true, .. })
+            ) {
                 self.set_dropdown_open(id, false)?;
                 return Ok(());
             }
@@ -4264,7 +4337,12 @@ fn textarea_row_col_at_cursor(text: &str, cursor: usize, wrap_cols: usize) -> (u
     (row, col)
 }
 
-fn textarea_cursor_from_row_col(text: &str, target_row: usize, target_col: usize, wrap_cols: usize) -> usize {
+fn textarea_cursor_from_row_col(
+    text: &str,
+    target_row: usize,
+    target_col: usize,
+    wrap_cols: usize,
+) -> usize {
     let mut row = 0usize;
     let mut col = 0usize;
     let mut idx = 0usize;

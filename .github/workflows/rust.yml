@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leftger/embedded-3dgfx
+          path: embedded-3dgfx
+      - name: Wire path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/embedded-3dgfx" ../embedded-3dgfx
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo check
@@ -25,6 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leftger/embedded-3dgfx
+          path: embedded-3dgfx
+      - name: Wire path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/embedded-3dgfx" ../embedded-3dgfx
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install SDL2
@@ -37,6 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leftger/embedded-3dgfx
+          path: embedded-3dgfx
+      - name: Wire path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/embedded-3dgfx" ../embedded-3dgfx
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -48,6 +66,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leftger/embedded-3dgfx
+          path: embedded-3dgfx
+      - name: Wire path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/embedded-3dgfx" ../embedded-3dgfx
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -60,6 +84,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leftger/embedded-3dgfx
+          path: embedded-3dgfx
+      - name: Wire path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/embedded-3dgfx" ../embedded-3dgfx
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install SDL2

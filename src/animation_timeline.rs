@@ -593,13 +593,12 @@ impl<const TRACKS: usize, const N: usize> ComposedAnimationPlayer<TRACKS, N> {
                 CompositionMode::Sequence => cumulative_delay,
             };
             anim = anim.with_delay(anim.delay_ms.saturating_add(delay));
-            let id = self
-                .manager
-                .start(anim)
-                .map_err(TimelineError::Animation)?;
+            let id = self.manager.start(anim).map_err(TimelineError::Animation)?;
             self.ids[idx] = Some(id);
             if self.composition.mode == CompositionMode::Sequence {
-                let segment = anim.total_duration_ms(true, false).unwrap_or(anim.duration_ms);
+                let segment = anim
+                    .total_duration_ms(true, false)
+                    .unwrap_or(anim.duration_ms);
                 cumulative_delay = cumulative_delay.saturating_add(segment);
             }
         }

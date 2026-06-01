@@ -69,7 +69,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 24, 24, 24>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(10, 10, 220, 10),
         "[1] chart mode [2] clip toggle [3] gauge value",
@@ -78,7 +79,13 @@ fn build_ui(gui: &mut GuiContext<'static, 24, 24, 24>) -> Ids {
     .unwrap();
 
     let chart = gui
-        .add_chart(Rect::new(12, 24, 104, 46), &CHART_SERIES, 0.0, 1.0, Style::panel())
+        .add_chart(
+            Rect::new(12, 24, 104, 46),
+            &CHART_SERIES,
+            0.0,
+            1.0,
+            Style::panel(),
+        )
         .unwrap();
     gui.set_chart_style(chart, 2, true, true).unwrap();
     gui.set_chart_decoration(chart, ChartMode::Line, true, true, true)
@@ -102,7 +109,8 @@ fn build_ui(gui: &mut GuiContext<'static, 24, 24, 24>) -> Ids {
     let table = gui
         .add_table(Rect::new(176, 24, 52, 46), &TABLE_ROWS, Style::panel())
         .unwrap();
-    gui.set_table_style(table, true, 1, TextAlign::Center).unwrap();
+    gui.set_table_style(table, true, 1, TextAlign::Center)
+        .unwrap();
 
     let clip_panel = gui
         .add_panel(Rect::new(12, 78, 90, 42), Style::panel())

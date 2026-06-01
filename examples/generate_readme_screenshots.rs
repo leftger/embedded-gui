@@ -25,7 +25,8 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all("docs/screenshots")?;
 
-    let mut dashboard_display = SimulatorDisplay::<Rgb565>::new(Size::new(DASHBOARD_W, DASHBOARD_H));
+    let mut dashboard_display =
+        SimulatorDisplay::<Rgb565>::new(Size::new(DASHBOARD_W, DASHBOARD_H));
     draw_dashboard_showcase(&mut dashboard_display);
     let dashboard_settings = OutputSettingsBuilder::new().scale(4).build();
     dashboard_display
@@ -63,7 +64,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn draw_dashboard_showcase(display: &mut SimulatorDisplay<Rgb565>) {
     let mut gui = GuiContext::<32, 32, 24>::new(Rect::new(0, 0, DASHBOARD_W, DASHBOARD_H));
-    gui.add_themed_panel(Rect::new(4, 4, 184, 112)).expect("panel");
+    gui.add_themed_panel(Rect::new(4, 4, 184, 112))
+        .expect("panel");
     gui.add_themed_label(Rect::new(12, 10, 168, 10), "SETTINGS")
         .expect("label");
     gui.add_themed_tabs(Rect::new(12, 26, 104, 14), &TABS, 1)
@@ -159,11 +161,8 @@ fn draw_font_showcase(display: &mut SimulatorDisplay<Rgb565>) {
         Line::from_spans(&line2).aligned(TextAlign::Center),
     ];
     let text = Text::from_lines(&lines).wrapped(TextWrap::Character);
-    ctx.draw_text_model_in(
-        Rect::new(body.x, body.y + 10, body.w, body.h - 10),
-        text,
-    )
-    .expect("text model");
+    ctx.draw_text_model_in(Rect::new(body.x, body.y + 10, body.w, body.h - 10), text)
+        .expect("text model");
     ctx.draw_text_in(
         Rect::new(4, 2, FONT_W - 8, 8),
         "Mixed tiny + large spans",
@@ -190,8 +189,14 @@ fn draw_motion_showcase(display: &mut SimulatorDisplay<Rgb565>, t: f32) {
     .expect("title");
     gui.add_themed_progress_bar(Rect::new(12, 28, 122, 10), progress)
         .expect("progress");
-    gui.add_gauge(Rect::new(140, 22, 26, 26), gauge, 0.0, 1.0, Style::progress())
-        .expect("gauge");
+    gui.add_gauge(
+        Rect::new(140, 22, 26, 26),
+        gauge,
+        0.0,
+        1.0,
+        Style::progress(),
+    )
+    .expect("gauge");
     gui.add_spinner(Rect::new(170, 24, 20, 20), progress, Style::progress())
         .expect("spinner");
     let card = gui

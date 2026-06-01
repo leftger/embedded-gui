@@ -352,27 +352,27 @@ impl<'a> WidgetNode<'a> {
                 major_ticks,
                 minor_ticks,
                 show_value,
-            } => {
-                render_gauge(
-                    ctx,
-                    rect,
-                    value,
-                    min,
-                    max,
-                    major_ticks,
-                    minor_ticks,
-                    show_value,
-                    self.style,
-                    state,
-                )
-            }
+            } => render_gauge(
+                ctx,
+                rect,
+                value,
+                min,
+                max,
+                major_ticks,
+                minor_ticks,
+                show_value,
+                self.style,
+                state,
+            ),
             WidgetKind::GaugeNeedle {
                 value,
                 min,
                 max,
                 start_deg,
                 end_deg,
-            } => render_gauge_needle(ctx, rect, value, min, max, start_deg, end_deg, self.style, state),
+            } => render_gauge_needle(
+                ctx, rect, value, min, max, start_deg, end_deg, self.style, state,
+            ),
             WidgetKind::Chart {
                 values,
                 min,
@@ -384,32 +384,28 @@ impl<'a> WidgetNode<'a> {
                 show_grid,
                 show_axes,
                 show_labels,
-            } => {
-                render_chart(
-                    ctx,
-                    rect,
-                    values,
-                    min,
-                    max,
-                    thickness,
-                    fill_under,
-                    markers,
-                    mode,
-                    show_grid,
-                    show_axes,
-                    show_labels,
-                    self.style,
-                    state,
-                )
-            }
+            } => render_chart(
+                ctx,
+                rect,
+                values,
+                min,
+                max,
+                thickness,
+                fill_under,
+                markers,
+                mode,
+                show_grid,
+                show_axes,
+                show_labels,
+                self.style,
+                state,
+            ),
             WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
             WidgetKind::Dropdown {
                 items,
                 selected,
                 open,
-            } => {
-                render_dropdown(ctx, rect, items, selected, open, self.style, state)
-            }
+            } => render_dropdown(ctx, rect, items, selected, open, self.style, state),
             WidgetKind::Roller { items, selected } => {
                 render_roller(ctx, rect, items, selected, self.style, state)
             }
@@ -454,8 +450,12 @@ impl<'a> WidgetNode<'a> {
                 alt_keys,
                 layout,
                 ..
-            } => render_keyboard(ctx, rect, keys, selected, cols, alt_keys, layout, self.style, state),
-            WidgetKind::Image { image, fit } => render_image(ctx, rect, image, fit, self.style, state),
+            } => render_keyboard(
+                ctx, rect, keys, selected, cols, alt_keys, layout, self.style, state,
+            ),
+            WidgetKind::Image { image, fit } => {
+                render_image(ctx, rect, image, fit, self.style, state)
+            }
             WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
             WidgetKind::Spacer => Ok(()),
             WidgetKind::Menu { items, selected } => {
@@ -1190,14 +1190,21 @@ where
         let mut min_label: String<12> = String::new();
         let _ = write!(&mut min_label, "{:.1}", min);
         ctx.draw_text_in(
-            Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(2), style.font.line_height()),
+            Rect::new(
+                inner.x + 1,
+                inner.y,
+                inner.w.saturating_sub(2),
+                style.font.line_height(),
+            ),
             max_label.as_str(),
             TextStyle::new(style.text).with_font(style.font),
         )?;
         ctx.draw_text_in(
             Rect::new(
                 inner.x + 1,
-                inner.bottom().saturating_sub(style.font.line_height() as i32),
+                inner
+                    .bottom()
+                    .saturating_sub(style.font.line_height() as i32),
                 inner.w.saturating_sub(2),
                 style.font.line_height(),
             ),
@@ -1291,7 +1298,9 @@ where
         radius,
         base,
         base + 120,
-        StrokeStyle::new(style.accent).with_width(2).with_antialias(true),
+        StrokeStyle::new(style.accent)
+            .with_width(2)
+            .with_antialias(true),
     )
 }
 
@@ -1324,16 +1333,22 @@ where
     ctx.draw_text_in(
         Rect::new(inner.right() - 7, inner.y, 7, inner.h),
         if open { "^" } else { "v" },
-        TextStyle::new(style.accent).with_font(style.font).centered(),
+        TextStyle::new(style.accent)
+            .with_font(style.font)
+            .centered(),
     )?;
     if open {
         let row_h = style.font.line_height().max(6);
-        let popup_h = (row_h.saturating_mul(items.len() as u32)).min(40).max(row_h);
+        let popup_h = (row_h.saturating_mul(items.len() as u32))
+            .min(40)
+            .max(row_h);
         let popup = Rect::new(inner.x, inner.bottom() as i32 + 1, inner.w, popup_h);
         ctx.fill_rect(popup, style.background.unwrap_or(Rgb565::new(8, 12, 16)))?;
         ctx.stroke_rect(popup, Border::one(style.border.color))?;
         let visible = (popup_h / row_h).max(1) as usize;
-        let start = selected.saturating_sub(visible / 2).min(items.len().saturating_sub(visible));
+        let start = selected
+            .saturating_sub(visible / 2)
+            .min(items.len().saturating_sub(visible));
         for (i, item) in items.iter().enumerate().skip(start).take(visible) {
             let row = Rect::new(
                 popup.x + 1,
@@ -1378,7 +1393,12 @@ where
     let row_h = (inner.h / 3).max(1);
     let rows = [prev, cur, next];
     for (idx, text) in rows.iter().enumerate() {
-        let row = Rect::new(inner.x, inner.y + (idx as u32 * row_h) as i32, inner.w, row_h);
+        let row = Rect::new(
+            inner.x,
+            inner.y + (idx as u32 * row_h) as i32,
+            inner.w,
+            row_h,
+        );
         if idx == 1 {
             ctx.fill_rect(row, style.accent)?;
         }

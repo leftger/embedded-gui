@@ -14,7 +14,8 @@ fn main() {
     let mut window = Window::new("timeline + transition showcase", &settings);
 
     let mut gui = GuiContext::<12, 12, 12>::new(Rect::new(0, 0, 160, 96));
-    gui.add_panel(Rect::new(8, 8, 144, 80), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(8, 8, 144, 80), Style::panel())
+        .unwrap();
     let meter = gui
         .add_meter(Rect::new(20, 28, 40, 20), 0.0, 0.0, 1.0, Style::progress())
         .unwrap();
@@ -81,12 +82,7 @@ fn main() {
                         ScreenCommand::Pop
                     };
                     transitions
-                        .apply(
-                            &mut stack,
-                            command,
-                            effects[effect_idx],
-                            &mut lifecycle,
-                        )
+                        .apply(&mut stack, command, effects[effect_idx], &mut lifecycle)
                         .unwrap();
                     effect_idx = (effect_idx + 1) % effects.len();
                 }

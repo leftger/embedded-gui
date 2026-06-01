@@ -621,12 +621,8 @@ fn nested_layout_respects_parent_clip_children_for_overflowing_child() {
         .unwrap();
     gui.add_child(parent, child).unwrap();
 
-    gui.apply_layout(
-        LinearLayout::row(),
-        Rect::new(0, 0, 40, 8),
-        &[child],
-    )
-    .unwrap();
+    gui.apply_layout(LinearLayout::row(), Rect::new(0, 0, 40, 8), &[child])
+        .unwrap();
 
     let mut target = MockTarget::new(80, 40);
     gui.render(&mut target).unwrap();
@@ -894,11 +890,7 @@ fn animation_reverse_starts_from_target() {
 #[test]
 fn animation_supports_custom_curve_callbacks() {
     fn hold_then_pop(t: f32) -> f32 {
-        if t < 0.5 {
-            0.0
-        } else {
-            1.2
-        }
+        if t < 0.5 { 0.0 } else { 1.2 }
     }
 
     let mut anim = Animation::new(0.0, 10.0, 100, Easing::Linear).with_custom_curve(hold_then_pop);
@@ -916,11 +908,7 @@ fn animation_supports_custom_curve_callbacks() {
 #[test]
 fn animation_supports_custom_interpolator_callbacks() {
     fn midpoint_bias(from: f32, to: f32, t: f32) -> f32 {
-        if t < 0.5 {
-            from
-        } else {
-            to
-        }
+        if t < 0.5 { from } else { to }
     }
 
     let mut anim =
@@ -1217,7 +1205,9 @@ fn widget_animator_ignore_policy_reports_conflict_ignored() {
 #[test]
 fn widget_animator_convenience_builders_work() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
-    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(1, 1, 20, 10), Style::panel())
+        .unwrap();
     let slider = gui
         .add_slider(Rect::new(1, 14, 20, 8), 0.0, 0.0, 1.0, Style::button())
         .unwrap();
@@ -1252,10 +1242,19 @@ fn widget_animator_convenience_builders_work() {
 #[test]
 fn widget_animator_policy_aware_builders_apply_conflict_rules() {
     let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 48, 20));
-    let panel = gui.add_panel(Rect::new(0, 0, 20, 8), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(0, 0, 20, 8), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<4, 4>::new();
     animator
-        .animate_widget_x_with_policy(panel, 0, 10, 100, Easing::Linear, AnimationConflictPolicy::Ignore)
+        .animate_widget_x_with_policy(
+            panel,
+            0,
+            10,
+            100,
+            Easing::Linear,
+            AnimationConflictPolicy::Ignore,
+        )
         .unwrap();
     assert_eq!(
         animator.animate_widget_x_with_policy(
@@ -1334,10 +1333,18 @@ fn widget_animator_extended_property_builders_work() {
 #[test]
 fn widget_animator_stagger_path_and_presets_work() {
     let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 120, 80));
-    let a = gui.add_panel(Rect::new(0, 0, 16, 10), Style::panel()).unwrap();
-    let b = gui.add_panel(Rect::new(0, 12, 16, 10), Style::panel()).unwrap();
-    let c = gui.add_panel(Rect::new(0, 24, 16, 10), Style::panel()).unwrap();
-    let focus = gui.add_panel(Rect::new(10, 40, 20, 12), Style::panel()).unwrap();
+    let a = gui
+        .add_panel(Rect::new(0, 0, 16, 10), Style::panel())
+        .unwrap();
+    let b = gui
+        .add_panel(Rect::new(0, 12, 16, 10), Style::panel())
+        .unwrap();
+    let c = gui
+        .add_panel(Rect::new(0, 24, 16, 10), Style::panel())
+        .unwrap();
+    let focus = gui
+        .add_panel(Rect::new(10, 40, 20, 12), Style::panel())
+        .unwrap();
 
     let mut animator = WidgetAnimator::<32, 32>::new();
     assert_eq!(
@@ -1383,10 +1390,18 @@ fn widget_animator_stagger_path_and_presets_work() {
 #[test]
 fn animation_presets_namespace_helpers_work() {
     let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 120, 80));
-    let a = gui.add_panel(Rect::new(4, 4, 18, 10), Style::panel()).unwrap();
-    let b = gui.add_panel(Rect::new(4, 18, 18, 10), Style::panel()).unwrap();
-    let c = gui.add_panel(Rect::new(4, 32, 18, 10), Style::panel()).unwrap();
-    let focus = gui.add_panel(Rect::new(40, 20, 22, 12), Style::panel()).unwrap();
+    let a = gui
+        .add_panel(Rect::new(4, 4, 18, 10), Style::panel())
+        .unwrap();
+    let b = gui
+        .add_panel(Rect::new(4, 18, 18, 10), Style::panel())
+        .unwrap();
+    let c = gui
+        .add_panel(Rect::new(4, 32, 18, 10), Style::panel())
+        .unwrap();
+    let focus = gui
+        .add_panel(Rect::new(40, 20, 22, 12), Style::panel())
+        .unwrap();
 
     let mut animator = WidgetAnimator::<32, 32>::new();
     assert_eq!(
@@ -1426,10 +1441,14 @@ fn animation_edge_cases_cover_delay_reverse_and_id_wrap() {
 
     let mut manager = AnimationManager::<1>::new();
     manager.set_next_id_for_test(u16::MAX);
-    let first = manager.start(Animation::new(0.0, 1.0, 1, Easing::Linear)).unwrap();
+    let first = manager
+        .start(Animation::new(0.0, 1.0, 1, Easing::Linear))
+        .unwrap();
     assert_eq!(first.raw(), u16::MAX);
     manager.tick(1);
-    let second = manager.start(Animation::new(0.0, 1.0, 1, Easing::Linear)).unwrap();
+    let second = manager
+        .start(Animation::new(0.0, 1.0, 1, Easing::Linear))
+        .unwrap();
     assert_eq!(second.raw(), 1);
 }
 
@@ -1442,7 +1461,9 @@ fn widget_animator_animates_geometry_and_style_properties() {
     let scroll = gui
         .add_scroll_view(Rect::new(0, 12, 30, 20), 0, 120, Style::panel())
         .unwrap();
-    let panel = gui.add_panel(Rect::new(4, 40, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(4, 40, 20, 10), Style::panel())
+        .unwrap();
     gui.clear_dirty();
 
     let mut animator = WidgetAnimator::<8, 8>::new();
@@ -1571,7 +1592,8 @@ fn screen_transition_runner_tracks_progress() {
 #[test]
 fn context_can_render_with_offset_and_opacity() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 32, 16));
-    gui.add_panel(Rect::new(1, 1, 10, 8), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(1, 1, 10, 8), Style::panel())
+        .unwrap();
     let mut target = TestBuffer::new(32, 16);
     gui.render_with_offset_and_opacity(&mut target, 4, 0, 128)
         .unwrap();
@@ -1621,7 +1643,8 @@ fn transition_wipe_and_origin_variants_produce_clips() {
     let sample = wipe.sample(100, 80);
     assert!(sample.incoming_clip.is_some());
 
-    let reveal = ScreenTransitionSpec::circular_reveal(300).with_origin(ScreenTransitionOrigin::BottomRight);
+    let reveal =
+        ScreenTransitionSpec::circular_reveal(300).with_origin(ScreenTransitionOrigin::BottomRight);
     assert_eq!(reveal.origin, ScreenTransitionOrigin::BottomRight);
     let eased = ScreenTransitionSpec::wipe_down(280).with_easing(Easing::OutBack);
     assert_eq!(eased.easing, Easing::OutBack);
@@ -1698,7 +1721,9 @@ fn keyframe_track_callbacks_fire_per_segment() {
 #[test]
 fn widget_animator_introspection_and_stop_helpers_work() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
-    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(1, 1, 20, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<8, 8>::new();
     animator
         .animate_widget_x(panel, 1, 8, 100, Easing::Linear)
@@ -1711,7 +1736,10 @@ fn widget_animator_introspection_and_stop_helpers_work() {
 
     let mut handles = heapless::Vec::<AnimationId, 8>::new();
     assert_eq!(animator.handles_for_widget(panel, &mut handles), 2);
-    assert_eq!(animator.stop_widget_property(panel, AnimatedProperty::WidgetX), 1);
+    assert_eq!(
+        animator.stop_widget_property(panel, AnimatedProperty::WidgetX),
+        1
+    );
     assert_eq!(animator.stop_widget(panel), 1);
     assert!(!animator.is_animating_widget(panel));
 }
@@ -1719,7 +1747,9 @@ fn widget_animator_introspection_and_stop_helpers_work() {
 #[test]
 fn widget_animator_selection_bump_settle_moves_and_returns() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 80, 40));
-    let panel = gui.add_panel(Rect::new(10, 20, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(10, 20, 20, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<8, 8>::new();
     animator
         .preset_selection_bump_settle(panel, 20, 4, 60)
@@ -1740,7 +1770,9 @@ fn widget_animator_custom_curve_and_interpolator_helpers_work() {
     }
 
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 80, 40));
-    let panel = gui.add_panel(Rect::new(10, 10, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(10, 10, 20, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<8, 8>::new();
     animator
         .animate_widget_x_with_custom_interpolator(
@@ -1776,7 +1808,9 @@ fn widget_animator_custom_curve_and_interpolator_helpers_work() {
 #[test]
 fn widget_animator_multi_property_keyframes_apply_in_sequence() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 100, 60));
-    let panel = gui.add_panel(Rect::new(10, 10, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(10, 10, 20, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<16, 16>::new();
     let count = animator
         .animate_widget_keyframes(
@@ -1837,7 +1871,9 @@ fn sequence_player_can_seek_to_label() {
 #[test]
 fn widget_animator_can_snapshot_active_bindings() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
-    let panel = gui.add_panel(Rect::new(1, 1, 20, 10), Style::panel()).unwrap();
+    let panel = gui
+        .add_panel(Rect::new(1, 1, 20, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<8, 8>::new();
     animator
         .animate_widget_x(panel, 1, 8, 100, Easing::Linear)
@@ -1849,12 +1885,16 @@ fn widget_animator_can_snapshot_active_bindings() {
     let mut snapshots = heapless::Vec::<BindingSnapshot, 8>::new();
     let count = animator.active_bindings(&mut snapshots);
     assert_eq!(count, 2);
-    assert!(snapshots
-        .iter()
-        .any(|s| s.property == AnimatedProperty::WidgetX));
-    assert!(snapshots
-        .iter()
-        .any(|s| s.property == AnimatedProperty::Opacity));
+    assert!(
+        snapshots
+            .iter()
+            .any(|s| s.property == AnimatedProperty::WidgetX)
+    );
+    assert!(
+        snapshots
+            .iter()
+            .any(|s| s.property == AnimatedProperty::Opacity)
+    );
 }
 
 #[test]
@@ -1955,7 +1995,9 @@ fn composed_animation_player_callbacks_pause_and_seek_active_work() {
 #[test]
 fn menu_focus_choreography_preset_applies_motion_bundle() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 120, 60));
-    let focused = gui.add_panel(Rect::new(20, 20, 40, 12), Style::panel()).unwrap();
+    let focused = gui
+        .add_panel(Rect::new(20, 20, 40, 12), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<16, 16>::new();
     presets::menu_focus_choreography(&mut animator, focused, 20, 20).unwrap();
     animator.tick(120, &mut gui).unwrap();
@@ -1967,10 +2009,18 @@ fn menu_focus_choreography_preset_applies_motion_bundle() {
 #[test]
 fn dialog_and_neighbor_focus_choreography_presets_work() {
     let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 140, 80));
-    let dialog = gui.add_panel(Rect::new(40, 30, 40, 18), Style::panel()).unwrap();
-    let focused = gui.add_panel(Rect::new(20, 12, 50, 10), Style::panel()).unwrap();
-    let n1 = gui.add_panel(Rect::new(20, 24, 50, 10), Style::panel()).unwrap();
-    let n2 = gui.add_panel(Rect::new(20, 36, 50, 10), Style::panel()).unwrap();
+    let dialog = gui
+        .add_panel(Rect::new(40, 30, 40, 18), Style::panel())
+        .unwrap();
+    let focused = gui
+        .add_panel(Rect::new(20, 12, 50, 10), Style::panel())
+        .unwrap();
+    let n1 = gui
+        .add_panel(Rect::new(20, 24, 50, 10), Style::panel())
+        .unwrap();
+    let n2 = gui
+        .add_panel(Rect::new(20, 36, 50, 10), Style::panel())
+        .unwrap();
     let mut animator = WidgetAnimator::<24, 24>::new();
     presets::dialog_pop_choreography(&mut animator, dialog, 30).unwrap();
     presets::list_focus_with_neighbors(&mut animator, focused, &[n1, n2], 20, 12).unwrap();
@@ -1985,7 +2035,17 @@ fn dialog_and_neighbor_focus_choreography_presets_work() {
 fn arc_gauge_widget_renders_and_updates() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 64, 32));
     let gauge = gui
-        .add_arc_gauge(Rect::new(4, 4, 24, 24), 0.2, 0.0, 1.0, 135, 405, 2, true, Style::progress())
+        .add_arc_gauge(
+            Rect::new(4, 4, 24, 24),
+            0.2,
+            0.0,
+            1.0,
+            135,
+            405,
+            2,
+            true,
+            Style::progress(),
+        )
         .unwrap();
     gui.set_gauge_value(gauge, 0.8).unwrap();
     let mut target = TestBuffer::new(64, 32);
@@ -2098,15 +2158,18 @@ fn physics_and_path_animators_advance() {
 #[test]
 fn style_transition_interpolates_between_states() {
     let styles = WidgetStyle::new(Style::button());
-    let mut transition = StyleTransition::new(VisualState::Normal, VisualState::Focused, 100, Easing::Linear);
+    let mut transition = StyleTransition::new(
+        VisualState::Normal,
+        VisualState::Focused,
+        100,
+        Easing::Linear,
+    );
     transition.tick(50);
     let blended = transition.style(styles);
     assert!(blended.opacity > 0);
 
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 20, 20));
-    let panel = gui
-        .add_panel(Rect::new(0, 0, 10, 10), styles)
-        .unwrap();
+    let panel = gui.add_panel(Rect::new(0, 0, 10, 10), styles).unwrap();
     gui.apply_widget_style_transition(panel, VisualState::Normal, VisualState::Focused, 0.5)
         .unwrap();
 }
@@ -2148,7 +2211,8 @@ fn new_widgets_chart_spinner_dropdown_render_and_update() {
     let table = gui
         .add_table(Rect::new(32, 18, 40, 20), &TABLE_ROWS, Style::panel())
         .unwrap();
-    gui.set_table_style(table, true, 2, TextAlign::Center).unwrap();
+    gui.set_table_style(table, true, 2, TextAlign::Center)
+        .unwrap();
     let gauge = gui
         .add_gauge(Rect::new(74, 18, 22, 22), 0.4, 0.0, 1.0, Style::progress())
         .unwrap();
@@ -2229,8 +2293,11 @@ fn ppm_decoder_and_sprite_atlas_helpers_work() {
     )
     .unwrap();
     assert_eq!((w, h), (2, 1));
-    let auto = decode_image_auto("P3 1 1 255 255 255 255", &mut heapless::Vec::<u16, 4>::new())
-        .unwrap();
+    let auto = decode_image_auto(
+        "P3 1 1 255 255 255 255",
+        &mut heapless::Vec::<u16, 4>::new(),
+    )
+    .unwrap();
     assert_eq!(auto, (1, 1));
     let image = ImageRef::new(w, h, pixels.as_slice());
     let sheet = SpriteSheet::new(image, 1, 1);
@@ -2303,10 +2370,12 @@ fn textarea_keyboard_and_text_shaper_hooks_work() {
     gui.set_textarea_text(textarea, "HI").unwrap();
     assert_eq!(gui.textarea_text(textarea), Some("HI"));
     gui.set_focus(Some(keyboard)).unwrap();
-    gui.set_keyboard_layout(keyboard, KeyboardLayout::Shift).unwrap();
+    gui.set_keyboard_layout(keyboard, KeyboardLayout::Shift)
+        .unwrap();
     assert_eq!(gui.keyboard_layout(keyboard), Some(KeyboardLayout::Shift));
     assert_eq!(gui.keyboard_selected_key(keyboard), Some('A'));
-    gui.set_keyboard_layout(keyboard, KeyboardLayout::Symbols).unwrap();
+    gui.set_keyboard_layout(keyboard, KeyboardLayout::Symbols)
+        .unwrap();
     assert_eq!(gui.keyboard_selected_key(keyboard), Some('1'));
     gui.handle_input(InputEvent::Down).unwrap();
     gui.handle_input(InputEvent::Select).unwrap();
@@ -3201,7 +3270,13 @@ fn textarea_edit_hooks_emit_text_input_events() {
     gui.textarea_backspace(textarea).unwrap();
     gui.textarea_delete_forward(textarea).unwrap();
 
-    assert_eq!(gui.pop_event(), Some(UiEvent::TextInput { id: textarea, ch: 'x' }));
+    assert_eq!(
+        gui.pop_event(),
+        Some(UiEvent::TextInput {
+            id: textarea,
+            ch: 'x'
+        })
+    );
     assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
     assert_eq!(
         gui.pop_event(),
@@ -3237,7 +3312,12 @@ fn textarea_edit_operations_mutate_internal_text() {
 fn textarea_cursor_word_navigation_helpers_work() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 80, 14), "ONE  TWO THREE", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 80, 14),
+            "ONE  TWO THREE",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
 
     gui.set_textarea_cursor_home(textarea).unwrap();
@@ -3260,7 +3340,12 @@ fn textarea_cursor_word_navigation_helpers_work() {
 fn textarea_selection_and_cursor_blink_state_work() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 80, 14),
+            "HELLO WORLD",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
     gui.set_focus(Some(textarea)).unwrap();
 
@@ -3281,7 +3366,12 @@ fn textarea_selection_and_cursor_blink_state_work() {
 fn textarea_insert_replaces_selected_range() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 80, 14),
+            "HELLO WORLD",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
 
     gui.set_textarea_selection(textarea, 6, 11).unwrap();
@@ -3312,7 +3402,12 @@ fn textarea_line_home_end_follow_wrapped_rows() {
 fn textarea_navigation_input_events_drive_editor_cursor() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 18, 14), "ONE TWO THREE", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 18, 14),
+            "ONE TWO THREE",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
     gui.set_focus(Some(textarea)).unwrap();
     gui.set_textarea_cursor(textarea, 11).unwrap();
@@ -3335,7 +3430,12 @@ fn textarea_navigation_input_events_drive_editor_cursor() {
 fn textarea_selection_navigation_events_expand_and_clear_selection() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 24, 14), "ONE TWO THREE", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 24, 14),
+            "ONE TWO THREE",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
     gui.set_focus(Some(textarea)).unwrap();
     gui.set_textarea_cursor(textarea, 4).unwrap();
@@ -3380,7 +3480,12 @@ fn textarea_undo_redo_restores_mutation_history() {
 fn textarea_undo_redo_tracks_selection_replace_boundaries() {
     let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
-        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .add_textarea(
+            Rect::new(0, 0, 80, 14),
+            "HELLO WORLD",
+            "TYPE",
+            Style::panel(),
+        )
         .unwrap();
     gui.set_focus(Some(textarea)).unwrap();
     gui.set_textarea_selection(textarea, 6, 11).unwrap();
@@ -3420,7 +3525,8 @@ fn textarea_read_only_blocks_mutation_ops() {
     let textarea = gui
         .add_textarea(Rect::new(0, 0, 80, 14), "LOCKED", "TYPE", Style::panel())
         .unwrap();
-    gui.set_textarea_capabilities(textarea, true, false, true).unwrap();
+    gui.set_textarea_capabilities(textarea, true, false, true)
+        .unwrap();
     while gui.pop_event().is_some() {}
 
     gui.textarea_insert_char(textarea, '!').unwrap();
@@ -3437,7 +3543,8 @@ fn textarea_single_line_rejects_newline_insert() {
     let textarea = gui
         .add_textarea(Rect::new(0, 0, 80, 14), "ONE", "TYPE", Style::panel())
         .unwrap();
-    gui.set_textarea_capabilities(textarea, false, true, true).unwrap();
+    gui.set_textarea_capabilities(textarea, false, true, true)
+        .unwrap();
     gui.set_textarea_cursor_end(textarea).unwrap();
     while gui.pop_event().is_some() {}
 

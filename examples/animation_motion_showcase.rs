@@ -15,7 +15,9 @@ const STAGE_COUNT: i32 = 4;
 const CUSTOM_CURVE_DURATION_MS: u32 = 1400;
 
 static TABS: [&str; 4] = ["NAV", "FX", "IO", "SYS"];
-static ITEMS: [&str; 8] = ["ALPHA", "BETA", "GAMMA", "DELTA", "SIGMA", "OMEGA", "ION", "ARC"];
+static ITEMS: [&str; 8] = [
+    "ALPHA", "BETA", "GAMMA", "DELTA", "SIGMA", "OMEGA", "ION", "ARC",
+];
 
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(W, H));
@@ -108,7 +110,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 48, 48, 32>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(12, 10, 216, 8),
         "SPACE replay stage | TAB next stage",
@@ -156,8 +159,12 @@ fn build_ui(gui: &mut GuiContext<'static, 48, 48, 32>) -> Ids {
     let spinner = gui
         .add_spinner(Rect::new(202, 58, 26, 26), 0.0, Style::progress())
         .unwrap();
-    gui.add_label(Rect::new(112, 96, 116, 8), "Curve vs Interpolator", Style::label())
-        .unwrap();
+    gui.add_label(
+        Rect::new(112, 96, 116, 8),
+        "Curve vs Interpolator",
+        Style::label(),
+    )
+    .unwrap();
     let custom_curve_panel = gui
         .add_panel(Rect::new(112, 108, 12, 8), Style::panel())
         .unwrap();

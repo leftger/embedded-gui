@@ -118,7 +118,9 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 64, 32>) -> Ids {
 
 fn relayout(gui: &mut GuiContext<'static, 32, 64, 32>, ids: &Ids, use_flex: bool) {
     let _ = gui.apply_layout(
-        LinearLayout::column().with_gap(2).with_padding(EdgeInsets::all(2)),
+        LinearLayout::column()
+            .with_gap(2)
+            .with_padding(EdgeInsets::all(2)),
         Rect::new(0, 0, 64, 80),
         &[ids.stat_a, ids.stat_b, ids.stat_c],
     );
@@ -130,7 +132,9 @@ fn relayout(gui: &mut GuiContext<'static, 32, 64, 32>, ids: &Ids, use_flex: bool
             LayoutItem::fill_weight(1),
         ];
         let _ = gui.apply_layout_flex(
-            LinearLayout::column().with_gap(2).with_padding(EdgeInsets::all(2)),
+            LinearLayout::column()
+                .with_gap(2)
+                .with_padding(EdgeInsets::all(2)),
             Rect::new(0, 0, 154, 80),
             &[ids.panel_a, ids.panel_b, ids.panel_c],
             &items,
@@ -139,7 +143,9 @@ fn relayout(gui: &mut GuiContext<'static, 32, 64, 32>, ids: &Ids, use_flex: bool
         );
     } else {
         let _ = gui.apply_layout_intrinsic_with_cross(
-            LinearLayout::column().with_gap(2).with_padding(EdgeInsets::all(2)),
+            LinearLayout::column()
+                .with_gap(2)
+                .with_padding(EdgeInsets::all(2)),
             Rect::new(0, 0, 154, 80),
             &[ids.panel_a, ids.panel_b, ids.panel_c],
             true,

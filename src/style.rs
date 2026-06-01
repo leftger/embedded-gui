@@ -390,7 +390,11 @@ pub fn lerp_style(a: Style, b: Style, t: f32) -> Style {
     let t = t.clamp(0.0, 1.0);
     let blend = |c1: Rgb565, c2: Rgb565| {
         let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t) as u8;
-        Rgb565::new(lerp(c1.r(), c2.r()), lerp(c1.g(), c2.g()), lerp(c1.b(), c2.b()))
+        Rgb565::new(
+            lerp(c1.r(), c2.r()),
+            lerp(c1.g(), c2.g()),
+            lerp(c1.b(), c2.b()),
+        )
     };
     Style {
         background: Some(blend(
@@ -403,8 +407,8 @@ pub fn lerp_style(a: Style, b: Style, t: f32) -> Style {
         text: blend(a.text, b.text),
         accent: blend(a.accent, b.accent),
         opacity: (a.opacity as f32 + (b.opacity as f32 - a.opacity as f32) * t) as u8,
-        corner_radius: (a.corner_radius as f32 + (b.corner_radius as f32 - a.corner_radius as f32) * t)
-            as u8,
+        corner_radius: (a.corner_radius as f32
+            + (b.corner_radius as f32 - a.corner_radius as f32) * t) as u8,
         shadow: a.shadow.or(b.shadow),
         border: Border {
             color: blend(a.border.color, b.border.color),

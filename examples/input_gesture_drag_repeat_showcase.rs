@@ -167,10 +167,26 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 24, 48, 24>) -> Ids {
-    let shell = flat_style(Rgb565::new(5, 8, 20), Rgb565::new(10, 18, 26), Rgb565::new(0, 42, 31));
-    let card = flat_style(Rgb565::new(9, 14, 28), Rgb565::new(12, 22, 30), Rgb565::new(10, 56, 31));
-    let stat = flat_style(Rgb565::new(8, 10, 22), Rgb565::new(10, 18, 28), Rgb565::new(10, 56, 31));
-    let button_style = flat_style(Rgb565::new(16, 24, 31), Rgb565::new(12, 22, 30), Rgb565::new(10, 56, 31));
+    let shell = flat_style(
+        Rgb565::new(5, 8, 20),
+        Rgb565::new(10, 18, 26),
+        Rgb565::new(0, 42, 31),
+    );
+    let card = flat_style(
+        Rgb565::new(9, 14, 28),
+        Rgb565::new(12, 22, 30),
+        Rgb565::new(10, 56, 31),
+    );
+    let stat = flat_style(
+        Rgb565::new(8, 10, 22),
+        Rgb565::new(10, 18, 28),
+        Rgb565::new(10, 56, 31),
+    );
+    let button_style = flat_style(
+        Rgb565::new(16, 24, 31),
+        Rgb565::new(12, 22, 30),
+        Rgb565::new(10, 56, 31),
+    );
 
     gui.add_panel(Rect::new(6, 6, 228, 128), shell).unwrap();
     gui.add_label(

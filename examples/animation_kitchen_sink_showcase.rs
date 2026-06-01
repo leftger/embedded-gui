@@ -59,7 +59,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 32, 32, 24>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 228, 128), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(12, 10, 216, 8),
         "SPACE restart animation batch",
@@ -138,7 +139,14 @@ fn start_batch(animator: &mut WidgetAnimator<32, 32>, ids: &Ids) {
     let _ = animator.animate_roller_selected(ids.roller, 0, 4, 1200, Easing::InOutSine);
     let _ = animator.animate_gauge_value(ids.gauge, 0.0, 1.0, 1200, Easing::OutExpo);
     let _ = animator.animate_spinner_phase(ids.spinner, 0.0, 2.0, 1200, Easing::Linear);
-    let _ = animator.stagger_widget_x(&[ids.tabs, ids.dropdown], 162, 168, 900, 120, Easing::OutSine);
+    let _ = animator.stagger_widget_x(
+        &[ids.tabs, ids.dropdown],
+        162,
+        168,
+        900,
+        120,
+        Easing::OutSine,
+    );
     let _ = animator.preset_fade_in_up(ids.panel, 32, 24, 700);
     let _ = animator.preset_attention_shake(ids.panel, 128, 2, 700);
     let _ = animator.animate_corner_radius(ids.panel, 0, 4, 900, Easing::InOutSine);

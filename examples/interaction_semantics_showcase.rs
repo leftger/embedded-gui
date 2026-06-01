@@ -101,7 +101,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 24, 64, 24>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 208, 116), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 208, 116), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(10, 10, 200, 20),
         "TAB focus  ENTER select  BACKSPACE closes dropdown\nSPACE pointer press/release",

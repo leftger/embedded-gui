@@ -250,9 +250,7 @@ impl WidgetEventKind {
             | Self::DoubleClicked
             | Self::LongPressed
             | Self::Opened
-            | Self::Closed => {
-                WidgetEventFilter::ACTIVATE
-            }
+            | Self::Closed => WidgetEventFilter::ACTIVATE,
             Self::ValueChanged => WidgetEventFilter::VALUE,
             Self::Focused | Self::Defocused => WidgetEventFilter::FOCUS,
             Self::Scroll { .. } => WidgetEventFilter::SCROLL,

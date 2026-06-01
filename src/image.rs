@@ -44,7 +44,11 @@ pub struct SpriteSheet<'a> {
 
 impl<'a> SpriteSheet<'a> {
     pub const fn new(image: ImageRef<'a>, sprite_w: u32, sprite_h: u32) -> Self {
-        let columns = if sprite_w == 0 { 1 } else { image.width / sprite_w };
+        let columns = if sprite_w == 0 {
+            1
+        } else {
+            image.width / sprite_w
+        };
         Self {
             image,
             sprite_w,
@@ -84,7 +88,10 @@ impl<'a> ImageAtlas<'a> {
     }
 
     pub fn rect_for(&self, id: u16) -> Option<Rect> {
-        self.entries.iter().find(|entry| entry.id == id).map(|e| e.rect)
+        self.entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .map(|e| e.rect)
     }
 }
 

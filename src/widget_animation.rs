@@ -1,8 +1,8 @@
 //! Widget-level animation bindings built on top of [`AnimationManager`].
 //! Keeps fixed-capacity, no-allocation behavior suitable for embedded targets.
 
-use heapless::Vec;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
+use heapless::Vec;
 
 use crate::{
     animation::{Animation, AnimationError, AnimationId, AnimationManager, Easing, PathPoint},
@@ -387,8 +387,8 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         curve: fn(f32) -> f32,
         policy: AnimationConflictPolicy,
     ) -> Result<AnimationId, WidgetAnimationError> {
-        let animation = Animation::new(from as f32, to as f32, duration_ms, easing)
-            .with_custom_curve(curve);
+        let animation =
+            Animation::new(from as f32, to as f32, duration_ms, easing).with_custom_curve(curve);
         self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetY, animation, policy)
     }
 
@@ -536,7 +536,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                     keyframe.easing,
                 )
                 .with_delay(delay_ms);
-                self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetX, anim, step_policy)?;
+                self.bind_property_with_policy(
+                    widget_id,
+                    AnimatedProperty::WidgetX,
+                    anim,
+                    step_policy,
+                )?;
                 created += 1;
                 state.x = next_x;
             }
@@ -548,7 +553,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                     keyframe.easing,
                 )
                 .with_delay(delay_ms);
-                self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetY, anim, step_policy)?;
+                self.bind_property_with_policy(
+                    widget_id,
+                    AnimatedProperty::WidgetY,
+                    anim,
+                    step_policy,
+                )?;
                 created += 1;
                 state.y = next_y;
             }
@@ -560,7 +570,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                     keyframe.easing,
                 )
                 .with_delay(delay_ms);
-                self.bind_property_with_policy(widget_id, AnimatedProperty::Opacity, anim, step_policy)?;
+                self.bind_property_with_policy(
+                    widget_id,
+                    AnimatedProperty::Opacity,
+                    anim,
+                    step_policy,
+                )?;
                 created += 1;
                 state.opacity = next_opacity;
             }
@@ -756,7 +771,8 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         let mut started = Vec::<AnimationId, BINDINGS>::new();
         for (idx, id) in widget_ids.iter().copied().enumerate() {
             let delay = stagger_ms.saturating_mul(idx as u32);
-            let animation = Animation::new(from as f32, to as f32, duration_ms, easing).with_delay(delay);
+            let animation =
+                Animation::new(from as f32, to as f32, duration_ms, easing).with_delay(delay);
             match self.bind_property_with_policy(
                 id,
                 AnimatedProperty::WidgetX,
@@ -801,7 +817,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         let a = self.bind_property_with_policy(
             widget_id,
             AnimatedProperty::WidgetX,
-            Animation::new(base_x as f32, (base_x + amplitude) as f32, step, Easing::InOutSine),
+            Animation::new(
+                base_x as f32,
+                (base_x + amplitude) as f32,
+                step,
+                Easing::InOutSine,
+            ),
             AnimationConflictPolicy::Replace,
         )?;
         let b = self.bind_property_with_policy(
@@ -819,8 +840,13 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         self.bind_property_with_policy(
             widget_id,
             AnimatedProperty::WidgetX,
-            Animation::new((base_x - amplitude) as f32, base_x as f32, step, Easing::InOutSine)
-                .with_delay(step.saturating_mul(2)),
+            Animation::new(
+                (base_x - amplitude) as f32,
+                base_x as f32,
+                step,
+                Easing::InOutSine,
+            )
+            .with_delay(step.saturating_mul(2)),
             AnimationConflictPolicy::Queue,
         )?;
         Ok((a, b))
@@ -955,7 +981,11 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         count
     }
 
-    pub fn stop_widget_property(&mut self, widget_id: WidgetId, property: AnimatedProperty) -> usize {
+    pub fn stop_widget_property(
+        &mut self,
+        widget_id: WidgetId,
+        property: AnimatedProperty,
+    ) -> usize {
         let ids: Vec<AnimationId, BINDINGS> = self
             .bindings
             .iter()
@@ -977,7 +1007,11 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
             .any(|b| b.widget_id == widget_id)
     }
 
-    pub fn is_animating_widget_property(&self, widget_id: WidgetId, property: AnimatedProperty) -> bool {
+    pub fn is_animating_widget_property(
+        &self,
+        widget_id: WidgetId,
+        property: AnimatedProperty,
+    ) -> bool {
         self.bindings
             .iter()
             .flatten()
@@ -990,7 +1024,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         out: &mut Vec<AnimationId, M>,
     ) -> usize {
         out.clear();
-        for binding in self.bindings.iter().flatten().filter(|b| b.widget_id == widget_id) {
+        for binding in self
+            .bindings
+            .iter()
+            .flatten()
+            .filter(|b| b.widget_id == widget_id)
+        {
             let _ = out.push(binding.animation_id);
         }
         out.len()
@@ -1072,7 +1111,9 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                     gui.set_roller_selected(binding.widget_id, value.max(0.0).round() as usize)?
                 }
                 AnimatedProperty::GaugeValue => gui.set_gauge_value(binding.widget_id, value)?,
-                AnimatedProperty::SpinnerPhase => gui.set_spinner_phase(binding.widget_id, value)?,
+                AnimatedProperty::SpinnerPhase => {
+                    gui.set_spinner_phase(binding.widget_id, value)?
+                }
                 AnimatedProperty::CornerRadius => gui.set_widget_corner_radius(
                     binding.widget_id,
                     value.clamp(0.0, 255.0).round() as u8,
@@ -1112,8 +1153,12 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                     }
                     gui.set_widget_accent(binding.widget_id, accent)?;
                 }
-                AnimatedProperty::WidgetX => gui.set_widget_x(binding.widget_id, value.round() as i32)?,
-                AnimatedProperty::WidgetY => gui.set_widget_y(binding.widget_id, value.round() as i32)?,
+                AnimatedProperty::WidgetX => {
+                    gui.set_widget_x(binding.widget_id, value.round() as i32)?
+                }
+                AnimatedProperty::WidgetY => {
+                    gui.set_widget_y(binding.widget_id, value.round() as i32)?
+                }
                 AnimatedProperty::WidgetWidth => {
                     gui.set_widget_width(binding.widget_id, value.max(1.0).round() as u32)?
                 }
@@ -1250,7 +1295,14 @@ pub mod presets {
         duration_ms: u32,
         stagger_ms: u32,
     ) -> Result<usize, WidgetAnimationError> {
-        animator.stagger_widget_x(widget_ids, from, to, duration_ms, stagger_ms, Easing::OutSine)
+        animator.stagger_widget_x(
+            widget_ids,
+            from,
+            to,
+            duration_ms,
+            stagger_ms,
+            Easing::OutSine,
+        )
     }
 
     pub fn menu_focus_choreography<const TRACKS: usize, const BINDINGS: usize>(
@@ -1299,7 +1351,13 @@ pub mod presets {
     ) -> Result<(), WidgetAnimationError> {
         menu_focus_choreography(animator, focused, base_x, base_y)?;
         for neighbor in neighbors.iter().copied() {
-            animator.animate_widget_x(neighbor, base_x, base_x.saturating_sub(2), 120, Easing::OutSine)?;
+            animator.animate_widget_x(
+                neighbor,
+                base_x,
+                base_x.saturating_sub(2),
+                120,
+                Easing::OutSine,
+            )?;
             animator.animate_opacity(neighbor, 255, 170, 120, Easing::OutSine)?;
         }
         Ok(())

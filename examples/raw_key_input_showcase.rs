@@ -134,7 +134,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> CounterAcc
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 24, 64, 24>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 208, 116), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 208, 116), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(10, 10, 198, 24),
         "TAB focus\nS=SelectPressed ENTER=SelectReleased\nB=BackPressed BACKSPACE=BackReleased",

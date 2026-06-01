@@ -72,7 +72,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 32, 96, 32>) -> Ids {
-    gui.add_panel(Rect::new(6, 6, 228, 124), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(6, 6, 228, 124), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(10, 10, 220, 18),
         "UP/DOWN focus  LEFT/RIGHT value  ENTER select\nBACKSPACE closes dropdown  1/2/3 type",
@@ -98,7 +99,8 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 96, 32>) -> Ids {
     let status = gui
         .add_textarea(Rect::new(116, 92, 108, 16), "IDLE", "-", Style::panel())
         .unwrap();
-    gui.set_textarea_capabilities(status, true, true, false).unwrap();
+    gui.set_textarea_capabilities(status, true, true, false)
+        .unwrap();
 
     Ids {
         enable,

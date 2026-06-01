@@ -193,8 +193,7 @@ pub fn apply_easing(t: f32, easing: Easing) -> f32 {
                 if t < 0.5 {
                     -(2.0_f32).powf(20.0 * t - 10.0) * ((20.0 * t - 11.125) * c5).sin() * 0.5
                 } else {
-                    (2.0_f32).powf(-20.0 * t + 10.0) * ((20.0 * t - 11.125) * c5).sin() * 0.5
-                        + 1.0
+                    (2.0_f32).powf(-20.0 * t + 10.0) * ((20.0 * t - 11.125) * c5).sin() * 0.5 + 1.0
                 }
             }
         }
@@ -537,7 +536,11 @@ impl Animation {
         ((delta / units_per_second) * 1000.0).ceil() as u32
     }
 
-    pub fn total_duration_ms(&self, include_delay: bool, include_repeat_count: bool) -> Option<u32> {
+    pub fn total_duration_ms(
+        &self,
+        include_delay: bool,
+        include_repeat_count: bool,
+    ) -> Option<u32> {
         let base = if include_delay {
             self.duration_ms.saturating_add(self.delay_ms)
         } else {
@@ -546,7 +549,8 @@ impl Animation {
         if !include_repeat_count || self.repeat_mode == RepeatMode::Once {
             return Some(base);
         }
-        self.repeat_count.map(|count| base.saturating_mul(count as u32))
+        self.repeat_count
+            .map(|count| base.saturating_mul(count as u32))
     }
 }
 
