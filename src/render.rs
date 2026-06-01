@@ -1025,6 +1025,67 @@ where
         Ok(())
     }
 
+    /// Fill a sector ("pie slice") using a start angle and sweep angle in degrees.
+    ///
+    /// Positive sweep draws counterclockwise, negative sweep clockwise.
+    pub fn fill_sector_sweep(
+        &mut self,
+        center_x: i32,
+        center_y: i32,
+        radius: u32,
+        start_deg: f32,
+        sweep_deg: f32,
+        color: Rgb565,
+    ) -> Result<(), D::Error> {
+        if radius == 0 {
+            return Ok(());
+        }
+
+        let draw = self.visible_rect(Rect::new(
+            center_x - radius as i32,
+            center_y - radius as i32,
+            radius.saturating_mul(2).saturating_add(1),
+            radius.saturating_mul(2).saturating_add(1),
+        ));
+        if draw.is_empty() {
+            return Ok(());
+        }
+
+        let max_sweep = sweep_deg.abs().min(360.0);
+        if max_sweep <= 0.0 {
+            return Ok(());
+        }
+
+        let rr = (radius as i32) * (radius as i32);
+        let start = normalize_angle_deg(start_deg);
+        let ccw = sweep_deg >= 0.0;
+
+        for y in draw.y..draw.bottom() {
+            for x in draw.x..draw.right() {
+                let dx = x - center_x;
+                let dy = y - center_y;
+                let d2 = dx * dx + dy * dy;
+                if d2 > rr {
+                    continue;
+                }
+
+                let mut angle = (dy as f32).atan2(dx as f32).to_degrees();
+                if angle < 0.0 {
+                    angle += 360.0;
+                }
+                let in_sweep = if ccw {
+                    ccw_distance_deg(start, angle) <= max_sweep
+                } else {
+                    ccw_distance_deg(angle, start) <= max_sweep
+                };
+                if in_sweep {
+                    self.pixel(x, y, color, 255)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn fill_polygon(&mut self, points: &[Point], color: Rgb565) -> Result<(), D::Error> {
         if points.len() < 3 {
             return Ok(());
@@ -1516,6 +1577,26 @@ fn lerp_rgb565(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
     let g = ((a.g() as u16 * inv) + (b.g() as u16 * t)) / 255;
     let bb = ((a.b() as u16 * inv) + (b.b() as u16 * t)) / 255;
     Rgb565::new(r as u8, g as u8, bb as u8)
+}
+
+#[inline]
+fn normalize_angle_deg(mut deg: f32) -> f32 {
+    while deg < 0.0 {
+        deg += 360.0;
+    }
+    while deg >= 360.0 {
+        deg -= 360.0;
+    }
+    deg
+}
+
+#[inline]
+fn ccw_distance_deg(from: f32, to: f32) -> f32 {
+    let mut d = normalize_angle_deg(to) - normalize_angle_deg(from);
+    if d < 0.0 {
+        d += 360.0;
+    }
+    d
 }
 
 fn apply_blend_mode(src: Rgb565, mode: BlendMode, backdrop: Rgb565) -> Rgb565 {
