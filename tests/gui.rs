@@ -1,4 +1,5 @@
 use core::convert::Infallible;
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use embedded_graphics_core::{
     Pixel,
@@ -891,9 +892,73 @@ fn animation_reverse_starts_from_target() {
 }
 
 #[test]
+fn animation_supports_custom_curve_callbacks() {
+    fn hold_then_pop(t: f32) -> f32 {
+        if t < 0.5 {
+            0.0
+        } else {
+            1.2
+        }
+    }
+
+    let mut anim = Animation::new(0.0, 10.0, 100, Easing::Linear).with_custom_curve(hold_then_pop);
+    anim.tick(40);
+    assert_eq!(anim.value(), 0.0);
+    anim.tick(20);
+    assert_eq!(anim.value(), 12.0);
+
+    anim.clear_custom_curve();
+    anim.reset();
+    anim.tick(50);
+    assert_eq!(anim.value(), 5.0);
+}
+
+#[test]
+fn animation_supports_custom_interpolator_callbacks() {
+    fn midpoint_bias(from: f32, to: f32, t: f32) -> f32 {
+        if t < 0.5 {
+            from
+        } else {
+            to
+        }
+    }
+
+    let mut anim =
+        Animation::new(10.0, 30.0, 100, Easing::Linear).with_custom_interpolator(midpoint_bias);
+    anim.tick(49);
+    assert_eq!(anim.value(), 10.0);
+    anim.tick(1);
+    assert_eq!(anim.value(), 30.0);
+
+    anim.clear_custom_interpolator();
+    anim.reset();
+    anim.tick(50);
+    assert_eq!(anim.value(), 20.0);
+}
+
+#[test]
 fn speed_helper_calculates_duration() {
     let ms = Animation::duration_from_speed(120.0, 60.0);
     assert_eq!(ms, 2000);
+}
+
+#[test]
+fn animation_total_duration_includes_delay_and_repeat_count() {
+    let once = Animation::new(0.0, 1.0, 100, Easing::Linear).with_delay(20);
+    assert_eq!(once.total_duration_ms(false, false), Some(100));
+    assert_eq!(once.total_duration_ms(true, false), Some(120));
+    assert_eq!(once.total_duration_ms(true, true), Some(120));
+
+    let finite = Animation::new(0.0, 1.0, 100, Easing::Linear)
+        .with_delay(10)
+        .with_repeat_mode(RepeatMode::Loop)
+        .with_repeat_count(Some(3));
+    assert_eq!(finite.total_duration_ms(true, true), Some(330));
+
+    let infinite = Animation::new(0.0, 1.0, 100, Easing::Linear)
+        .with_repeat_mode(RepeatMode::Loop)
+        .with_repeat_count(None);
+    assert_eq!(infinite.total_duration_ms(true, true), None);
 }
 
 #[test]
@@ -935,6 +1000,72 @@ fn animation_manager_can_stop_track_early() {
     assert!(manager.stop(id));
     assert!(manager.value(id).is_none());
     assert_eq!(manager.active_count(), 0);
+}
+
+#[test]
+fn animation_manager_callbacks_pause_and_seek_work() {
+    static STARTED: AtomicUsize = AtomicUsize::new(0);
+    static REPEATED: AtomicUsize = AtomicUsize::new(0);
+    static COMPLETED_FINISHED: AtomicUsize = AtomicUsize::new(0);
+    static COMPLETED_STOPPED: AtomicUsize = AtomicUsize::new(0);
+    static SEEN_REPEAT_TWO: AtomicBool = AtomicBool::new(false);
+
+    fn on_start(_: AnimationId) {
+        STARTED.fetch_add(1, Ordering::Relaxed);
+    }
+    fn on_repeat(_: AnimationId, iteration: u16) {
+        REPEATED.fetch_add(1, Ordering::Relaxed);
+        if iteration >= 2 {
+            SEEN_REPEAT_TWO.store(true, Ordering::Relaxed);
+        }
+    }
+    fn on_complete(_: AnimationId, finished: bool) {
+        if finished {
+            COMPLETED_FINISHED.fetch_add(1, Ordering::Relaxed);
+        } else {
+            COMPLETED_STOPPED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    STARTED.store(0, Ordering::Relaxed);
+    REPEATED.store(0, Ordering::Relaxed);
+    COMPLETED_FINISHED.store(0, Ordering::Relaxed);
+    COMPLETED_STOPPED.store(0, Ordering::Relaxed);
+    SEEN_REPEAT_TWO.store(false, Ordering::Relaxed);
+
+    let mut manager = AnimationManager::<3>::new();
+    manager.set_callbacks(AnimationManagerCallbacks {
+        on_start: Some(on_start),
+        on_repeat: Some(on_repeat),
+        on_complete: Some(on_complete),
+    });
+    let id = manager
+        .start(
+            Animation::new(0.0, 1.0, 10, Easing::Linear)
+                .with_repeat_mode(RepeatMode::Loop)
+                .with_repeat_count(Some(3)),
+        )
+        .unwrap();
+    assert_eq!(STARTED.load(Ordering::Relaxed), 1);
+
+    manager.set_paused(true);
+    manager.tick(10);
+    let paused_value = manager.value(id).unwrap();
+    manager.tick(10);
+    assert_eq!(manager.value(id).unwrap(), paused_value);
+
+    manager.set_paused(false);
+    assert!(!manager.is_paused());
+    assert!(manager.seek(id, 25));
+    manager.tick(5);
+    assert!(SEEN_REPEAT_TWO.load(Ordering::Relaxed));
+    assert_eq!(COMPLETED_FINISHED.load(Ordering::Relaxed), 1);
+
+    let stop_id = manager
+        .start(Animation::new(0.0, 1.0, 100, Easing::Linear))
+        .unwrap();
+    assert!(manager.stop(stop_id));
+    assert_eq!(COMPLETED_STOPPED.load(Ordering::Relaxed), 1);
 }
 
 #[test]

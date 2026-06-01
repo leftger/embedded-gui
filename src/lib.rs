@@ -26,7 +26,7 @@ pub mod widget_animation;
 pub mod widgets;
 
 pub use animation::{
-    Animation, AnimationError, AnimationId, AnimationManager, AnimationState, Easing,
+    Animation, AnimationError, AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationState, Easing,
     InertiaAnimator, PathAnimator, PathPoint, RepeatMode, SpringAnimator, Timer, Tween,
     apply_easing,
 };
@@ -89,7 +89,7 @@ pub use widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode};
 pub mod prelude {
     pub use crate::{
         Align, AnimatedProperty, Animation, AnimationError, AnimationGroup, AnimationId,
-        AnimationManager, AnimationSequence, AnimationState, Axis, Block, Border, Constraint,
+        AnimationManager, AnimationManagerCallbacks, AnimationSequence, AnimationState, Axis, Block, Border, Constraint,
         DirtyTracker, Easing, EdgeInsets, EventContext, EventPhase, EventPhaseMask, EventPolicy,
         FocusGroupId, FontId, GradientDirection, GuiContext, GuiError, ImageAtlas,
         PressTiming, WidgetKeyInputPolicy, WidgetKeyBindings, KeyBindingAction,

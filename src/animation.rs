@@ -318,12 +318,15 @@ pub enum AnimationState {
     Finished,
 }
 
+#[allow(unpredictable_function_pointer_comparisons)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Animation {
     pub from: f32,
     pub to: f32,
     pub duration_ms: u32,
     pub easing: Easing,
+    pub custom_curve: Option<fn(f32) -> f32>,
+    pub custom_interpolator: Option<fn(f32, f32, f32) -> f32>,
     pub delay_ms: u32,
     pub repeat_mode: RepeatMode,
     pub repeat_count: Option<u16>,
@@ -340,6 +343,8 @@ impl Animation {
             to,
             duration_ms,
             easing,
+            custom_curve: None,
+            custom_interpolator: None,
             delay_ms: 0,
             repeat_mode: RepeatMode::Once,
             repeat_count: None,
@@ -365,6 +370,24 @@ impl Animation {
         self
     }
 
+    pub fn with_custom_curve(mut self, curve: fn(f32) -> f32) -> Self {
+        self.custom_curve = Some(curve);
+        self
+    }
+
+    pub fn clear_custom_curve(&mut self) {
+        self.custom_curve = None;
+    }
+
+    pub fn with_custom_interpolator(mut self, interpolator: fn(f32, f32, f32) -> f32) -> Self {
+        self.custom_interpolator = Some(interpolator);
+        self
+    }
+
+    pub fn clear_custom_interpolator(&mut self) {
+        self.custom_interpolator = None;
+    }
+
     pub fn set_reversed(&mut self, reversed: bool) {
         self.reversed = reversed;
     }
@@ -373,6 +396,11 @@ impl Animation {
         self.elapsed_ms = 0;
         self.iteration = 0;
         self.finished = false;
+    }
+
+    pub fn set_elapsed(&mut self, elapsed_ms: u32) {
+        self.elapsed_ms = elapsed_ms;
+        self.finished = self.resolve_finished();
     }
 
     pub fn tick(&mut self, dt_ms: u32) -> AnimationState {
@@ -411,8 +439,16 @@ impl Animation {
             progress = 1.0 - progress;
         }
 
-        let t = apply_easing(progress, self.easing);
-        self.from + (self.to - self.from) * t
+        let t = if let Some(curve) = self.custom_curve {
+            curve(progress)
+        } else {
+            apply_easing(progress, self.easing)
+        };
+        if let Some(interpolator) = self.custom_interpolator {
+            interpolator(self.from, self.to, t)
+        } else {
+            self.from + (self.to - self.from) * t
+        }
     }
 
     pub fn is_done(&self) -> bool {
@@ -456,18 +492,41 @@ impl Animation {
         }
         ((delta / units_per_second) * 1000.0).ceil() as u32
     }
+
+    pub fn total_duration_ms(&self, include_delay: bool, include_repeat_count: bool) -> Option<u32> {
+        let base = if include_delay {
+            self.duration_ms.saturating_add(self.delay_ms)
+        } else {
+            self.duration_ms
+        };
+        if !include_repeat_count || self.repeat_mode == RepeatMode::Once {
+            return Some(base);
+        }
+        self.repeat_count.map(|count| base.saturating_mul(count as u32))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct AnimationTrack {
     id: AnimationId,
     animation: Animation,
+    last_iteration: u16,
+}
+
+#[allow(unpredictable_function_pointer_comparisons)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AnimationManagerCallbacks {
+    pub on_start: Option<fn(AnimationId)>,
+    pub on_repeat: Option<fn(AnimationId, u16)>,
+    pub on_complete: Option<fn(AnimationId, bool)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnimationManager<const N: usize> {
     tracks: [Option<AnimationTrack>; N],
     next_id: u16,
+    paused: bool,
+    callbacks: AnimationManagerCallbacks,
 }
 
 impl<const N: usize> Default for AnimationManager<N> {
@@ -481,7 +540,17 @@ impl<const N: usize> AnimationManager<N> {
         Self {
             tracks: [None; N],
             next_id: 1,
+            paused: false,
+            callbacks: AnimationManagerCallbacks {
+                on_start: None,
+                on_repeat: None,
+                on_complete: None,
+            },
         }
+    }
+
+    pub fn set_callbacks(&mut self, callbacks: AnimationManagerCallbacks) {
+        self.callbacks = callbacks;
     }
 
     pub fn start(&mut self, animation: Animation) -> Result<AnimationId, AnimationError> {
@@ -489,7 +558,14 @@ impl<const N: usize> AnimationManager<N> {
         self.next_id = self.next_id.wrapping_add(1).max(1);
 
         if let Some(slot) = self.tracks.iter_mut().find(|slot| slot.is_none()) {
-            *slot = Some(AnimationTrack { id, animation });
+            *slot = Some(AnimationTrack {
+                id,
+                animation,
+                last_iteration: 0,
+            });
+            if let Some(cb) = self.callbacks.on_start {
+                cb(id);
+            }
             Ok(id)
         } else {
             Err(AnimationError::Full)
@@ -500,6 +576,9 @@ impl<const N: usize> AnimationManager<N> {
         for slot in &mut self.tracks {
             if slot.as_ref().is_some_and(|track| track.id == id) {
                 *slot = None;
+                if let Some(cb) = self.callbacks.on_complete {
+                    cb(id, false);
+                }
                 return true;
             }
         }
@@ -507,10 +586,23 @@ impl<const N: usize> AnimationManager<N> {
     }
 
     pub fn tick(&mut self, dt_ms: u32) {
+        if self.paused {
+            return;
+        }
         for slot in &mut self.tracks {
             if let Some(track) = slot.as_mut() {
                 track.animation.tick(dt_ms);
+                let iteration = track.animation.iteration();
+                if iteration > track.last_iteration {
+                    track.last_iteration = iteration;
+                    if let Some(cb) = self.callbacks.on_repeat {
+                        cb(track.id, iteration);
+                    }
+                }
                 if track.animation.is_done() {
+                    if let Some(cb) = self.callbacks.on_complete {
+                        cb(track.id, true);
+                    }
                     *slot = None;
                 }
             }
@@ -543,6 +635,29 @@ impl<const N: usize> AnimationManager<N> {
 
     pub fn active_count(&self) -> usize {
         self.tracks.iter().flatten().count()
+    }
+
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn seek(&mut self, id: AnimationId, elapsed_ms: u32) -> bool {
+        if let Some(track) = self
+            .tracks
+            .iter_mut()
+            .flatten()
+            .find(|track| track.id == id)
+        {
+            track.animation.set_elapsed(elapsed_ms);
+            track.last_iteration = track.animation.iteration();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn set_next_id_for_test(&mut self, id: u16) {

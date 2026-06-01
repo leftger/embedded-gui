@@ -12,6 +12,7 @@ const W: u32 = 240;
 const H: u32 = 140;
 const FRAME_MS: u32 = 16;
 const STAGE_COUNT: i32 = 4;
+const CUSTOM_CURVE_DURATION_MS: u32 = 1400;
 
 static TABS: [&str; 4] = ["NAV", "FX", "IO", "SYS"];
 static ITEMS: [&str; 8] = ["ALPHA", "BETA", "GAMMA", "DELTA", "SIGMA", "OMEGA", "ION", "ARC"];
@@ -24,12 +25,28 @@ fn main() {
     let ids = build_ui(&mut gui);
 
     let mut animator = WidgetAnimator::<64, 64>::new();
+    let mut custom_animator = AnimationManager::<4>::new();
+    let mut custom_curve_track = None;
+    let mut custom_interp_track = None;
     let mut stage = 0_i32;
     start_stage(&mut gui, &mut animator, &ids, stage);
+    restart_custom_lanes(
+        &mut custom_animator,
+        &mut custom_curve_track,
+        &mut custom_interp_track,
+    );
 
     'running: loop {
         animator.tick(FRAME_MS, &mut gui).unwrap();
+        custom_animator.tick(FRAME_MS);
         gui.tick_spinner(ids.spinner, FRAME_MS, 0.45).unwrap();
+        tick_custom_lanes(
+            &mut gui,
+            &mut custom_animator,
+            &mut custom_curve_track,
+            &mut custom_interp_track,
+            &ids,
+        );
 
         if animator.active_count() == 0 {
             stage = (stage + 1) % STAGE_COUNT;
@@ -45,10 +62,22 @@ fn main() {
                 SimulatorEvent::Quit => break 'running,
                 SimulatorEvent::KeyDown { keycode, .. } => match keycode {
                     Keycode::Escape => break 'running,
-                    Keycode::Space => start_stage(&mut gui, &mut animator, &ids, stage),
+                    Keycode::Space => {
+                        start_stage(&mut gui, &mut animator, &ids, stage);
+                        restart_custom_lanes(
+                            &mut custom_animator,
+                            &mut custom_curve_track,
+                            &mut custom_interp_track,
+                        );
+                    }
                     Keycode::Tab => {
                         stage = (stage + 1) % STAGE_COUNT;
                         start_stage(&mut gui, &mut animator, &ids, stage);
+                        restart_custom_lanes(
+                            &mut custom_animator,
+                            &mut custom_curve_track,
+                            &mut custom_interp_track,
+                        );
                     }
                     _ => {}
                 },
@@ -72,6 +101,10 @@ struct Ids {
     roller: WidgetId,
     gauge: WidgetId,
     spinner: WidgetId,
+    custom_curve_panel: WidgetId,
+    custom_interp_panel: WidgetId,
+    custom_curve_value: WidgetId,
+    custom_interp_value: WidgetId,
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 48, 48, 32>) -> Ids {
@@ -123,6 +156,20 @@ fn build_ui(gui: &mut GuiContext<'static, 48, 48, 32>) -> Ids {
     let spinner = gui
         .add_spinner(Rect::new(202, 58, 26, 26), 0.0, Style::progress())
         .unwrap();
+    gui.add_label(Rect::new(112, 96, 116, 8), "Curve vs Interpolator", Style::label())
+        .unwrap();
+    let custom_curve_panel = gui
+        .add_panel(Rect::new(112, 108, 12, 8), Style::panel())
+        .unwrap();
+    let custom_interp_panel = gui
+        .add_panel(Rect::new(112, 120, 12, 8), Style::panel())
+        .unwrap();
+    let custom_curve_value = gui
+        .add_value_label(Rect::new(196, 108, 32, 8), "C", 0, Style::panel())
+        .unwrap();
+    let custom_interp_value = gui
+        .add_value_label(Rect::new(196, 120, 32, 8), "I", 0, Style::panel())
+        .unwrap();
 
     Ids {
         stage_label,
@@ -136,6 +183,82 @@ fn build_ui(gui: &mut GuiContext<'static, 48, 48, 32>) -> Ids {
         roller,
         gauge,
         spinner,
+        custom_curve_panel,
+        custom_interp_panel,
+        custom_curve_value,
+        custom_interp_value,
+    }
+}
+
+fn hold_then_burst_curve(t: f32) -> f32 {
+    if t < 0.38 {
+        0.0
+    } else if t < 0.72 {
+        ((t - 0.38) / 0.34).powf(1.1)
+    } else {
+        1.0 + 0.18 * ((t - 0.72) / 0.28)
+    }
+}
+
+fn stepped_interpolator(from: f32, to: f32, t: f32) -> f32 {
+    if t < 0.2 {
+        from
+    } else if t < 0.45 {
+        from + (to - from) * 0.35
+    } else if t < 0.75 {
+        from + (to - from) * 0.65
+    } else {
+        to
+    }
+}
+
+fn restart_custom_lanes(
+    manager: &mut AnimationManager<4>,
+    curve_track: &mut Option<AnimationId>,
+    interp_track: &mut Option<AnimationId>,
+) {
+    manager.set_paused(false);
+    *curve_track = manager
+        .start(
+            Animation::new(112.0, 192.0, CUSTOM_CURVE_DURATION_MS, Easing::InOutSine)
+                .with_custom_curve(hold_then_burst_curve),
+        )
+        .ok();
+    *interp_track = manager
+        .start(
+            Animation::new(112.0, 192.0, CUSTOM_CURVE_DURATION_MS, Easing::Linear)
+                .with_custom_interpolator(stepped_interpolator),
+        )
+        .ok();
+}
+
+fn tick_custom_lanes(
+    gui: &mut GuiContext<'static, 48, 48, 32>,
+    manager: &mut AnimationManager<4>,
+    curve_track: &mut Option<AnimationId>,
+    interp_track: &mut Option<AnimationId>,
+    ids: &Ids,
+) {
+    if let Some(id) = *curve_track {
+        if let Some(v) = manager.value(id) {
+            let x = v.round() as i32;
+            let _ = gui.set_widget_x(ids.custom_curve_panel, x);
+            let _ = gui.set_value_label(ids.custom_curve_value, x - 112);
+        } else {
+            *curve_track = None;
+        }
+    }
+    if let Some(id) = *interp_track {
+        if let Some(v) = manager.value(id) {
+            let x = v.round() as i32;
+            let _ = gui.set_widget_x(ids.custom_interp_panel, x);
+            let _ = gui.set_value_label(ids.custom_interp_value, x - 112);
+        } else {
+            *interp_track = None;
+        }
+    }
+    if curve_track.is_none() && interp_track.is_none() {
+        restart_custom_lanes(manager, curve_track, interp_track);
     }
 }
 
