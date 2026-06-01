@@ -15,10 +15,12 @@ pub trait F32Ext {
 #[cfg(all(not(feature = "std"), feature = "libm", feature = "micromath"))]
 compile_error!("Select at most one math backend: `libm` or `micromath`.");
 
-#[cfg(all(not(feature = "std"), not(feature = "libm"), not(feature = "micromath")))]
-compile_error!(
-    "no_std requires a math backend feature: enable `libm` or `micromath`."
-);
+#[cfg(all(
+    not(feature = "std"),
+    not(feature = "libm"),
+    not(feature = "micromath")
+))]
+compile_error!("no_std requires a math backend feature: enable `libm` or `micromath`.");
 
 #[cfg(feature = "std")]
 impl F32Ext for f32 {
