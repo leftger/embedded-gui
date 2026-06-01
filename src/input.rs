@@ -32,7 +32,11 @@ pub enum InputEvent {
     Undo,
     Redo,
     Select,
+    SelectPressed,
+    SelectReleased,
     Back,
+    BackPressed,
+    BackReleased,
     Encoder {
         delta: i8,
     },
@@ -55,6 +59,7 @@ pub enum UiEvent {
     Pressed(WidgetId),
     Released(WidgetId),
     Clicked(WidgetId),
+    DoubleClicked(WidgetId),
     LongPressed(WidgetId),
     Opened(WidgetId),
     Closed(WidgetId),
@@ -133,6 +138,7 @@ impl UiEvent {
             | Self::Pressed(id)
             | Self::Released(id)
             | Self::Clicked(id)
+            | Self::DoubleClicked(id)
             | Self::LongPressed(id)
             | Self::Opened(id)
             | Self::Closed(id)
@@ -159,6 +165,7 @@ impl UiEvent {
             | Self::Pressed(_)
             | Self::Released(_)
             | Self::Clicked(_)
+            | Self::DoubleClicked(_)
             | Self::LongPressed(_)
             | Self::Opened(_)
             | Self::Closed(_) => UiEventFilter::ACTIVATE,
@@ -179,6 +186,7 @@ pub enum WidgetEventKind {
     Pressed,
     Released,
     Clicked,
+    DoubleClicked,
     LongPressed,
     Opened,
     Closed,
@@ -238,7 +246,11 @@ impl WidgetEventKind {
     pub const fn filter(self) -> WidgetEventFilter {
         match self {
             Self::Pressed | Self::Released | Self::Gesture => WidgetEventFilter::POINTER,
-            Self::Clicked | Self::LongPressed | Self::Opened | Self::Closed => {
+            Self::Clicked
+            | Self::DoubleClicked
+            | Self::LongPressed
+            | Self::Opened
+            | Self::Closed => {
                 WidgetEventFilter::ACTIVATE
             }
             Self::ValueChanged => WidgetEventFilter::VALUE,
