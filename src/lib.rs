@@ -35,7 +35,9 @@ pub use animation_timeline::{
     SequencePlayer, SequencePlayerStatus, SequenceRepeatMode, TimelineError, TimelineStep,
 };
 pub use block::Block;
-pub use context::{GuiContext, GuiError};
+pub use context::{
+    GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetKeyBindings, WidgetKeyInputPolicy,
+};
 pub use font::FontId;
 pub use geometry::{DirtyTracker, EdgeInsets, Rect};
 pub use input::{
@@ -90,6 +92,7 @@ pub mod prelude {
         AnimationManager, AnimationSequence, AnimationState, Axis, Block, Border, Constraint,
         DirtyTracker, Easing, EdgeInsets, EventContext, EventPhase, EventPhaseMask, EventPolicy,
         FocusGroupId, FontId, GradientDirection, GuiContext, GuiError, ImageAtlas,
+        PressTiming, WidgetKeyInputPolicy, WidgetKeyBindings, KeyBindingAction,
         ImageAtlasEntry, ImageFit, ImageRef, InputEvent, Keyframe, KeyframeTrack,
         KeyframeTrackCallbacks, LayoutItem, Length, Line, LinearGradient, LinearLayout,
         ListState, PointerButton, PointerState, PresentRegion, Rect, RenderCtx, RenderQuality,

@@ -582,6 +582,61 @@ fn intrinsic_layout_can_preserve_cross_axis_size() {
 }
 
 #[test]
+fn nested_apply_layout_positions_children_relative_to_parent() {
+    let mut gui = GuiContext::<12, 16, 12>::new(Rect::new(0, 0, 120, 80));
+    let parent = gui
+        .add_panel(Rect::new(10, 12, 60, 30), Style::panel())
+        .unwrap();
+    let a = gui
+        .add_button(Rect::new(0, 0, 1, 1), "A", Style::button())
+        .unwrap();
+    let b = gui
+        .add_button(Rect::new(0, 0, 1, 1), "B", Style::button())
+        .unwrap();
+    gui.add_child(parent, a).unwrap();
+    gui.add_child(parent, b).unwrap();
+
+    gui.apply_layout(
+        LinearLayout::row().with_gap(2),
+        Rect::new(1, 2, 40, 10),
+        &[a, b],
+    )
+    .unwrap();
+
+    let a_abs = gui.absolute_rect(a).unwrap();
+    let b_abs = gui.absolute_rect(b).unwrap();
+    assert_eq!(a_abs, Rect::new(11, 14, 19, 10));
+    assert_eq!(b_abs, Rect::new(32, 14, 19, 10));
+}
+
+#[test]
+fn nested_layout_respects_parent_clip_children_for_overflowing_child() {
+    let mut gui = GuiContext::<12, 16, 12>::new(Rect::new(0, 0, 80, 40));
+    let parent = gui
+        .add_panel(Rect::new(6, 6, 20, 12), Style::panel())
+        .unwrap();
+    let child = gui
+        .add_label(Rect::new(0, 0, 1, 1), "OVERFLOW LABEL", Style::label())
+        .unwrap();
+    gui.add_child(parent, child).unwrap();
+
+    gui.apply_layout(
+        LinearLayout::row(),
+        Rect::new(0, 0, 40, 8),
+        &[child],
+    )
+    .unwrap();
+
+    let mut target = MockTarget::new(80, 40);
+    gui.render(&mut target).unwrap();
+    let leaked_pixels = target
+        .pixels
+        .iter()
+        .any(|&(x, y, _)| x > 26 && y >= 6 && y <= 18);
+    assert!(!leaked_pixels);
+}
+
+#[test]
 fn block_calculates_inner_area_and_renders_title() {
     let block = Block::styled(Style::panel()).title("HUD");
 
@@ -2192,6 +2247,167 @@ fn select_emits_pressed_clicked_activate_and_focus_events() {
 }
 
 #[test]
+fn double_select_emits_double_clicked_within_window() {
+    let mut gui = GuiContext::<4, 24, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_double_select_window_ms(40);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::DoubleClicked(button) {
+            panic!("unexpected double click on first select");
+        }
+    }
+
+    gui.tick_input(20).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    let mut saw_double = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::DoubleClicked(button) {
+            saw_double = true;
+        }
+    }
+    assert!(saw_double);
+}
+
+#[test]
+fn double_select_timeout_prevents_double_clicked_event() {
+    let mut gui = GuiContext::<4, 24, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_double_select_window_ms(20);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    while gui.pop_event().is_some() {}
+    gui.tick_input(25).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+
+    while let Some(event) = gui.pop_event() {
+        assert_ne!(event, UiEvent::DoubleClicked(button));
+    }
+}
+
+#[test]
+fn raw_select_policy_uses_press_release_then_activation() {
+    let mut gui = GuiContext::<4, 24, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_widget_key_input_policy(
+        button,
+        WidgetKeyInputPolicy {
+            raw_select: true,
+            raw_back: false,
+        },
+    )
+    .unwrap();
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::SelectPressed).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Pressed(button)));
+
+    gui.handle_input(InputEvent::SelectReleased).unwrap();
+    let mut saw_released = false;
+    let mut saw_pressed = false;
+    let mut saw_clicked = false;
+    let mut saw_activate = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::Released(button) {
+            saw_released = true;
+        } else if event == UiEvent::Pressed(button) {
+            saw_pressed = true;
+        } else if event == UiEvent::Clicked(button) {
+            saw_clicked = true;
+        } else if event == UiEvent::Activate(button) {
+            saw_activate = true;
+        }
+    }
+    assert!(saw_released && saw_pressed && saw_clicked && saw_activate);
+}
+
+#[test]
+fn raw_back_policy_emits_press_release_and_runs_back_action() {
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 0, 40, 12), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_widget_key_input_policy(
+        dropdown,
+        WidgetKeyInputPolicy {
+            raw_select: false,
+            raw_back: true,
+        },
+    )
+    .unwrap();
+    gui.set_focus(Some(dropdown)).unwrap();
+    gui.set_dropdown_open(dropdown, true).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::BackPressed).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Pressed(dropdown)));
+
+    gui.handle_input(InputEvent::BackReleased).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Released(dropdown)));
+    assert_eq!(gui.pop_event(), Some(UiEvent::Closed(dropdown)));
+    assert_eq!(gui.dropdown_open(dropdown), Some(false));
+}
+
+#[test]
+fn widget_key_binding_can_ignore_select_activation() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_widget_key_bindings(
+        button,
+        WidgetKeyBindings {
+            select: KeyBindingAction::Ignore,
+            back: KeyBindingAction::Default,
+        },
+    )
+    .unwrap();
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn widget_key_binding_can_remap_back_to_activate() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_widget_key_bindings(
+        button,
+        WidgetKeyBindings {
+            select: KeyBindingAction::Default,
+            back: KeyBindingAction::Activate,
+        },
+    )
+    .unwrap();
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Back).unwrap();
+    let mut saw_activate = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::Activate(button) {
+            saw_activate = true;
+        }
+    }
+    assert!(saw_activate);
+}
+
+#[test]
 fn pointer_release_emits_release_events() {
     let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
     let button = gui
@@ -2202,6 +2418,140 @@ fn pointer_release_emits_release_events() {
     gui.handle_input(InputEvent::Pointer {
         x: 2,
         y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    assert_eq!(gui.pop_event(), Some(UiEvent::Released(button)));
+    assert_eq!(gui.pop_event(), Some(UiEvent::PointerReleased(button)));
+}
+
+#[test]
+fn pointer_double_click_emits_double_clicked_within_window() {
+    let mut gui = GuiContext::<4, 24, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_double_pointer_window_ms(40);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while let Some(event) = gui.pop_event() {
+        assert_ne!(event, UiEvent::DoubleClicked(button));
+    }
+
+    gui.tick_input(20).unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    let mut saw_double = false;
+    while let Some(event) = gui.pop_event() {
+        if event == UiEvent::DoubleClicked(button) {
+            saw_double = true;
+        }
+    }
+    assert!(saw_double);
+}
+
+#[test]
+fn pointer_double_click_timeout_prevents_double_clicked_event() {
+    let mut gui = GuiContext::<4, 24, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_double_pointer_window_ms(20);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+    gui.tick_input(25).unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    while let Some(event) = gui.pop_event() {
+        assert_ne!(event, UiEvent::DoubleClicked(button));
+    }
+}
+
+#[test]
+fn pointer_release_reports_pressed_widget_even_when_pointer_leaves_hit_rect() {
+    let mut gui = GuiContext::<4, 16, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 20, 10), "ONE", Style::button())
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 40,
+        y: 20,
         state: PointerState::Released,
         button: PointerButton::Primary,
     })
@@ -2306,6 +2656,104 @@ fn dropdown_emits_open_close_events() {
 }
 
 #[test]
+fn back_input_closes_focused_open_dropdown_before_global_back() {
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 0, 40, 12), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(dropdown)).unwrap();
+    gui.set_dropdown_open(dropdown, true).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Back).unwrap();
+
+    assert_eq!(gui.dropdown_open(dropdown), Some(false));
+    assert_eq!(gui.pop_event(), Some(UiEvent::Closed(dropdown)));
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn dropdown_navigation_wraps_with_up_down_when_open() {
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 0, 40, 12), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(dropdown)).unwrap();
+    gui.set_dropdown_open(dropdown, true).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Up).unwrap();
+    assert_eq!(gui.dropdown_selected(dropdown), Some(2));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(dropdown)));
+
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.dropdown_selected(dropdown), Some(0));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(dropdown)));
+}
+
+#[test]
+fn list_navigation_updates_selection_and_offset() {
+    static ITEMS: [&str; 5] = ["A", "B", "C", "D", "E"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 80, 40));
+    let list = gui
+        .add_list(Rect::new(0, 0, 40, 20), &ITEMS, 0, 2, Style::panel())
+        .unwrap();
+    gui.set_focus(Some(list)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Down).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+
+    assert_eq!(gui.list_selected(list), Some(3));
+    let node = gui.widgets().iter().find(|w| w.id == list).unwrap();
+    match node.kind {
+        WidgetKind::List { offset, .. } => assert_eq!(offset, 2),
+        _ => panic!("expected list widget"),
+    }
+}
+
+#[test]
+fn tabs_left_right_and_encoder_wrap_selection() {
+    static TABS: [&str; 3] = ["A", "B", "C"];
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 80, 32));
+    let tabs = gui
+        .add_tabs(Rect::new(0, 0, 60, 12), &TABS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(tabs)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Left).unwrap();
+    assert_eq!(gui.tab_selected(tabs), Some(2));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(tabs)));
+
+    gui.handle_input(InputEvent::Right).unwrap();
+    assert_eq!(gui.tab_selected(tabs), Some(0));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(tabs)));
+}
+
+#[test]
+fn roller_navigation_wraps_selection() {
+    static ITEMS: [&str; 3] = ["ONE", "TWO", "THREE"];
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 80, 32));
+    let roller = gui
+        .add_roller(Rect::new(0, 0, 40, 18), &ITEMS, 0, Style::button())
+        .unwrap();
+    gui.set_focus(Some(roller)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Up).unwrap();
+    assert_eq!(gui.roller_selected(roller), Some(2));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(roller)));
+
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.roller_selected(roller), Some(0));
+    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(roller)));
+}
+
+#[test]
 fn textarea_edit_hooks_emit_text_input_events() {
     let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 64, 32));
     let textarea = gui
@@ -2327,14 +2775,7 @@ fn textarea_edit_hooks_emit_text_input_events() {
         })
     );
     assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
-    assert_eq!(
-        gui.pop_event(),
-        Some(UiEvent::TextInput {
-            id: textarea,
-            ch: '\u{7f}'
-        })
-    );
-    assert_eq!(gui.pop_event(), Some(UiEvent::ValueChanged(textarea)));
+    assert_eq!(gui.pop_event(), None);
 }
 
 #[test]
@@ -2500,6 +2941,44 @@ fn textarea_undo_redo_restores_mutation_history() {
 }
 
 #[test]
+fn textarea_undo_redo_tracks_selection_replace_boundaries() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "HELLO WORLD", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_selection(textarea, 6, 11).unwrap();
+    gui.set_textarea_cursor(textarea, 11).unwrap();
+
+    gui.textarea_insert_char(textarea, '!').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO !"));
+
+    gui.handle_input(InputEvent::Undo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO WORLD"));
+
+    gui.handle_input(InputEvent::Redo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("HELLO !"));
+}
+
+#[test]
+fn textarea_wrapped_selection_replace_can_be_undone() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 18, 14), "ABCDEFGH", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_cursor(textarea, 6).unwrap();
+    gui.handle_input(InputEvent::SelectHome).unwrap();
+    assert_eq!(gui.textarea_selection(textarea), Some((4, 6)));
+
+    gui.textarea_insert_char(textarea, 'Z').unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABCDZGH"));
+
+    gui.handle_input(InputEvent::Undo).unwrap();
+    assert_eq!(gui.textarea_text(textarea), Some("ABCDEFGH"));
+}
+
+#[test]
 fn textarea_read_only_blocks_mutation_ops() {
     let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
     let textarea = gui
@@ -2532,6 +3011,55 @@ fn textarea_single_line_rejects_newline_insert() {
 
     gui.textarea_insert_char(textarea, 'X').unwrap();
     assert_eq!(gui.textarea_text(textarea), Some("ONEX"));
+}
+
+#[test]
+fn textarea_noop_backspace_does_not_emit_events() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "A", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_textarea_cursor(textarea, 0).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.textarea_backspace(textarea).unwrap();
+
+    assert_eq!(gui.textarea_text(textarea), Some("A"));
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn textarea_noop_delete_forward_does_not_emit_events() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 14), "A", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_textarea_cursor(textarea, 1).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.textarea_delete_forward(textarea).unwrap();
+
+    assert_eq!(gui.textarea_text(textarea), Some("A"));
+    assert_eq!(gui.pop_event(), None);
+}
+
+#[test]
+fn textarea_select_home_and_end_follow_wrapped_line_boundaries() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 96, 32));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 18, 14), "ABCDEFGH", "TYPE", Style::panel())
+        .unwrap();
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.set_textarea_cursor(textarea, 6).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::SelectHome).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(4));
+    assert_eq!(gui.textarea_selection(textarea), Some((4, 6)));
+
+    gui.handle_input(InputEvent::SelectEnd).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(8));
+    assert_eq!(gui.textarea_selection(textarea), Some((6, 8)));
 }
 
 #[test]
@@ -2685,6 +3213,62 @@ fn long_press_repeat_emits_repeated_activate_for_button() {
 }
 
 #[test]
+fn widget_press_timing_override_controls_long_press_and_repeat() {
+    let mut gui = GuiContext::<4, 32, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_long_press_threshold_ms(1000);
+    gui.set_press_repeat_timing(1000, 1000);
+    gui.set_widget_press_timing(button, PressTiming::new(10, 20, 10))
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.tick_input(10).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::LongPressed(button)));
+    assert_eq!(gui.pop_event(), None);
+
+    gui.tick_input(20).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::Clicked(button)));
+    assert_eq!(gui.pop_event(), Some(UiEvent::Activate(button)));
+}
+
+#[test]
+fn clearing_widget_press_timing_reverts_to_global_behavior() {
+    let mut gui = GuiContext::<4, 32, 4>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", Style::button())
+        .unwrap();
+    gui.set_long_press_threshold_ms(40);
+    gui.set_widget_press_timing(button, PressTiming::new(10, 20, 10))
+        .unwrap();
+    gui.clear_widget_press_timing(button).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    while gui.pop_event().is_some() {}
+    gui.tick_input(10).unwrap();
+    assert_eq!(gui.pop_event(), None);
+    gui.tick_input(30).unwrap();
+    assert_eq!(gui.pop_event(), Some(UiEvent::LongPressed(button)));
+}
+
+#[test]
 fn drag_release_continues_scroll_with_inertia() {
     let mut gui = GuiContext::<8, 48, 8>::new(Rect::new(0, 0, 64, 32));
     let scroll = gui
@@ -2824,6 +3408,99 @@ fn focus_state_transitions_progress_and_complete() {
 }
 
 #[test]
+fn pressed_state_uses_pressed_style_while_pointer_is_held() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let pressed_bg = Rgb565::new(31, 0, 0);
+    let normal_bg = Rgb565::new(0, 0, 4);
+    let normal = Style {
+        background: Some(normal_bg),
+        gradient: None,
+        font: FontId::Tiny3x5,
+        foreground: Rgb565::WHITE,
+        text: Rgb565::WHITE,
+        accent: Rgb565::CYAN,
+        opacity: 255,
+        corner_radius: 0,
+        shadow: None,
+        border: Border::none(),
+        padding: EdgeInsets::all(0),
+    };
+    let styles = WidgetStyle::new(normal).with_pressed(Style {
+        background: Some(pressed_bg),
+        ..normal
+    });
+    let _button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "ONE", styles)
+        .unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    let mut target = MockTarget::new(64, 32);
+    gui.render(&mut target).unwrap();
+    assert!(target.pixels.iter().any(|&(_, _, c)| c == pressed_bg));
+}
+
+#[test]
+fn pressed_state_transitions_progress_and_complete_on_release() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let _button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "A", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(30);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.tick_input(10).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+    gui.tick_input(40).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
+fn select_activation_runs_pressed_feedback_transition_cycle() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 30, 10), "A", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(20);
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.tick_input(20).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.tick_input(25).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
 fn zero_duration_disables_state_transition_queue() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
     let first = gui
@@ -2836,6 +3513,75 @@ fn zero_duration_disables_state_transition_queue() {
     gui.set_focus(Some(first)).unwrap();
     gui.set_focus(Some(second)).unwrap();
     assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
+fn disabling_widget_starts_transition_toward_disabled_state() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let first = gui
+        .add_button(Rect::new(0, 0, 20, 10), "A", Style::button())
+        .unwrap();
+    let _second = gui
+        .add_button(Rect::new(0, 12, 20, 10), "B", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(20);
+    gui.set_focus(Some(first)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.set_disabled(first, true).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.tick_input(25).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
+fn enabling_widget_starts_transition_back_to_resting_state() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 20, 10), "A", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(20);
+    gui.set_disabled(button, true).unwrap();
+    gui.tick_input(25).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.set_disabled(button, false).unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+
+    gui.tick_input(25).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
+}
+
+#[test]
+fn disabling_pressed_widget_clears_pressed_state_immediately() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 24, 10), "A", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(20);
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert!(gui.active_state_transitions() >= 1);
+    while gui.pop_event().is_some() {}
+
+    gui.set_disabled(button, true).unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 2,
+        y: 2,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    assert_eq!(gui.pop_event(), None);
 }
 
 #[test]
@@ -2995,6 +3741,75 @@ fn style_class_state_override_applies_only_in_state() {
         .filter(|&&(_, _, c)| c == focused_bg)
         .count();
     assert!(focused_count > normal_count);
+}
+
+#[test]
+fn class_state_overrides_apply_to_transition_endpoints() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 40, 20));
+    let base = Style {
+        background: Some(Rgb565::BLUE),
+        gradient: None,
+        font: FontId::Tiny3x5,
+        foreground: Rgb565::WHITE,
+        text: Rgb565::WHITE,
+        accent: Rgb565::WHITE,
+        opacity: 255,
+        corner_radius: 0,
+        shadow: None,
+        border: Border::none(),
+        padding: EdgeInsets::all(0),
+    };
+    let button = gui
+        .add_button(Rect::new(2, 2, 24, 10), "", WidgetStyle::new(base))
+        .unwrap();
+    let class = StyleClassId::new(7);
+    gui.set_widget_style_class(button, Some(class)).unwrap();
+    gui.set_style_class_state(
+        class,
+        VisualState::Normal,
+        Style {
+            background: Some(Rgb565::BLACK),
+            ..base
+        },
+    )
+    .unwrap();
+    gui.set_style_class_state(
+        class,
+        VisualState::Focused,
+        Style {
+            background: Some(Rgb565::RED),
+            ..base
+        },
+    )
+    .unwrap();
+    gui.set_state_transition_duration_ms(100);
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+    gui.set_focus(None).unwrap();
+    gui.tick_input(50).unwrap();
+
+    let mut target = TestBuffer::new(40, 20);
+    gui.render(&mut target).unwrap();
+    let mid = target.pixel_at(8, 6).unwrap_or(Rgb565::BLACK);
+    assert!(mid.r() > 0);
+}
+
+#[test]
+fn state_transition_for_widget_is_replaced_by_new_state_change() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    let button = gui
+        .add_button(Rect::new(0, 0, 20, 10), "A", Style::button())
+        .unwrap();
+    gui.set_state_transition_duration_ms(80);
+    gui.set_focus(Some(button)).unwrap();
+    while gui.pop_event().is_some() {}
+
+    gui.set_focus(None).unwrap();
+    assert_eq!(gui.active_state_transitions(), 1);
+    gui.set_disabled(button, true).unwrap();
+    assert_eq!(gui.active_state_transitions(), 1);
+    gui.tick_input(100).unwrap();
+    assert_eq!(gui.active_state_transitions(), 0);
 }
 
 #[test]
