@@ -17,7 +17,7 @@ embedded-graphics-core = "0.4.1"
 heapless = "0.9"
 
 [dev-dependencies]
-embedded-3dgfx = { path = "../embedded-3dgfx" }
+embedded-3dgfx = { git = "https://github.com/leftger/embedded-3dgfx.git", branch = "master" }
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
 embedded-graphics-simulator = "0.8"

@@ -89,6 +89,7 @@ dependencies = [
 [[package]]
 name = "embedded-3dgfx"
 version = "0.3.0"
+source = "git+https://github.com/leftger/embedded-3dgfx.git?branch=master#12409affa228849338c1ffae4ea821b1c27e1641"
 dependencies = [
  "embedded-graphics-core",
  "embedded-graphics-framebuf",
