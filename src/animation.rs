@@ -707,6 +707,31 @@ impl<const N: usize> AnimationManager<N> {
         }
     }
 
+    pub fn seek_stepped(&mut self, id: AnimationId, elapsed_ms: u32, step_ms: u32) -> bool {
+        let Some(track) = self
+            .tracks
+            .iter_mut()
+            .flatten()
+            .find(|track| track.id == id)
+        else {
+            return false;
+        };
+        let step = step_ms.max(1);
+        let current = track.animation.elapsed_ms();
+        if elapsed_ms <= current {
+            track.animation.set_elapsed(elapsed_ms);
+            track.last_iteration = track.animation.iteration();
+            return true;
+        }
+        let mut cursor = current;
+        while cursor < elapsed_ms {
+            cursor = core::cmp::min(cursor.saturating_add(step), elapsed_ms);
+            track.animation.set_elapsed(cursor);
+        }
+        track.last_iteration = track.animation.iteration();
+        true
+    }
+
     pub fn set_next_id_for_test(&mut self, id: u16) {
         self.next_id = id.max(1);
     }

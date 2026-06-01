@@ -311,6 +311,21 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         )
     }
 
+    pub fn animate_widget_x_with_custom_interpolator(
+        &mut self,
+        widget_id: WidgetId,
+        from: i32,
+        to: i32,
+        duration_ms: u32,
+        easing: Easing,
+        interpolator: fn(f32, f32, f32) -> f32,
+        policy: AnimationConflictPolicy,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        let animation = Animation::new(from as f32, to as f32, duration_ms, easing)
+            .with_custom_interpolator(interpolator);
+        self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetX, animation, policy)
+    }
+
     pub fn animate_widget_y(
         &mut self,
         widget_id: WidgetId,
@@ -344,6 +359,21 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
             Animation::new(from as f32, to as f32, duration_ms, easing),
             policy,
         )
+    }
+
+    pub fn animate_widget_y_with_custom_curve(
+        &mut self,
+        widget_id: WidgetId,
+        from: i32,
+        to: i32,
+        duration_ms: u32,
+        easing: Easing,
+        curve: fn(f32) -> f32,
+        policy: AnimationConflictPolicy,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        let animation = Animation::new(from as f32, to as f32, duration_ms, easing)
+            .with_custom_curve(curve);
+        self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetY, animation, policy)
     }
 
     pub fn animate_widget_width(
@@ -449,6 +479,21 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
             Animation::new(from as f32, to as f32, duration_ms, easing),
             policy,
         )
+    }
+
+    pub fn animate_opacity_with_custom_interpolator(
+        &mut self,
+        widget_id: WidgetId,
+        from: u8,
+        to: u8,
+        duration_ms: u32,
+        easing: Easing,
+        interpolator: fn(f32, f32, f32) -> f32,
+        policy: AnimationConflictPolicy,
+    ) -> Result<AnimationId, WidgetAnimationError> {
+        let animation = Animation::new(from as f32, to as f32, duration_ms, easing)
+            .with_custom_interpolator(interpolator);
+        self.bind_property_with_policy(widget_id, AnimatedProperty::Opacity, animation, policy)
     }
 
     pub fn pulse_opacity(

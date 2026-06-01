@@ -63,7 +63,7 @@ pub use screen::{
 };
 pub use screen_transition::{
     ActiveScreenTransition, ScreenTransitionEffect, ScreenTransitionRunner, ScreenTransitionSample,
-    ScreenTransitionSpec, render_transition_pair,
+    ScreenTransitionOrigin, ScreenTransitionSpec, render_transition_pair,
 };
 pub use state::{ListState, ScrollState, SliderState, TabsState};
 pub use style::{
@@ -99,7 +99,7 @@ pub mod prelude {
         RepeatMode, Screen, ScreenCommand, ScreenId,
         ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
         ScreenTransitionEffect, ScreenTransitionRunner, ScreenTransitionSpec,
-        ScreenTransitionSample, ActiveScreenTransition, ScrollState, SequencePlayer, SpriteSheet,
+        ScreenTransitionSample, ScreenTransitionOrigin, ActiveScreenTransition, ScrollState, SequencePlayer, SpriteSheet,
         SequencePlayerStatus, SequenceRepeatMode, Shadow, SliderState, Span, StateStyle,
         StatefulWidget, Style, StyleTransition, SpringAnimator, InertiaAnimator, PathPoint,
         PathAnimator, lerp_style, render_transition_pair,

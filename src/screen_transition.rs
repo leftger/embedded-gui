@@ -16,12 +16,31 @@ pub enum ScreenTransitionEffect {
     SlideRight,
     Zoom,
     CircularReveal,
+    WipeLeft,
+    WipeRight,
+    WipeUp,
+    WipeDown,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScreenTransitionOrigin {
+    #[default]
+    Center,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenTransitionSpec {
     pub effect: ScreenTransitionEffect,
     pub duration_ms: u32,
+    pub origin: ScreenTransitionOrigin,
 }
 
 impl ScreenTransitionSpec {
@@ -29,6 +48,7 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::None,
             duration_ms: 0,
+            origin: ScreenTransitionOrigin::Center,
         }
     }
 
@@ -36,6 +56,7 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::Fade,
             duration_ms,
+            origin: ScreenTransitionOrigin::Center,
         }
     }
 
@@ -43,6 +64,7 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::SlideLeft,
             duration_ms,
+            origin: ScreenTransitionOrigin::Center,
         }
     }
 
@@ -50,6 +72,7 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::SlideRight,
             duration_ms,
+            origin: ScreenTransitionOrigin::Center,
         }
     }
 
@@ -57,6 +80,7 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::Zoom,
             duration_ms,
+            origin: ScreenTransitionOrigin::Center,
         }
     }
 
@@ -64,7 +88,45 @@ impl ScreenTransitionSpec {
         Self {
             effect: ScreenTransitionEffect::CircularReveal,
             duration_ms,
+            origin: ScreenTransitionOrigin::Center,
         }
+    }
+
+    pub const fn wipe_left(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::WipeLeft,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+        }
+    }
+
+    pub const fn wipe_right(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::WipeRight,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+        }
+    }
+
+    pub const fn wipe_up(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::WipeUp,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+        }
+    }
+
+    pub const fn wipe_down(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::WipeDown,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+        }
+    }
+
+    pub const fn with_origin(mut self, origin: ScreenTransitionOrigin) -> Self {
+        self.origin = origin;
+        self
     }
 }
 
@@ -73,6 +135,7 @@ pub struct ActiveScreenTransition {
     pub from: Option<ScreenId>,
     pub to: Option<ScreenId>,
     pub effect: ScreenTransitionEffect,
+    pub origin: ScreenTransitionOrigin,
     pub progress: f32,
 }
 
@@ -158,7 +221,7 @@ impl ActiveScreenTransition {
             }
             ScreenTransitionEffect::CircularReveal => {
                 let incoming = self.opacity_u8();
-                let clip = centered_reveal_clip(viewport_w, viewport_h, self.progress);
+                let clip = reveal_clip(viewport_w, viewport_h, self.progress, self.origin);
                 ScreenTransitionSample {
                     outgoing_offset_x: 0,
                     incoming_offset_x: 0,
@@ -168,13 +231,31 @@ impl ActiveScreenTransition {
                     incoming_clip: Some(clip),
                 }
             }
+            ScreenTransitionEffect::WipeLeft
+            | ScreenTransitionEffect::WipeRight
+            | ScreenTransitionEffect::WipeUp
+            | ScreenTransitionEffect::WipeDown => {
+                let clip = wipe_clip(viewport_w, viewport_h, self.progress, self.effect);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    incoming_offset_x: 0,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: Some(clip),
+                }
+            }
         }
     }
 }
 
-fn centered_reveal_clip(viewport_w: u32, viewport_h: u32, progress: f32) -> Rect {
-    let cx = viewport_w as i32 / 2;
-    let cy = viewport_h as i32 / 2;
+fn reveal_clip(
+    viewport_w: u32,
+    viewport_h: u32,
+    progress: f32,
+    origin: ScreenTransitionOrigin,
+) -> Rect {
+    let (cx, cy) = origin_point(viewport_w, viewport_h, origin);
     let max_radius = (((viewport_w as f32).hypot(viewport_h as f32)) * 0.5).ceil() as i32;
     let radius = ((max_radius as f32) * progress.clamp(0.0, 1.0)).ceil() as i32;
     let left = (cx - radius).clamp(0, viewport_w as i32);
@@ -182,6 +263,49 @@ fn centered_reveal_clip(viewport_w: u32, viewport_h: u32, progress: f32) -> Rect
     let right = (cx + radius).clamp(0, viewport_w as i32);
     let bottom = (cy + radius).clamp(0, viewport_h as i32);
     Rect::new(left, top, (right - left).max(0) as u32, (bottom - top).max(0) as u32)
+}
+
+fn origin_point(viewport_w: u32, viewport_h: u32, origin: ScreenTransitionOrigin) -> (i32, i32) {
+    let mid_x = viewport_w as i32 / 2;
+    let mid_y = viewport_h as i32 / 2;
+    let max_x = viewport_w as i32;
+    let max_y = viewport_h as i32;
+    match origin {
+        ScreenTransitionOrigin::Center => (mid_x, mid_y),
+        ScreenTransitionOrigin::TopLeft => (0, 0),
+        ScreenTransitionOrigin::Top => (mid_x, 0),
+        ScreenTransitionOrigin::TopRight => (max_x, 0),
+        ScreenTransitionOrigin::Left => (0, mid_y),
+        ScreenTransitionOrigin::Right => (max_x, mid_y),
+        ScreenTransitionOrigin::BottomLeft => (0, max_y),
+        ScreenTransitionOrigin::Bottom => (mid_x, max_y),
+        ScreenTransitionOrigin::BottomRight => (max_x, max_y),
+    }
+}
+
+fn wipe_clip(viewport_w: u32, viewport_h: u32, progress: f32, effect: ScreenTransitionEffect) -> Rect {
+    let w = viewport_w as i32;
+    let h = viewport_h as i32;
+    let p = progress.clamp(0.0, 1.0);
+    match effect {
+        ScreenTransitionEffect::WipeLeft => {
+            let visible = (w as f32 * p).round() as i32;
+            Rect::new(0, 0, visible.max(0) as u32, viewport_h)
+        }
+        ScreenTransitionEffect::WipeRight => {
+            let visible = (w as f32 * p).round() as i32;
+            Rect::new((w - visible).max(0), 0, visible.max(0) as u32, viewport_h)
+        }
+        ScreenTransitionEffect::WipeUp => {
+            let visible = (h as f32 * p).round() as i32;
+            Rect::new(0, 0, viewport_w, visible.max(0) as u32)
+        }
+        ScreenTransitionEffect::WipeDown => {
+            let visible = (h as f32 * p).round() as i32;
+            Rect::new(0, (h - visible).max(0), viewport_w, visible.max(0) as u32)
+        }
+        _ => Rect::new(0, 0, viewport_w, viewport_h),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -217,6 +341,7 @@ impl ScreenTransitionRunner {
             from: transition.from,
             to: transition.to,
             effect: spec.effect,
+            origin: spec.origin,
             progress: 0.0,
         });
         Ok(())

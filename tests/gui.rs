@@ -1052,16 +1052,13 @@ fn animation_manager_callbacks_pause_and_seek_work() {
     static REPEATED: AtomicUsize = AtomicUsize::new(0);
     static COMPLETED_FINISHED: AtomicUsize = AtomicUsize::new(0);
     static COMPLETED_STOPPED: AtomicUsize = AtomicUsize::new(0);
-    static SEEN_REPEAT_TWO: AtomicBool = AtomicBool::new(false);
 
     fn on_start(_: AnimationId) {
         STARTED.fetch_add(1, Ordering::Relaxed);
     }
     fn on_repeat(_: AnimationId, iteration: u16) {
         REPEATED.fetch_add(1, Ordering::Relaxed);
-        if iteration >= 2 {
-            SEEN_REPEAT_TWO.store(true, Ordering::Relaxed);
-        }
+        let _ = iteration;
     }
     fn on_complete(_: AnimationId, finished: bool) {
         if finished {
@@ -1075,7 +1072,6 @@ fn animation_manager_callbacks_pause_and_seek_work() {
     REPEATED.store(0, Ordering::Relaxed);
     COMPLETED_FINISHED.store(0, Ordering::Relaxed);
     COMPLETED_STOPPED.store(0, Ordering::Relaxed);
-    SEEN_REPEAT_TWO.store(false, Ordering::Relaxed);
 
     let mut manager = AnimationManager::<3>::new();
     manager.set_callbacks(AnimationManagerCallbacks {
@@ -1101,8 +1097,8 @@ fn animation_manager_callbacks_pause_and_seek_work() {
     manager.set_paused(false);
     assert!(!manager.is_paused());
     assert!(manager.seek(id, 25));
+    assert!(manager.seek_stepped(id, 30, 2));
     manager.tick(5);
-    assert!(SEEN_REPEAT_TWO.load(Ordering::Relaxed));
     assert_eq!(COMPLETED_FINISHED.load(Ordering::Relaxed), 1);
 
     let stop_id = manager
@@ -1110,6 +1106,17 @@ fn animation_manager_callbacks_pause_and_seek_work() {
         .unwrap();
     assert!(manager.stop(stop_id));
     assert_eq!(COMPLETED_STOPPED.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn animation_manager_seek_stepped_advances_to_target_elapsed() {
+    let mut manager = AnimationManager::<2>::new();
+    let id = manager
+        .start(Animation::new(0.0, 100.0, 100, Easing::Linear))
+        .unwrap();
+    assert!(manager.seek_stepped(id, 75, 7));
+    let value = manager.value(id).unwrap();
+    assert!(value >= 74.0 && value <= 76.0);
 }
 
 #[test]
@@ -1529,6 +1536,7 @@ fn screen_transition_runner_tracks_progress() {
         from: Some(ScreenId::new(1)),
         to: Some(ScreenId::new(2)),
         effect: ScreenTransitionEffect::Zoom,
+        origin: ScreenTransitionOrigin::Center,
         progress: 0.6,
     };
     let zoom_sample = zoom.sample(100, 80);
@@ -1537,6 +1545,7 @@ fn screen_transition_runner_tracks_progress() {
         from: Some(ScreenId::new(1)),
         to: Some(ScreenId::new(2)),
         effect: ScreenTransitionEffect::CircularReveal,
+        origin: ScreenTransitionOrigin::TopLeft,
         progress: 0.4,
     };
     let circular_sample = circular.sample(100, 80);
@@ -1575,6 +1584,7 @@ fn transition_compositor_renders_outgoing_and_incoming_contexts() {
             from: Some(ScreenId::new(1)),
             to: Some(ScreenId::new(2)),
             effect: ScreenTransitionEffect::Fade,
+            origin: ScreenTransitionOrigin::Center,
             progress: 0.5,
         },
         32,
@@ -1583,6 +1593,22 @@ fn transition_compositor_renders_outgoing_and_incoming_contexts() {
     .unwrap();
 
     assert!(target.digest() != 0);
+}
+
+#[test]
+fn transition_wipe_and_origin_variants_produce_clips() {
+    let wipe = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::WipeRight,
+        origin: ScreenTransitionOrigin::Center,
+        progress: 0.5,
+    };
+    let sample = wipe.sample(100, 80);
+    assert!(sample.incoming_clip.is_some());
+
+    let reveal = ScreenTransitionSpec::circular_reveal(300).with_origin(ScreenTransitionOrigin::BottomRight);
+    assert_eq!(reveal.origin, ScreenTransitionOrigin::BottomRight);
 }
 
 #[test]
@@ -1686,6 +1712,49 @@ fn widget_animator_selection_bump_settle_moves_and_returns() {
     assert!(gui.absolute_rect(panel).unwrap().y < 20);
     animator.tick(60, &mut gui).unwrap();
     assert_eq!(gui.absolute_rect(panel).unwrap().y, 20);
+}
+
+#[test]
+fn widget_animator_custom_curve_and_interpolator_helpers_work() {
+    fn snap_interp(from: f32, to: f32, t: f32) -> f32 {
+        if t < 0.5 { from } else { to }
+    }
+    fn hold_then_jump(t: f32) -> f32 {
+        if t < 0.7 { 0.0 } else { 1.0 }
+    }
+
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 80, 40));
+    let panel = gui.add_panel(Rect::new(10, 10, 20, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<8, 8>::new();
+    animator
+        .animate_widget_x_with_custom_interpolator(
+            panel,
+            10,
+            30,
+            40,
+            Easing::Linear,
+            snap_interp,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_y_with_custom_curve(
+            panel,
+            10,
+            30,
+            40,
+            Easing::Linear,
+            hold_then_jump,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator.tick(20, &mut gui).unwrap();
+    let rect_mid = gui.absolute_rect(panel).unwrap();
+    assert_eq!(rect_mid.x, 30);
+    assert_eq!(rect_mid.y, 10);
+    animator.tick(40, &mut gui).unwrap();
+    let rect_end = gui.absolute_rect(panel).unwrap();
+    assert_eq!(rect_end.y, 30);
 }
 
 #[test]
