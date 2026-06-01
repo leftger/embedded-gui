@@ -71,6 +71,52 @@ impl Default for ScrollPhysics {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PressTiming {
+    pub long_press_ms: u32,
+    pub repeat_delay_ms: u32,
+    pub repeat_interval_ms: u32,
+}
+
+impl PressTiming {
+    pub const fn new(long_press_ms: u32, repeat_delay_ms: u32, repeat_interval_ms: u32) -> Self {
+        Self {
+            long_press_ms,
+            repeat_delay_ms,
+            repeat_interval_ms,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WidgetKeyInputPolicy {
+    pub raw_select: bool,
+    pub raw_back: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyBindingAction {
+    Default,
+    Ignore,
+    Activate,
+    Back,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetKeyBindings {
+    pub select: KeyBindingAction,
+    pub back: KeyBindingAction,
+}
+
+impl Default for WidgetKeyBindings {
+    fn default() -> Self {
+        Self {
+            select: KeyBindingAction::Default,
+            back: KeyBindingAction::Default,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TextareaSnapshot {
     text_buf: [u8; TEXTAREA_CAPACITY],
     text_len: u8,
@@ -109,11 +155,20 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     textarea_cursor_blink_elapsed_ms: u32,
     press_repeat_delay_ms: u32,
     press_repeat_interval_ms: u32,
+    select_double_window_ms: u32,
+    select_elapsed_ms: u32,
+    last_select_id: Option<WidgetId>,
+    pointer_double_window_ms: u32,
+    pointer_elapsed_ms: u32,
+    last_pointer_id: Option<WidgetId>,
     pressed: Option<PressTracker>,
     inertia_scroll: Option<InertiaScroll>,
     scroll_physics: ScrollPhysics,
     state_transition_ms: u32,
     state_transitions: Vec<StateTransition, NODES>,
+    widget_press_timings: Vec<(WidgetId, PressTiming), NODES>,
+    widget_key_policies: Vec<(WidgetId, WidgetKeyInputPolicy), NODES>,
+    widget_key_bindings: Vec<(WidgetId, WidgetKeyBindings), NODES>,
     textarea_undo: Vec<TextareaHistoryEntry, NODES>,
     textarea_redo: Vec<TextareaHistoryEntry, NODES>,
     next_id: u16,
@@ -142,11 +197,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             textarea_cursor_blink_elapsed_ms: 0,
             press_repeat_delay_ms: 650,
             press_repeat_interval_ms: 140,
+            select_double_window_ms: 300,
+            select_elapsed_ms: 0,
+            last_select_id: None,
+            pointer_double_window_ms: 300,
+            pointer_elapsed_ms: 0,
+            last_pointer_id: None,
             pressed: None,
             inertia_scroll: None,
             scroll_physics: ScrollPhysics::default(),
             state_transition_ms: 0,
             state_transitions: Vec::new(),
+            widget_press_timings: Vec::new(),
+            widget_key_policies: Vec::new(),
+            widget_key_bindings: Vec::new(),
             textarea_undo: Vec::new(),
             textarea_redo: Vec::new(),
             next_id: 1,
@@ -171,7 +235,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.focus = None;
         self.pressed = None;
         self.inertia_scroll = None;
+        self.last_select_id = None;
+        self.select_elapsed_ms = 0;
+        self.last_pointer_id = None;
+        self.pointer_elapsed_ms = 0;
         self.state_transitions.clear();
+        self.widget_press_timings.clear();
+        self.widget_key_policies.clear();
+        self.widget_key_bindings.clear();
         self.textarea_undo.clear();
         self.textarea_redo.clear();
         self.dirty.mark_all(self.viewport)?;
@@ -189,6 +260,142 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn set_press_repeat_timing(&mut self, delay_ms: u32, interval_ms: u32) {
         self.press_repeat_delay_ms = delay_ms.max(1);
         self.press_repeat_interval_ms = interval_ms.max(1);
+    }
+
+    pub fn set_double_select_window_ms(&mut self, window_ms: u32) {
+        self.select_double_window_ms = window_ms.max(1);
+    }
+
+    pub fn set_double_pointer_window_ms(&mut self, window_ms: u32) {
+        self.pointer_double_window_ms = window_ms.max(1);
+    }
+
+    pub fn set_widget_press_timing(
+        &mut self,
+        id: WidgetId,
+        timing: PressTiming,
+    ) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        let timing = PressTiming {
+            long_press_ms: timing.long_press_ms.max(1),
+            repeat_delay_ms: timing.repeat_delay_ms.max(1),
+            repeat_interval_ms: timing.repeat_interval_ms.max(1),
+        };
+        if let Some((_, current)) = self
+            .widget_press_timings
+            .iter_mut()
+            .find(|(timing_id, _)| *timing_id == id)
+        {
+            *current = timing;
+            return Ok(());
+        }
+        self.widget_press_timings
+            .push((id, timing))
+            .map_err(|_| GuiError::WidgetsFull)
+    }
+
+    pub fn clear_widget_press_timing(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        if let Some(pos) = self
+            .widget_press_timings
+            .iter()
+            .position(|(timing_id, _)| *timing_id == id)
+        {
+            self.widget_press_timings.remove(pos);
+        }
+        Ok(())
+    }
+
+    pub fn widget_press_timing(&self, id: WidgetId) -> Result<Option<PressTiming>, GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        Ok(self
+            .widget_press_timings
+            .iter()
+            .find(|(timing_id, _)| *timing_id == id)
+            .map(|(_, timing)| *timing))
+    }
+
+    pub fn set_widget_key_input_policy(
+        &mut self,
+        id: WidgetId,
+        policy: WidgetKeyInputPolicy,
+    ) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        if let Some((_, current)) = self
+            .widget_key_policies
+            .iter_mut()
+            .find(|(policy_id, _)| *policy_id == id)
+        {
+            *current = policy;
+            return Ok(());
+        }
+        self.widget_key_policies
+            .push((id, policy))
+            .map_err(|_| GuiError::WidgetsFull)
+    }
+
+    pub fn clear_widget_key_input_policy(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        if let Some(pos) = self
+            .widget_key_policies
+            .iter()
+            .position(|(policy_id, _)| *policy_id == id)
+        {
+            self.widget_key_policies.remove(pos);
+        }
+        Ok(())
+    }
+
+    pub fn widget_key_input_policy(
+        &self,
+        id: WidgetId,
+    ) -> Result<Option<WidgetKeyInputPolicy>, GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        Ok(self
+            .widget_key_policies
+            .iter()
+            .find(|(policy_id, _)| *policy_id == id)
+            .map(|(_, policy)| *policy))
+    }
+
+    pub fn set_widget_key_bindings(
+        &mut self,
+        id: WidgetId,
+        bindings: WidgetKeyBindings,
+    ) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        if let Some((_, current)) = self
+            .widget_key_bindings
+            .iter_mut()
+            .find(|(binding_id, _)| *binding_id == id)
+        {
+            *current = bindings;
+            return Ok(());
+        }
+        self.widget_key_bindings
+            .push((id, bindings))
+            .map_err(|_| GuiError::WidgetsFull)
+    }
+
+    pub fn clear_widget_key_bindings(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        if let Some(pos) = self
+            .widget_key_bindings
+            .iter()
+            .position(|(binding_id, _)| *binding_id == id)
+        {
+            self.widget_key_bindings.remove(pos);
+        }
+        Ok(())
+    }
+
+    pub fn widget_key_bindings(&self, id: WidgetId) -> Result<Option<WidgetKeyBindings>, GuiError> {
+        self.node(id).ok_or(GuiError::NotFound)?;
+        Ok(self
+            .widget_key_bindings
+            .iter()
+            .find(|(binding_id, _)| *binding_id == id)
+            .map(|(_, bindings)| *bindings))
     }
 
     pub fn set_scroll_physics(
@@ -1688,6 +1895,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 for c in textarea_text(text_buf, *text_len).chars() {
                     let _ = chars.push(c);
                 }
+                let original_len = chars.len();
+                let original_cursor = *cursor;
 
                 if ch == '\u{8}' {
                     let removed_selection = delete_selection_if_any(&mut chars, cursor, selection);
@@ -1695,7 +1904,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         chars.remove(*cursor - 1);
                         *cursor -= 1;
                     }
-                    if removed_selection || *cursor < textarea_text(text_buf, *text_len).chars().count() {
+                    if removed_selection || *cursor != original_cursor || chars.len() != original_len {
                         *selection = None;
                         let (next_buf, next_len) = textarea_storage_from_chars(&chars);
                         *text_buf = next_buf;
@@ -1707,8 +1916,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     if !removed_selection && *cursor < chars.len() {
                         chars.remove(*cursor);
                     }
-                    if removed_selection || *cursor < textarea_text(text_buf, *text_len).chars().count()
-                    {
+                    if removed_selection || chars.len() != original_len {
                         *selection = None;
                         let (next_buf, next_len) = textarea_storage_from_chars(&chars);
                         *text_buf = next_buf;
@@ -1737,9 +1945,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             self.push_textarea_undo(id, before);
             self.clear_textarea_redo_for(id);
             self.dirty.add(rect)?;
+            self.push_event(UiEvent::TextInput { id, ch })?;
+            self.push_event(UiEvent::ValueChanged(id))?;
         }
-        self.push_event(UiEvent::TextInput { id, ch })?;
-        self.push_event(UiEvent::ValueChanged(id))
+        Ok(())
     }
 
     fn textarea_line_context(&self, id: WidgetId) -> Result<(&str, usize, usize), GuiError> {
@@ -2121,11 +2330,18 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         flag: WidgetFlags,
         enabled: bool,
     ) -> Result<(), GuiError> {
+        let was_set = self.has_flag(id, flag)?;
+        let before_state = self.current_visual_state(id);
         self.mark_subtree_dirty(id)?;
         self.node_mut(id)
             .ok_or(GuiError::NotFound)?
             .flags
             .set(flag, enabled);
+        if flag == WidgetFlags::DISABLED && enabled {
+            if self.pressed.is_some_and(|pressed| pressed.id == id) {
+                self.pressed = None;
+            }
+        }
         self.mark_subtree_dirty(id)?;
         if self
             .focus
@@ -2133,6 +2349,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         {
             self.focus = None;
             self.ensure_focus();
+        }
+        if flag == WidgetFlags::DISABLED && was_set != enabled {
+            let after_state = self.current_visual_state(id);
+            self.start_state_transition(id, before_state, after_state);
         }
         Ok(())
     }
@@ -2605,18 +2825,60 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::Select => {
                 if let Some(id) = self.focus {
-                    self.dispatch_activation(id, false)?;
+                    match self.key_bindings_for(id).select {
+                        KeyBindingAction::Default | KeyBindingAction::Activate => {
+                            self.handle_select_activation(id)?
+                        }
+                        KeyBindingAction::Back => self.handle_back_action()?,
+                        KeyBindingAction::Ignore => {}
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectPressed => {
+                if let Some(id) = self.focus {
+                    if self.key_input_policy_for(id).raw_select {
+                        self.dispatch_key_pressed(id)?;
+                    }
+                }
+                Ok(())
+            }
+            InputEvent::SelectReleased => {
+                if let Some(id) = self.focus {
+                    if self.key_input_policy_for(id).raw_select {
+                        self.dispatch_key_released(id)?;
+                        self.handle_select_activation(id)?;
+                    }
                 }
                 Ok(())
             }
             InputEvent::Back => {
                 if let Some(id) = self.focus {
-                    if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
-                        self.textarea_backspace(id)?;
-                        return Ok(());
+                    match self.key_bindings_for(id).back {
+                        KeyBindingAction::Default | KeyBindingAction::Back => self.handle_back_action(),
+                        KeyBindingAction::Activate => self.handle_select_activation(id),
+                        KeyBindingAction::Ignore => Ok(()),
+                    }
+                } else {
+                    self.handle_back_action()
+                }
+            }
+            InputEvent::BackPressed => {
+                if let Some(id) = self.focus {
+                    if self.key_input_policy_for(id).raw_back {
+                        self.dispatch_key_pressed(id)?;
                     }
                 }
-                self.push_event(UiEvent::Back)
+                Ok(())
+            }
+            InputEvent::BackReleased => {
+                if let Some(id) = self.focus {
+                    if self.key_input_policy_for(id).raw_back {
+                        self.dispatch_key_released(id)?;
+                        return self.handle_back_action();
+                    }
+                }
+                Ok(())
             }
             InputEvent::Pointer {
                 x,
@@ -2641,6 +2903,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     pub fn tick_input(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        if self.last_select_id.is_some() {
+            self.select_elapsed_ms = self.select_elapsed_ms.saturating_add(dt_ms);
+            if self.select_elapsed_ms > self.select_double_window_ms {
+                self.last_select_id = None;
+                self.select_elapsed_ms = 0;
+            }
+        }
+        if self.last_pointer_id.is_some() {
+            self.pointer_elapsed_ms = self.pointer_elapsed_ms.saturating_add(dt_ms);
+            if self.pointer_elapsed_ms > self.pointer_double_window_ms {
+                self.last_pointer_id = None;
+                self.pointer_elapsed_ms = 0;
+            }
+        }
         self.tick_state_transitions(dt_ms)?;
         if let Some(mut inertia) = self.inertia_scroll {
             if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
@@ -2673,9 +2949,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             self.pressed = None;
             return Ok(());
         }
+        let timing = self.press_timing_for(pressed.id);
         pressed.elapsed_ms = pressed.elapsed_ms.saturating_add(dt_ms);
         pressed.repeat_elapsed_ms = pressed.repeat_elapsed_ms.saturating_add(dt_ms);
-        if !pressed.long_emitted && pressed.elapsed_ms >= self.long_press_ms {
+        if !pressed.long_emitted && pressed.elapsed_ms >= timing.long_press_ms {
             let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
             self.dispatch_widget_event(pressed.id, WidgetEventKind::LongPressed, &mut events, |_| {
                 EventPolicy::Continue
@@ -2683,15 +2960,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             self.push_event(UiEvent::LongPressed(pressed.id))?;
             pressed.long_emitted = true;
         }
-        if pressed.repeat_elapsed_ms >= self.press_repeat_delay_ms
+        if pressed.repeat_elapsed_ms >= timing.repeat_delay_ms
             && self.repeatable_widget(pressed.id)
             && pressed.long_emitted
         {
-            let intervals = (pressed.repeat_elapsed_ms - self.press_repeat_delay_ms)
-                / self.press_repeat_interval_ms;
+            let intervals = (pressed.repeat_elapsed_ms - timing.repeat_delay_ms)
+                / timing.repeat_interval_ms;
             if intervals > 0 {
                 self.dispatch_repeat_activation(pressed.id)?;
-                pressed.repeat_elapsed_ms = self.press_repeat_delay_ms;
+                pressed.repeat_elapsed_ms = timing.repeat_delay_ms;
             }
         }
         self.pressed = Some(pressed);
@@ -2839,7 +3116,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             let old_clip = ctx.clip();
             ctx.set_clip(old_clip.intersection(clip));
-            let state = if Some(node.id) == self.focus {
+            let state = if self.pressed.is_some_and(|pressed| pressed.id == node.id) {
+                VisualState::Pressed
+            } else if Some(node.id) == self.focus {
                 VisualState::Focused
             } else if !self.effective_enabled(node.id) {
                 VisualState::Disabled
@@ -2847,16 +3126,23 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 VisualState::Normal
             };
             let mut render_node = *node;
-            if let Some(class) = node.style_class {
-                if let Some((_, style)) = self.class_styles.iter().find(|(id, _)| *id == class) {
-                    let class_state = style.resolve(state);
-                    render_node.style = node.style.with_state_override(state, class_state);
-                }
-            }
-            if let Some((from, to, t)) = self.state_transition_progress(node.id) {
-                let blended = lerp_style(render_node.style.resolve(from), render_node.style.resolve(to), t);
-                render_node.style = render_node.style.with_state_override(state, blended);
-            }
+            let class_style = node.style_class.and_then(|class| {
+                self.class_styles
+                    .iter()
+                    .find(|(id, _)| *id == class)
+                    .map(|(_, style)| *style)
+            });
+            let resolve_state_style = |vs: VisualState| {
+                class_style
+                    .map(|style| style.resolve(vs))
+                    .unwrap_or_else(|| render_node.style.resolve(vs))
+            };
+            let active_style = if let Some((from, to, t)) = self.state_transition_progress(node.id) {
+                lerp_style(resolve_state_style(from), resolve_state_style(to), t)
+            } else {
+                resolve_state_style(state)
+            };
+            render_node.style = render_node.style.with_state_override(state, active_style);
             if opacity < 255 {
                 let apply = |v: u8| -> u8 { ((v as u16 * opacity as u16) / 255) as u8 };
                 render_node.style.normal.opacity = apply(render_node.style.normal.opacity);
@@ -3361,7 +3647,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
-    fn handle_pointer_released(&mut self, x: i32, y: i32) -> Result<(), GuiError> {
+    fn handle_pointer_released(&mut self, _x: i32, _y: i32) -> Result<(), GuiError> {
+        let mut released_id = None;
         if let Some(pressed) = self.pressed {
             if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
                 if pressed.scroll_velocity.abs() > self.scroll_physics.velocity_threshold {
@@ -3371,16 +3658,34 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     });
                 }
             }
+            released_id = Some(pressed.id);
         }
         self.pressed = None;
-        let hit = self.pointer_hit(x, y, true);
-        if let Some(id) = hit {
+        if let Some(id) = released_id {
+            let to = if !self.effective_enabled(id) {
+                VisualState::Disabled
+            } else if Some(id) == self.focus {
+                VisualState::Focused
+            } else {
+                VisualState::Normal
+            };
+            self.start_state_transition(id, VisualState::Pressed, to);
             let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
             self.dispatch_widget_event(id, WidgetEventKind::Released, &mut events, |_| {
                 EventPolicy::Continue
             })?;
             self.push_event(UiEvent::Released(id))?;
             self.push_event(UiEvent::PointerReleased(id))?;
+            let double_pointer = self.last_pointer_id == Some(id)
+                && self.pointer_elapsed_ms <= self.pointer_double_window_ms;
+            if double_pointer {
+                self.dispatch_double_clicked(id)?;
+                self.last_pointer_id = None;
+                self.pointer_elapsed_ms = 0;
+            } else {
+                self.last_pointer_id = Some(id);
+                self.pointer_elapsed_ms = 0;
+            }
         }
         Ok(())
     }
@@ -3442,6 +3747,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         if is_pointer {
             self.push_event(UiEvent::PointerPressed(id))?;
         }
+        let from = if Some(id) == self.focus {
+            VisualState::Focused
+        } else {
+            VisualState::Normal
+        };
+        self.start_state_transition(id, from, VisualState::Pressed);
 
         self.activate_focused(id)?;
         self.dispatch_widget_event(id, WidgetEventKind::Clicked, &mut events, |_| {
@@ -3459,6 +3770,30 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         })?;
         self.push_event(UiEvent::Clicked(id))?;
         self.push_event(UiEvent::Activate(id))
+    }
+
+    fn dispatch_double_clicked(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+        self.dispatch_widget_event(id, WidgetEventKind::DoubleClicked, &mut events, |_| {
+            EventPolicy::Continue
+        })?;
+        self.push_event(UiEvent::DoubleClicked(id))
+    }
+
+    fn dispatch_key_pressed(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+        self.dispatch_widget_event(id, WidgetEventKind::Pressed, &mut events, |_| {
+            EventPolicy::Continue
+        })?;
+        self.push_event(UiEvent::Pressed(id))
+    }
+
+    fn dispatch_key_released(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
+        self.dispatch_widget_event(id, WidgetEventKind::Released, &mut events, |_| {
+            EventPolicy::Continue
+        })?;
+        self.push_event(UiEvent::Released(id))
     }
 
     fn repeatable_widget(&self, id: WidgetId) -> bool {
@@ -3558,9 +3893,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             return Ok(());
         }
         let mut i = 0usize;
+        let mut completed_pressed = heapless::Vec::<WidgetId, NODES>::new();
         while i < self.state_transitions.len() {
             let mut remove = false;
             let id;
+            let to;
             {
                 let entry = &mut self.state_transitions[i];
                 entry.elapsed_ms = entry.elapsed_ms.saturating_add(dt_ms);
@@ -3568,15 +3905,27 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     remove = true;
                 }
                 id = entry.id;
+                to = entry.to;
             }
             if let Some(rect) = self.absolute_rect(id) {
                 self.dirty.add(rect)?;
             }
             if remove {
+                if to == VisualState::Pressed {
+                    let _ = completed_pressed.push(id);
+                }
                 self.state_transitions.remove(i);
             } else {
                 i += 1;
             }
+        }
+        for id in completed_pressed {
+            // Pointer-held presses keep visual pressed state until release.
+            if self.pressed.is_some_and(|pressed| pressed.id == id) {
+                continue;
+            }
+            let to = self.resting_visual_state(id);
+            self.start_state_transition(id, VisualState::Pressed, to);
         }
         Ok(())
     }
@@ -3673,6 +4022,81 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .iter()
             .find(|(id, _)| *id == event.current)
             .is_some_and(|(_, policy)| policy.stop && policy.allows(event.kind, event.phase))
+    }
+
+    fn resting_visual_state(&self, id: WidgetId) -> VisualState {
+        if !self.effective_enabled(id) {
+            VisualState::Disabled
+        } else if Some(id) == self.focus {
+            VisualState::Focused
+        } else {
+            VisualState::Normal
+        }
+    }
+
+    fn current_visual_state(&self, id: WidgetId) -> VisualState {
+        if self.pressed.is_some_and(|pressed| pressed.id == id) {
+            VisualState::Pressed
+        } else {
+            self.resting_visual_state(id)
+        }
+    }
+
+    fn press_timing_for(&self, id: WidgetId) -> PressTiming {
+        self.widget_press_timings
+            .iter()
+            .find(|(timing_id, _)| *timing_id == id)
+            .map(|(_, timing)| *timing)
+            .unwrap_or(PressTiming {
+                long_press_ms: self.long_press_ms,
+                repeat_delay_ms: self.press_repeat_delay_ms,
+                repeat_interval_ms: self.press_repeat_interval_ms,
+            })
+    }
+
+    fn key_input_policy_for(&self, id: WidgetId) -> WidgetKeyInputPolicy {
+        self.widget_key_policies
+            .iter()
+            .find(|(policy_id, _)| *policy_id == id)
+            .map(|(_, policy)| *policy)
+            .unwrap_or_default()
+    }
+
+    fn key_bindings_for(&self, id: WidgetId) -> WidgetKeyBindings {
+        self.widget_key_bindings
+            .iter()
+            .find(|(binding_id, _)| *binding_id == id)
+            .map(|(_, bindings)| *bindings)
+            .unwrap_or_default()
+    }
+
+    fn handle_select_activation(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let double_select = self.last_select_id == Some(id)
+            && self.select_elapsed_ms <= self.select_double_window_ms;
+        self.dispatch_activation(id, false)?;
+        if double_select {
+            self.dispatch_double_clicked(id)?;
+            self.last_select_id = None;
+            self.select_elapsed_ms = 0;
+        } else {
+            self.last_select_id = Some(id);
+            self.select_elapsed_ms = 0;
+        }
+        Ok(())
+    }
+
+    fn handle_back_action(&mut self) -> Result<(), GuiError> {
+        if let Some(id) = self.focus {
+            if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::TextArea { .. })) {
+                self.textarea_backspace(id)?;
+                return Ok(());
+            }
+            if matches!(self.node(id).map(|n| n.kind), Some(WidgetKind::Dropdown { open: true, .. })) {
+                self.set_dropdown_open(id, false)?;
+                return Ok(());
+            }
+        }
+        self.push_event(UiEvent::Back)
     }
 }
 
