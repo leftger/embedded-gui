@@ -81,7 +81,7 @@ pub use widget::{
 };
 pub use widget_animation::{
     AnimatedProperty, AnimationConflictPolicy, BindingSnapshot, WidgetAnimationCallbacks,
-    WidgetAnimationError, WidgetAnimator,
+    WidgetAnimationError, WidgetAnimator, WidgetKeyframeState, WidgetPropertyKeyframe,
 };
 pub use widget_animation::presets;
 pub use widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode};
@@ -110,7 +110,7 @@ pub mod prelude {
         VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
         AnimationConflictPolicy, BindingSnapshot, WidgetDispatchPolicy, WidgetEvent,
         WidgetEventFilter, WidgetEventKind, WidgetFlags, WidgetId, WidgetKind, WidgetStyle, KeyboardLayout,
-        ChartMode,
+        ChartMode, WidgetKeyframeState, WidgetPropertyKeyframe,
         presets,
         TextShaper, BasicTextShaper, ShapingConfig, ShapedGlyph, TextDirection,
         apply_easing,

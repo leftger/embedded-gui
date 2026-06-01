@@ -39,6 +39,22 @@ pub enum AnimatedProperty {
     Opacity,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetKeyframeState {
+    pub x: i32,
+    pub y: i32,
+    pub opacity: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetPropertyKeyframe {
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub opacity: Option<u8>,
+    pub duration_ms: u32,
+    pub easing: Easing,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AnimationConflictPolicy {
     #[default]
@@ -494,6 +510,63 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         let animation = Animation::new(from as f32, to as f32, duration_ms, easing)
             .with_custom_interpolator(interpolator);
         self.bind_property_with_policy(widget_id, AnimatedProperty::Opacity, animation, policy)
+    }
+
+    pub fn animate_widget_keyframes(
+        &mut self,
+        widget_id: WidgetId,
+        initial: WidgetKeyframeState,
+        keyframes: &[WidgetPropertyKeyframe],
+        policy: AnimationConflictPolicy,
+    ) -> Result<usize, WidgetAnimationError> {
+        let mut created = 0usize;
+        let mut delay_ms = 0u32;
+        let mut state = initial;
+        for (idx, keyframe) in keyframes.iter().copied().enumerate() {
+            let step_policy = if idx == 0 {
+                policy
+            } else {
+                AnimationConflictPolicy::Queue
+            };
+            if let Some(next_x) = keyframe.x {
+                let anim = Animation::new(
+                    state.x as f32,
+                    next_x as f32,
+                    keyframe.duration_ms,
+                    keyframe.easing,
+                )
+                .with_delay(delay_ms);
+                self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetX, anim, step_policy)?;
+                created += 1;
+                state.x = next_x;
+            }
+            if let Some(next_y) = keyframe.y {
+                let anim = Animation::new(
+                    state.y as f32,
+                    next_y as f32,
+                    keyframe.duration_ms,
+                    keyframe.easing,
+                )
+                .with_delay(delay_ms);
+                self.bind_property_with_policy(widget_id, AnimatedProperty::WidgetY, anim, step_policy)?;
+                created += 1;
+                state.y = next_y;
+            }
+            if let Some(next_opacity) = keyframe.opacity {
+                let anim = Animation::new(
+                    state.opacity as f32,
+                    next_opacity as f32,
+                    keyframe.duration_ms,
+                    keyframe.easing,
+                )
+                .with_delay(delay_ms);
+                self.bind_property_with_policy(widget_id, AnimatedProperty::Opacity, anim, step_policy)?;
+                created += 1;
+                state.opacity = next_opacity;
+            }
+            delay_ms = delay_ms.saturating_add(keyframe.duration_ms);
+        }
+        Ok(created)
     }
 
     pub fn pulse_opacity(

@@ -162,13 +162,21 @@ The `examples/` folder currently includes:
 
 - Input and widget interaction guarantees are documented in `docs/interaction-behavior-contract.md`.
 
-## Example Screenshots
+## Visual Showcase
 
-Dashboard-style UI:
+Animation and transition capabilities (generated from simulator output):
+
+![Animation and transition showcase](docs/screenshots/motion.gif)
+
+Dashboard-style UI composition:
 
 ![Dashboard UI screenshot](docs/screenshots/dashboard.png)
 
-Mixed font text model showcase:
+Typography and mixed-font text model:
 
 ![Mixed font showcase screenshot](docs/screenshots/fonts.png)
+
+Static motion frame preview:
+
+![Motion frame screenshot](docs/screenshots/motion.png)
 

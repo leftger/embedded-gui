@@ -1120,6 +1120,20 @@ fn animation_manager_seek_stepped_advances_to_target_elapsed() {
 }
 
 #[test]
+fn animation_manager_replay_stepped_emits_samples() {
+    let mut manager = AnimationManager::<2>::new();
+    let id = manager
+        .start(Animation::new(0.0, 100.0, 100, Easing::Linear))
+        .unwrap();
+    let mut samples = heapless::Vec::<f32, 32>::new();
+    assert!(manager.replay_stepped(id, 60, 10, |v| {
+        let _ = samples.push(v);
+    }));
+    assert_eq!(samples.len(), 6);
+    assert!(samples[samples.len() - 1] >= 59.0 && samples[samples.len() - 1] <= 61.0);
+}
+
+#[test]
 fn widget_animator_updates_progress_and_meter_values() {
     let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 96, 64));
     let progress = gui
@@ -1755,6 +1769,49 @@ fn widget_animator_custom_curve_and_interpolator_helpers_work() {
     animator.tick(40, &mut gui).unwrap();
     let rect_end = gui.absolute_rect(panel).unwrap();
     assert_eq!(rect_end.y, 30);
+}
+
+#[test]
+fn widget_animator_multi_property_keyframes_apply_in_sequence() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 100, 60));
+    let panel = gui.add_panel(Rect::new(10, 10, 20, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<16, 16>::new();
+    let count = animator
+        .animate_widget_keyframes(
+            panel,
+            WidgetKeyframeState {
+                x: 10,
+                y: 10,
+                opacity: 255,
+            },
+            &[
+                WidgetPropertyKeyframe {
+                    x: Some(20),
+                    y: Some(12),
+                    opacity: Some(220),
+                    duration_ms: 20,
+                    easing: Easing::Linear,
+                },
+                WidgetPropertyKeyframe {
+                    x: Some(30),
+                    y: Some(16),
+                    opacity: Some(128),
+                    duration_ms: 20,
+                    easing: Easing::Linear,
+                },
+            ],
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    assert_eq!(count, 6);
+    animator.tick(20, &mut gui).unwrap();
+    let mid = gui.absolute_rect(panel).unwrap();
+    assert_eq!(mid.x, 20);
+    assert_eq!(mid.y, 12);
+    animator.tick(20, &mut gui).unwrap();
+    let end = gui.absolute_rect(panel).unwrap();
+    assert_eq!(end.x, 30);
+    assert_eq!(end.y, 16);
 }
 
 #[test]

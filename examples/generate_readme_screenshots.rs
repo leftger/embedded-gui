@@ -9,6 +9,8 @@ const DASHBOARD_W: u32 = 192;
 const DASHBOARD_H: u32 = 120;
 const FONT_W: u32 = 240;
 const FONT_H: u32 = 140;
+const MOTION_W: u32 = 220;
+const MOTION_H: u32 = 128;
 
 static TABS: [&str; 3] = ["SYS", "GFX", "NET"];
 static SETTINGS_ITEMS: [&str; 6] = ["DITHER", "AUDIO", "RADAR", "VIBRO", "DEBUG", "ABOUT"];
@@ -37,7 +39,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .to_rgb_output_image(&font_settings)
         .save_png("docs/screenshots/fonts.png")?;
 
-    println!("wrote docs/screenshots/dashboard.png and docs/screenshots/fonts.png");
+    let motion_settings = OutputSettingsBuilder::new().scale(4).build();
+    for frame_idx in 0..32 {
+        let mut motion_display = SimulatorDisplay::<Rgb565>::new(Size::new(MOTION_W, MOTION_H));
+        let t = frame_idx as f32 / 31.0;
+        draw_motion_showcase(&mut motion_display, t);
+        let path = format!("docs/screenshots/motion_{frame_idx:02}.png");
+        motion_display
+            .to_rgb_output_image(&motion_settings)
+            .save_png(path)?;
+    }
+    let mut motion_poster = SimulatorDisplay::<Rgb565>::new(Size::new(MOTION_W, MOTION_H));
+    draw_motion_showcase(&mut motion_poster, 0.55);
+    motion_poster
+        .to_rgb_output_image(&motion_settings)
+        .save_png("docs/screenshots/motion.png")?;
+
+    println!(
+        "wrote dashboard/fonts/motion PNGs to docs/screenshots (motion_00..motion_31 + motion.png)"
+    );
     Ok(())
 }
 
@@ -150,4 +170,42 @@ fn draw_font_showcase(display: &mut SimulatorDisplay<Rgb565>) {
         TextStyle::new(Rgb565::WHITE).with_align(TextAlign::Center),
     )
     .expect("hint");
+}
+
+fn draw_motion_showcase(display: &mut SimulatorDisplay<Rgb565>, t: f32) {
+    let mut gui = GuiContext::<24, 24, 16>::new(Rect::new(0, 0, MOTION_W, MOTION_H));
+    let eased = apply_easing(t, Easing::InOutSine);
+    let panel_x = 14 + (eased * 96.0).round() as i32;
+    let panel_y = 20 + (apply_easing(t, Easing::OutBounce) * 32.0).round() as i32;
+    let progress = apply_easing(t, Easing::InOutCubic);
+    let gauge = apply_easing(t, Easing::OutExpo);
+    let opacity = (80.0 + 175.0 * apply_easing(t, Easing::InOutSine)).round() as u8;
+
+    gui.add_themed_panel(Rect::new(6, 6, MOTION_W - 12, MOTION_H - 12))
+        .expect("shell");
+    gui.add_themed_label(
+        Rect::new(12, 10, MOTION_W - 24, 10),
+        "ANIMATION + TRANSITION CAPABILITIES",
+    )
+    .expect("title");
+    gui.add_themed_progress_bar(Rect::new(12, 28, 122, 10), progress)
+        .expect("progress");
+    gui.add_gauge(Rect::new(140, 22, 26, 26), gauge, 0.0, 1.0, Style::progress())
+        .expect("gauge");
+    gui.add_spinner(Rect::new(170, 24, 20, 20), progress, Style::progress())
+        .expect("spinner");
+    let card = gui
+        .add_themed_panel(Rect::new(panel_x, panel_y, 72, 28))
+        .expect("card");
+    gui.set_widget_opacity(card, opacity).expect("opacity");
+    gui.add_themed_label(Rect::new(panel_x + 6, panel_y + 8, 58, 10), "MOTION")
+        .expect("card label");
+    gui.add_themed_value_label(Rect::new(12, 44, 62, 12), "FPS", 60)
+        .expect("fps");
+    gui.add_themed_slider(Rect::new(12, 62, 122, 12), progress, 0.0, 1.0)
+        .expect("slider");
+    gui.add_themed_icon_button(Rect::new(12, 82, 90, 14), 'A', "CIRCULAR REVEAL")
+        .expect("button");
+
+    gui.render(display).expect("render");
 }
