@@ -41,6 +41,7 @@ pub struct ScreenTransitionSpec {
     pub effect: ScreenTransitionEffect,
     pub duration_ms: u32,
     pub origin: ScreenTransitionOrigin,
+    pub easing: Easing,
 }
 
 impl ScreenTransitionSpec {
@@ -49,6 +50,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::None,
             duration_ms: 0,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -57,6 +59,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::Fade,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -65,6 +68,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::SlideLeft,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -73,6 +77,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::SlideRight,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -81,6 +86,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::Zoom,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -89,6 +95,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::CircularReveal,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -97,6 +104,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::WipeLeft,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -105,6 +113,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::WipeRight,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -113,6 +122,7 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::WipeUp,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
@@ -121,11 +131,17 @@ impl ScreenTransitionSpec {
             effect: ScreenTransitionEffect::WipeDown,
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
         }
     }
 
     pub const fn with_origin(mut self, origin: ScreenTransitionOrigin) -> Self {
         self.origin = origin;
+        self
+    }
+
+    pub const fn with_easing(mut self, easing: Easing) -> Self {
+        self.easing = easing;
         self
     }
 }
@@ -335,7 +351,7 @@ impl ScreenTransitionRunner {
             self.active = None;
             return Ok(());
         }
-        let anim = Animation::new(0.0, 1.0, spec.duration_ms, Easing::InOutSine);
+        let anim = Animation::new(0.0, 1.0, spec.duration_ms, spec.easing);
         self.animation = Some(anim);
         self.active = Some(ActiveScreenTransition {
             from: transition.from,

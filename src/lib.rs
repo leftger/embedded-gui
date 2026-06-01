@@ -31,8 +31,10 @@ pub use animation::{
     apply_easing,
 };
 pub use animation_timeline::{
-    AnimationGroup, AnimationSequence, Keyframe, KeyframeTrack, KeyframeTrackCallbacks,
-    SequencePlayer, SequencePlayerStatus, SequenceRepeatMode, TimelineError, TimelineStep,
+    AnimationGroup, AnimationSequence, ComposedAnimation, ComposedAnimationPlayer,
+    ComposedAnimationCallbacks, ComposedAnimationStatus, CompositionControls, CompositionMode,
+    Keyframe, KeyframeTrack, KeyframeTrackCallbacks, SequencePlayer, SequencePlayerStatus,
+    SequenceRepeatMode, TimelineError, TimelineStep,
 };
 pub use block::Block;
 pub use context::{
@@ -90,6 +92,8 @@ pub mod prelude {
     pub use crate::{
         Align, AnimatedProperty, Animation, AnimationError, AnimationGroup, AnimationId,
         AnimationHandlers, AnimationManager, AnimationManagerCallbacks, AnimationSequence, AnimationState, Axis, Block, Border, Constraint,
+        ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
+        ComposedAnimationStatus, CompositionControls, CompositionMode,
         DirtyTracker, Easing, EdgeInsets, EventContext, EventPhase, EventPhaseMask, EventPolicy,
         FocusGroupId, FontId, GradientDirection, GuiContext, GuiError, ImageAtlas,
         PressTiming, WidgetKeyInputPolicy, WidgetKeyBindings, KeyBindingAction,

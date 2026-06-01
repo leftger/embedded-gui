@@ -1623,6 +1623,8 @@ fn transition_wipe_and_origin_variants_produce_clips() {
 
     let reveal = ScreenTransitionSpec::circular_reveal(300).with_origin(ScreenTransitionOrigin::BottomRight);
     assert_eq!(reveal.origin, ScreenTransitionOrigin::BottomRight);
+    let eased = ScreenTransitionSpec::wipe_down(280).with_easing(Easing::OutBack);
+    assert_eq!(eased.easing, Easing::OutBack);
 }
 
 #[test]
@@ -1867,6 +1869,116 @@ fn sequence_player_loop_mode_restarts() {
     player.tick(10).unwrap();
     assert_eq!(first, 0);
     assert_eq!(player.status().step_idx, 0);
+}
+
+#[test]
+fn composed_animation_player_sequence_controls_repeat_and_reverse() {
+    let mut composition = ComposedAnimation::<4>::new(CompositionMode::Sequence);
+    composition
+        .push(Animation::new(0.0, 1.0, 20, Easing::Linear))
+        .unwrap();
+    composition
+        .push(Animation::new(1.0, 2.0, 20, Easing::Linear))
+        .unwrap();
+    composition = composition.with_controls(CompositionControls {
+        start_delay_ms: 10,
+        repeat_count: Some(2),
+        reverse: true,
+    });
+
+    let mut player = ComposedAnimationPlayer::<8, 4>::new(composition);
+    player.tick(10).unwrap();
+    let status0 = player.status();
+    assert!(status0.active || !status0.done);
+    player.tick(60).unwrap();
+    let status1 = player.status();
+    assert!(!status1.done);
+    for _ in 0..20 {
+        player.tick(20).unwrap();
+        if player.status().done {
+            break;
+        }
+    }
+    assert!(player.status().done);
+}
+
+#[test]
+fn composed_animation_player_callbacks_pause_and_seek_active_work() {
+    static STARTS: AtomicUsize = AtomicUsize::new(0);
+    static COMPLETES: AtomicUsize = AtomicUsize::new(0);
+    static DONE: AtomicUsize = AtomicUsize::new(0);
+    fn on_start(_: u16) {
+        STARTS.fetch_add(1, Ordering::Relaxed);
+    }
+    fn on_complete(_: u16) {
+        COMPLETES.fetch_add(1, Ordering::Relaxed);
+    }
+    fn on_done() {
+        DONE.fetch_add(1, Ordering::Relaxed);
+    }
+
+    STARTS.store(0, Ordering::Relaxed);
+    COMPLETES.store(0, Ordering::Relaxed);
+    DONE.store(0, Ordering::Relaxed);
+    let mut composition = ComposedAnimation::<3>::new(CompositionMode::Spawn);
+    composition
+        .push(Animation::new(0.0, 1.0, 40, Easing::Linear))
+        .unwrap();
+    composition = composition.with_controls(CompositionControls {
+        start_delay_ms: 0,
+        repeat_count: Some(1),
+        reverse: false,
+    });
+    let mut player = ComposedAnimationPlayer::<8, 3>::new(composition);
+    player.set_callbacks(ComposedAnimationCallbacks {
+        on_cycle_start: Some(on_start),
+        on_cycle_complete: Some(on_complete),
+        on_done: Some(on_done),
+    });
+    player.tick(1).unwrap();
+    player.set_paused(true);
+    player.tick(100).unwrap();
+    player.set_paused(false);
+    assert!(player.seek_active_stepped(20, 5));
+    for _ in 0..8 {
+        player.tick(10).unwrap();
+        if player.status().done {
+            break;
+        }
+    }
+    assert!(player.status().done);
+    assert_eq!(STARTS.load(Ordering::Relaxed), 1);
+    assert!(COMPLETES.load(Ordering::Relaxed) >= 1);
+    assert_eq!(DONE.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn menu_focus_choreography_preset_applies_motion_bundle() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 120, 60));
+    let focused = gui.add_panel(Rect::new(20, 20, 40, 12), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<16, 16>::new();
+    presets::menu_focus_choreography(&mut animator, focused, 20, 20).unwrap();
+    animator.tick(120, &mut gui).unwrap();
+    let rect = gui.absolute_rect(focused).unwrap();
+    assert!(rect.x >= 20);
+    assert_eq!(rect.y, 20);
+}
+
+#[test]
+fn dialog_and_neighbor_focus_choreography_presets_work() {
+    let mut gui = GuiContext::<16, 16, 16>::new(Rect::new(0, 0, 140, 80));
+    let dialog = gui.add_panel(Rect::new(40, 30, 40, 18), Style::panel()).unwrap();
+    let focused = gui.add_panel(Rect::new(20, 12, 50, 10), Style::panel()).unwrap();
+    let n1 = gui.add_panel(Rect::new(20, 24, 50, 10), Style::panel()).unwrap();
+    let n2 = gui.add_panel(Rect::new(20, 36, 50, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<24, 24>::new();
+    presets::dialog_pop_choreography(&mut animator, dialog, 30).unwrap();
+    presets::list_focus_with_neighbors(&mut animator, focused, &[n1, n2], 20, 12).unwrap();
+    animator.tick(180, &mut gui).unwrap();
+    assert_eq!(gui.absolute_rect(dialog).unwrap().y, 30);
+    assert!(gui.absolute_rect(focused).unwrap().x >= 20);
+    assert!(gui.absolute_rect(n1).unwrap().x <= 20);
+    assert!(gui.absolute_rect(n2).unwrap().x <= 20);
 }
 
 #[test]

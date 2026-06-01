@@ -1149,7 +1149,9 @@ impl From<AnimationError> for WidgetAnimationError {
 pub mod presets {
     use embedded_graphics_core::pixelcolor::Rgb565;
 
-    use super::{Easing, PathPoint, WidgetAnimationError, WidgetAnimator, WidgetId};
+    use super::{
+        AnimationConflictPolicy, Easing, PathPoint, WidgetAnimationError, WidgetAnimator, WidgetId,
+    };
 
     pub fn entrance_fade_in_up<const TRACKS: usize, const BINDINGS: usize>(
         animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
@@ -1249,5 +1251,57 @@ pub mod presets {
         stagger_ms: u32,
     ) -> Result<usize, WidgetAnimationError> {
         animator.stagger_widget_x(widget_ids, from, to, duration_ms, stagger_ms, Easing::OutSine)
+    }
+
+    pub fn menu_focus_choreography<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        focused: WidgetId,
+        base_x: i32,
+        base_y: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.preset_selection_bump_settle(focused, base_y, 3, 120)?;
+        animator.animate_widget_x_with_custom_interpolator(
+            focused,
+            base_x,
+            base_x + 6,
+            120,
+            Easing::InOutSine,
+            |from, to, t| {
+                if t < 0.5 {
+                    from + (to - from) * (t * 1.6)
+                } else {
+                    to - (to - from) * ((t - 0.5) * 1.2)
+                }
+            },
+            AnimationConflictPolicy::Replace,
+        )?;
+        animator.animate_opacity(focused, 180, 255, 120, Easing::OutSine)?;
+        Ok(())
+    }
+
+    pub fn dialog_pop_choreography<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        dialog: WidgetId,
+        base_y: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.preset_fade_in_up(dialog, base_y + 8, base_y, 180)?;
+        animator.animate_corner_radius(dialog, 1, 4, 180, Easing::OutBack)?;
+        animator.animate_opacity(dialog, 120, 255, 180, Easing::OutSine)?;
+        Ok(())
+    }
+
+    pub fn list_focus_with_neighbors<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        focused: WidgetId,
+        neighbors: &[WidgetId],
+        base_x: i32,
+        base_y: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        menu_focus_choreography(animator, focused, base_x, base_y)?;
+        for neighbor in neighbors.iter().copied() {
+            animator.animate_widget_x(neighbor, base_x, base_x.saturating_sub(2), 120, Easing::OutSine)?;
+            animator.animate_opacity(neighbor, 255, 170, 120, Easing::OutSine)?;
+        }
+        Ok(())
     }
 }
