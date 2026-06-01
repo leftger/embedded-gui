@@ -38,6 +38,12 @@ fn main() {
     let mut transitions = ScreenTransitionRunner::new();
     let mut stack = ScreenStack::<4>::with_root(ScreenId::new(1)).unwrap();
     let mut lifecycle = heapless::Vec::<ScreenLifecycleEvent, 8>::new();
+    let mut effect_idx = 0usize;
+    let effects = [
+        ScreenTransitionSpec::slide_left(420),
+        ScreenTransitionSpec::fade(420),
+        ScreenTransitionSpec::circular_reveal(420),
+    ];
 
     'running: loop {
         player.tick(16).ok();
@@ -51,7 +57,7 @@ fn main() {
 
         display.clear(Rgb565::BLACK).unwrap();
         if let Some(active) = transitions.active() {
-            render_transition_pair(&mut display, &gui, &gui, active, 160).unwrap();
+            render_transition_pair(&mut display, &gui, &gui, active, 160, 96).unwrap();
         } else {
             gui.render(&mut display).unwrap();
         }
@@ -78,10 +84,11 @@ fn main() {
                         .apply(
                             &mut stack,
                             command,
-                            ScreenTransitionSpec::slide_left(420),
+                            effects[effect_idx],
                             &mut lifecycle,
                         )
                         .unwrap();
+                    effect_idx = (effect_idx + 1) % effects.len();
                 }
                 _ => {}
             }

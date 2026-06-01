@@ -3,6 +3,7 @@ use heapless::Vec;
 use crate::{
     animation::{Animation, Easing},
     context::GuiContext,
+    geometry::Rect,
     screen::{ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError},
 };
 
@@ -14,6 +15,7 @@ pub enum ScreenTransitionEffect {
     SlideLeft,
     SlideRight,
     Zoom,
+    CircularReveal,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +59,13 @@ impl ScreenTransitionSpec {
             duration_ms,
         }
     }
+
+    pub const fn circular_reveal(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::CircularReveal,
+            duration_ms,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -88,10 +97,12 @@ pub struct ScreenTransitionSample {
     pub incoming_offset_x: i32,
     pub outgoing_opacity: u8,
     pub incoming_opacity: u8,
+    pub outgoing_clip: Option<Rect>,
+    pub incoming_clip: Option<Rect>,
 }
 
 impl ActiveScreenTransition {
-    pub fn sample(&self, viewport_w: u32) -> ScreenTransitionSample {
+    pub fn sample(&self, viewport_w: u32, viewport_h: u32) -> ScreenTransitionSample {
         match self.effect {
             ScreenTransitionEffect::Fade => {
                 let incoming = self.opacity_u8();
@@ -100,6 +111,8 @@ impl ActiveScreenTransition {
                     incoming_offset_x: 0,
                     outgoing_opacity: 255u8.saturating_sub(incoming),
                     incoming_opacity: incoming,
+                    outgoing_clip: None,
+                    incoming_clip: None,
                 }
             }
             ScreenTransitionEffect::SlideLeft => {
@@ -109,6 +122,8 @@ impl ActiveScreenTransition {
                     incoming_offset_x: out + viewport_w as i32,
                     outgoing_opacity: 255,
                     incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
                 }
             }
             ScreenTransitionEffect::SlideRight => {
@@ -118,6 +133,8 @@ impl ActiveScreenTransition {
                     incoming_offset_x: out - viewport_w as i32,
                     outgoing_opacity: 255,
                     incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
                 }
             }
             ScreenTransitionEffect::None => ScreenTransitionSample {
@@ -125,6 +142,8 @@ impl ActiveScreenTransition {
                 incoming_offset_x: 0,
                 outgoing_opacity: 255,
                 incoming_opacity: 255,
+                outgoing_clip: None,
+                incoming_clip: None,
             },
             ScreenTransitionEffect::Zoom => {
                 let incoming = self.opacity_u8();
@@ -133,10 +152,36 @@ impl ActiveScreenTransition {
                     incoming_offset_x: 0,
                     outgoing_opacity: 255u8.saturating_sub(incoming / 2),
                     incoming_opacity: incoming,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::CircularReveal => {
+                let incoming = self.opacity_u8();
+                let clip = centered_reveal_clip(viewport_w, viewport_h, self.progress);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    incoming_offset_x: 0,
+                    outgoing_opacity: 255u8.saturating_sub(incoming / 4),
+                    incoming_opacity: incoming,
+                    outgoing_clip: None,
+                    incoming_clip: Some(clip),
                 }
             }
         }
     }
+}
+
+fn centered_reveal_clip(viewport_w: u32, viewport_h: u32, progress: f32) -> Rect {
+    let cx = viewport_w as i32 / 2;
+    let cy = viewport_h as i32 / 2;
+    let max_radius = (((viewport_w as f32).hypot(viewport_h as f32)) * 0.5).ceil() as i32;
+    let radius = ((max_radius as f32) * progress.clamp(0.0, 1.0)).ceil() as i32;
+    let left = (cx - radius).clamp(0, viewport_w as i32);
+    let top = (cy - radius).clamp(0, viewport_h as i32);
+    let right = (cx + radius).clamp(0, viewport_w as i32);
+    let bottom = (cy + radius).clamp(0, viewport_h as i32);
+    Rect::new(left, top, (right - left).max(0) as u32, (bottom - top).max(0) as u32)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -214,22 +259,43 @@ pub fn render_transition_pair<
     incoming: &GuiContext<'a, NODES, EVENTS, DIRTY>,
     active: ActiveScreenTransition,
     viewport_w: u32,
+    viewport_h: u32,
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
 {
-    let sample = active.sample(viewport_w);
-    outgoing.render_with_offset_and_opacity(
-        target,
-        sample.outgoing_offset_x,
-        0,
-        sample.outgoing_opacity,
-    )?;
-    incoming.render_with_offset_and_opacity(
-        target,
-        sample.incoming_offset_x,
-        0,
-        sample.incoming_opacity,
-    )?;
+    let sample = active.sample(viewport_w, viewport_h);
+    if let Some(clip) = sample.outgoing_clip {
+        outgoing.render_with_offset_opacity_and_clip(
+            target,
+            sample.outgoing_offset_x,
+            0,
+            sample.outgoing_opacity,
+            clip,
+        )?;
+    } else {
+        outgoing.render_with_offset_and_opacity(
+            target,
+            sample.outgoing_offset_x,
+            0,
+            sample.outgoing_opacity,
+        )?;
+    }
+    if let Some(clip) = sample.incoming_clip {
+        incoming.render_with_offset_opacity_and_clip(
+            target,
+            sample.incoming_offset_x,
+            0,
+            sample.incoming_opacity,
+            clip,
+        )?;
+    } else {
+        incoming.render_with_offset_and_opacity(
+            target,
+            sample.incoming_offset_x,
+            0,
+            sample.incoming_opacity,
+        )?;
+    }
     Ok(())
 }

@@ -2679,6 +2679,24 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.render_into(&mut ctx, offset_x, offset_y, opacity)
     }
 
+    pub fn render_with_offset_opacity_and_clip<D>(
+        &self,
+        target: &mut D,
+        offset_x: i32,
+        offset_y: i32,
+        opacity: u8,
+        clip: Rect,
+    ) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        let mut ctx = RenderCtx::new(target, self.viewport);
+        ctx.set_quality(self.render_quality);
+        let old_clip = ctx.clip();
+        ctx.set_clip(old_clip.intersection(clip));
+        self.render_into(&mut ctx, offset_x, offset_y, opacity)
+    }
+
     pub fn handle_input(&mut self, event: InputEvent) -> Result<(), GuiError> {
         match event {
             InputEvent::Home => {

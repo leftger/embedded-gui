@@ -708,6 +708,32 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         Ok((a, b))
     }
 
+    pub fn preset_selection_bump_settle(
+        &mut self,
+        widget_id: WidgetId,
+        base_y: i32,
+        bump_px: i32,
+        duration_ms: u32,
+    ) -> Result<(AnimationId, AnimationId), WidgetAnimationError> {
+        let up_ms = (duration_ms / 3).max(1);
+        let settle_ms = duration_ms.saturating_sub(up_ms).max(1);
+        let bump_y = base_y - bump_px.abs();
+        let up = self.bind_property_with_policy(
+            widget_id,
+            AnimatedProperty::WidgetY,
+            Animation::new(base_y as f32, bump_y as f32, up_ms, Easing::OutCubic),
+            AnimationConflictPolicy::Replace,
+        )?;
+        let settle = self.bind_property_with_policy(
+            widget_id,
+            AnimatedProperty::WidgetY,
+            Animation::new(bump_y as f32, base_y as f32, settle_ms, Easing::OutBounce)
+                .with_delay(up_ms),
+            AnimationConflictPolicy::Queue,
+        )?;
+        Ok((up, settle))
+    }
+
     pub fn bind_property_with_policy(
         &mut self,
         widget_id: WidgetId,
@@ -1026,6 +1052,17 @@ pub mod presets {
         duration_ms: u32,
     ) -> Result<(), WidgetAnimationError> {
         animator.preset_attention_shake(widget_id, base_x, amplitude, duration_ms)?;
+        Ok(())
+    }
+
+    pub fn selection_bump_settle<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        widget_id: WidgetId,
+        base_y: i32,
+        bump_px: i32,
+        duration_ms: u32,
+    ) -> Result<(), WidgetAnimationError> {
+        animator.preset_selection_bump_settle(widget_id, base_y, bump_px, duration_ms)?;
         Ok(())
     }
 

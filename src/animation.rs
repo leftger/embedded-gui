@@ -319,6 +319,13 @@ pub enum AnimationState {
 }
 
 #[allow(unpredictable_function_pointer_comparisons)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AnimationHandlers {
+    pub on_started: Option<fn()>,
+    pub on_stopped: Option<fn(bool)>,
+}
+
+#[allow(unpredictable_function_pointer_comparisons)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Animation {
     pub from: f32,
@@ -327,12 +334,14 @@ pub struct Animation {
     pub easing: Easing,
     pub custom_curve: Option<fn(f32) -> f32>,
     pub custom_interpolator: Option<fn(f32, f32, f32) -> f32>,
+    pub handlers: AnimationHandlers,
     pub delay_ms: u32,
     pub repeat_mode: RepeatMode,
     pub repeat_count: Option<u16>,
     elapsed_ms: u32,
     iteration: u16,
     reversed: bool,
+    started: bool,
     finished: bool,
 }
 
@@ -345,12 +354,17 @@ impl Animation {
             easing,
             custom_curve: None,
             custom_interpolator: None,
+            handlers: AnimationHandlers {
+                on_started: None,
+                on_stopped: None,
+            },
             delay_ms: 0,
             repeat_mode: RepeatMode::Once,
             repeat_count: None,
             elapsed_ms: 0,
             iteration: 0,
             reversed: false,
+            started: false,
             finished: false,
         }
     }
@@ -392,9 +406,14 @@ impl Animation {
         self.reversed = reversed;
     }
 
+    pub fn set_handlers(&mut self, handlers: AnimationHandlers) {
+        self.handlers = handlers;
+    }
+
     pub fn reset(&mut self) {
         self.elapsed_ms = 0;
         self.iteration = 0;
+        self.started = false;
         self.finished = false;
     }
 
@@ -408,7 +427,13 @@ impl Animation {
             return AnimationState::Finished;
         }
         self.elapsed_ms = self.elapsed_ms.saturating_add(dt_ms);
+        self.emit_started_if_ready();
         self.finished = self.resolve_finished();
+        if self.finished {
+            if let Some(cb) = self.handlers.on_stopped {
+                cb(true);
+            }
+        }
         if self.finished {
             AnimationState::Finished
         } else {
@@ -484,6 +509,25 @@ impl Animation {
 
         let total = self.delay_ms.saturating_add(self.duration_ms);
         self.elapsed_ms >= total
+    }
+
+    pub(crate) fn notify_stopped(&mut self, finished: bool) {
+        if let Some(cb) = self.handlers.on_stopped {
+            cb(finished);
+        }
+    }
+
+    fn emit_started_if_ready(&mut self) {
+        if self.started {
+            return;
+        }
+        if self.delay_ms > 0 && self.elapsed_ms < self.delay_ms {
+            return;
+        }
+        self.started = true;
+        if let Some(cb) = self.handlers.on_started {
+            cb();
+        }
     }
 
     pub fn duration_from_speed(delta: f32, units_per_second: f32) -> u32 {
@@ -575,6 +619,9 @@ impl<const N: usize> AnimationManager<N> {
     pub fn stop(&mut self, id: AnimationId) -> bool {
         for slot in &mut self.tracks {
             if slot.as_ref().is_some_and(|track| track.id == id) {
+                if let Some(track) = slot.as_mut() {
+                    track.animation.notify_stopped(false);
+                }
                 *slot = None;
                 if let Some(cb) = self.callbacks.on_complete {
                     cb(id, false);

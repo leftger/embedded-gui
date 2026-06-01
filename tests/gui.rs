@@ -937,6 +937,50 @@ fn animation_supports_custom_interpolator_callbacks() {
 }
 
 #[test]
+fn animation_per_track_handlers_fire_for_start_and_stop() {
+    static STARTED: AtomicUsize = AtomicUsize::new(0);
+    static STOPPED_FINISH: AtomicUsize = AtomicUsize::new(0);
+    static STOPPED_CANCEL: AtomicUsize = AtomicUsize::new(0);
+
+    fn on_started() {
+        STARTED.fetch_add(1, Ordering::Relaxed);
+    }
+    fn on_stopped(finished: bool) {
+        if finished {
+            STOPPED_FINISH.fetch_add(1, Ordering::Relaxed);
+        } else {
+            STOPPED_CANCEL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    STARTED.store(0, Ordering::Relaxed);
+    STOPPED_FINISH.store(0, Ordering::Relaxed);
+    STOPPED_CANCEL.store(0, Ordering::Relaxed);
+
+    let mut anim = Animation::new(0.0, 1.0, 20, Easing::Linear).with_delay(10);
+    anim.set_handlers(AnimationHandlers {
+        on_started: Some(on_started),
+        on_stopped: Some(on_stopped),
+    });
+    anim.tick(9);
+    assert_eq!(STARTED.load(Ordering::Relaxed), 0);
+    anim.tick(1);
+    assert_eq!(STARTED.load(Ordering::Relaxed), 1);
+    anim.tick(20);
+    assert_eq!(STOPPED_FINISH.load(Ordering::Relaxed), 1);
+
+    let mut manager = AnimationManager::<2>::new();
+    let mut cancel_anim = Animation::new(0.0, 1.0, 100, Easing::Linear);
+    cancel_anim.set_handlers(AnimationHandlers {
+        on_started: None,
+        on_stopped: Some(on_stopped),
+    });
+    let id = manager.start(cancel_anim).unwrap();
+    assert!(manager.stop(id));
+    assert_eq!(STOPPED_CANCEL.load(Ordering::Relaxed), 1);
+}
+
+#[test]
 fn speed_helper_calculates_duration() {
     let ms = Animation::duration_from_speed(120.0, 60.0);
     assert_eq!(ms, 2000);
@@ -1479,7 +1523,7 @@ fn screen_transition_runner_tracks_progress() {
     let active = runner.active().unwrap();
     assert!(active.opacity_u8() > 0);
     assert!(active.slide_offset_x(100) == 0);
-    let sample = active.sample(100);
+    let sample = active.sample(100, 80);
     assert!(sample.incoming_opacity > 0);
     let zoom = ActiveScreenTransition {
         from: Some(ScreenId::new(1)),
@@ -1487,8 +1531,16 @@ fn screen_transition_runner_tracks_progress() {
         effect: ScreenTransitionEffect::Zoom,
         progress: 0.6,
     };
-    let zoom_sample = zoom.sample(100);
+    let zoom_sample = zoom.sample(100, 80);
     assert!(zoom_sample.incoming_opacity > zoom_sample.outgoing_opacity / 2);
+    let circular = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::CircularReveal,
+        progress: 0.4,
+    };
+    let circular_sample = circular.sample(100, 80);
+    assert!(circular_sample.incoming_clip.is_some());
     runner.tick(100);
     assert!(runner.active().is_none());
 }
@@ -1526,6 +1578,7 @@ fn transition_compositor_renders_outgoing_and_incoming_contexts() {
             progress: 0.5,
         },
         32,
+        16,
     )
     .unwrap();
 
@@ -1619,6 +1672,20 @@ fn widget_animator_introspection_and_stop_helpers_work() {
     assert_eq!(animator.stop_widget_property(panel, AnimatedProperty::WidgetX), 1);
     assert_eq!(animator.stop_widget(panel), 1);
     assert!(!animator.is_animating_widget(panel));
+}
+
+#[test]
+fn widget_animator_selection_bump_settle_moves_and_returns() {
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 80, 40));
+    let panel = gui.add_panel(Rect::new(10, 20, 20, 10), Style::panel()).unwrap();
+    let mut animator = WidgetAnimator::<8, 8>::new();
+    animator
+        .preset_selection_bump_settle(panel, 20, 4, 60)
+        .unwrap();
+    animator.tick(20, &mut gui).unwrap();
+    assert!(gui.absolute_rect(panel).unwrap().y < 20);
+    animator.tick(60, &mut gui).unwrap();
+    assert_eq!(gui.absolute_rect(panel).unwrap().y, 20);
 }
 
 #[test]
