@@ -9,6 +9,7 @@ use crate::{
     font::{FontId, glyph_rows},
     geometry::Rect,
     image::{ImageFit, ImageRef},
+    math::F32Ext as _,
     style::{Border, GradientDirection, LinearGradient},
     text,
 };

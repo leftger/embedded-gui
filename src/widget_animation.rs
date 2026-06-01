@@ -7,6 +7,7 @@ use heapless::Vec;
 use crate::{
     animation::{Animation, AnimationError, AnimationId, AnimationManager, Easing, PathPoint},
     context::{GuiContext, GuiError},
+    math::F32Ext as _,
     widget::WidgetId,
 };
 

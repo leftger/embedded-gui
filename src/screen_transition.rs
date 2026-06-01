@@ -4,6 +4,7 @@ use crate::{
     animation::{Animation, Easing},
     context::GuiContext,
     geometry::Rect,
+    math::F32Ext as _,
     screen::{ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError},
 };
 

@@ -7,6 +7,7 @@ use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
     image::{ImageFit, ImageRef},
+    math::F32Ext as _,
     render::{RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},

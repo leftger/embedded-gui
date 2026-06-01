@@ -12,6 +12,7 @@ pub mod geometry;
 pub mod image;
 pub mod input;
 pub mod layout;
+mod math;
 pub mod present;
 pub mod render;
 pub mod screen;

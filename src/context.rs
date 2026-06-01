@@ -13,6 +13,7 @@ use crate::{
     render::{RenderCtx, RenderQuality, TextAlign},
     state::{ListState, ScrollState, SliderState, TabsState},
     style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
+    math::F32Ext as _,
     widget::{
         EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
     },

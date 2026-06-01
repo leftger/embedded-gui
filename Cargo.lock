@@ -165,6 +165,8 @@ dependencies = [
  "embedded-graphics-framebuf",
  "embedded-graphics-simulator",
  "heapless",
+ "libm",
+ "micromath",
  "nalgebra",
 ]
 
