@@ -2,12 +2,14 @@ use heapless::Vec;
 
 use crate::{
     animation::{Animation, Easing},
+    animation_timing::{self, timing_half_phase, timing_shutter_phase},
     context::GuiContext,
     geometry::Rect,
     math::F32Ext as _,
     screen::{ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError},
 };
 
+/// Screen transition visual effect.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ScreenTransitionEffect {
     #[default]
@@ -15,12 +17,34 @@ pub enum ScreenTransitionEffect {
     Fade,
     SlideLeft,
     SlideRight,
+    SlideUp,
+    SlideDown,
+    /// Rectangular push: incoming from the right with moook easing.
+    PushMoook,
+    /// Rectangular pop: incoming from the left with moook easing.
+    PopMoook,
     Zoom,
     CircularReveal,
     WipeLeft,
     WipeRight,
     WipeUp,
     WipeDown,
+    /// Two-phase directional shutter wipe.
+    ShutterLeft,
+    ShutterRight,
+    ShutterUp,
+    ShutterDown,
+    /// Round-display card flip (vertical clip).
+    RoundFlipLeft,
+    RoundFlipRight,
+    /// Two-phase slide with a mid-transition seam.
+    PortHoleLeft,
+    PortHoleRight,
+    PortHoleUp,
+    PortHoleDown,
+    /// Modal overlay slide from top or bottom.
+    ModalSlideUp,
+    ModalSlideDown,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -79,6 +103,150 @@ impl ScreenTransitionSpec {
             duration_ms,
             origin: ScreenTransitionOrigin::Center,
             easing: Easing::InOutSine,
+        }
+    }
+
+    pub const fn slide_up(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::SlideUp,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
+        }
+    }
+
+    pub const fn slide_down(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::SlideDown,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::InOutSine,
+        }
+    }
+
+    pub const fn push_moook(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PushMoook,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::Moook,
+        }
+    }
+
+    pub const fn pop_moook(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PopMoook,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::Moook,
+        }
+    }
+
+    pub const fn shutter_left(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ShutterLeft,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn shutter_right(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ShutterRight,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn shutter_up(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ShutterUp,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn shutter_down(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ShutterDown,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn round_flip_left(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::RoundFlipLeft,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::Linear,
+        }
+    }
+
+    pub const fn round_flip_right(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::RoundFlipRight,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::Linear,
+        }
+    }
+
+    pub const fn port_hole_left(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PortHoleLeft,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn port_hole_right(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PortHoleRight,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn port_hole_up(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PortHoleUp,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn port_hole_down(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::PortHoleDown,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Center,
+            easing: Easing::EaseInOut,
+        }
+    }
+
+    pub const fn modal_slide_up(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ModalSlideUp,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Bottom,
+            easing: Easing::EaseOut,
+        }
+    }
+
+    pub const fn modal_slide_down(duration_ms: u32) -> Self {
+        Self {
+            effect: ScreenTransitionEffect::ModalSlideDown,
+            duration_ms,
+            origin: ScreenTransitionOrigin::Top,
+            easing: Easing::EaseOut,
         }
     }
 
@@ -162,10 +330,34 @@ impl ActiveScreenTransition {
     }
 
     pub fn slide_offset_x(&self, width: u32) -> i32 {
-        let px = (width as f32 * self.progress.clamp(0.0, 1.0)).round() as i32;
+        let t = eased_progress(self.progress, self.effect);
+        let px = (width as f32 * t).round() as i32;
         match self.effect {
-            ScreenTransitionEffect::SlideLeft => -px,
-            ScreenTransitionEffect::SlideRight => px,
+            ScreenTransitionEffect::SlideLeft
+            | ScreenTransitionEffect::ShutterLeft
+            | ScreenTransitionEffect::PortHoleLeft => -px,
+            ScreenTransitionEffect::SlideRight
+            | ScreenTransitionEffect::PushMoook
+            | ScreenTransitionEffect::ShutterRight
+            | ScreenTransitionEffect::PortHoleRight
+            | ScreenTransitionEffect::RoundFlipRight => px,
+            ScreenTransitionEffect::PopMoook => px,
+            _ => 0,
+        }
+    }
+
+    pub fn slide_offset_y(&self, height: u32) -> i32 {
+        let t = eased_progress(self.progress, self.effect);
+        let px = (height as f32 * t).round() as i32;
+        match self.effect {
+            ScreenTransitionEffect::SlideUp
+            | ScreenTransitionEffect::ShutterUp
+            | ScreenTransitionEffect::PortHoleUp
+            | ScreenTransitionEffect::ModalSlideUp => -px,
+            ScreenTransitionEffect::SlideDown
+            | ScreenTransitionEffect::ShutterDown
+            | ScreenTransitionEffect::PortHoleDown
+            | ScreenTransitionEffect::ModalSlideDown => px,
             _ => 0,
         }
     }
@@ -174,11 +366,68 @@ impl ActiveScreenTransition {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenTransitionSample {
     pub outgoing_offset_x: i32,
+    pub outgoing_offset_y: i32,
     pub incoming_offset_x: i32,
+    pub incoming_offset_y: i32,
     pub outgoing_opacity: u8,
     pub incoming_opacity: u8,
     pub outgoing_clip: Option<Rect>,
     pub incoming_clip: Option<Rect>,
+}
+
+fn eased_progress(progress: f32, effect: ScreenTransitionEffect) -> f32 {
+    match effect {
+        ScreenTransitionEffect::PushMoook | ScreenTransitionEffect::PopMoook => {
+            animation_timing::moook_curve(progress)
+        }
+        _ => progress.clamp(0.0, 1.0),
+    }
+}
+
+fn shutter_offset(progress: f32, viewport: u32, horizontal: bool, negative: bool) -> (i32, i32) {
+    let (phase_t, first_half) = timing_shutter_phase(progress);
+    let span = viewport as i32;
+    let sign = if negative { -1 } else { 1 };
+    if horizontal {
+        if first_half {
+            (sign * -((span as f32 * phase_t).round() as i32), 0)
+        } else {
+            (
+                sign * span,
+                sign * (span - (span as f32 * phase_t).round() as i32),
+            )
+        }
+    } else if first_half {
+        (0, sign * -((span as f32 * phase_t).round() as i32))
+    } else {
+        (0, sign * (span - (span as f32 * phase_t).round() as i32))
+    }
+}
+
+fn port_hole_offsets(
+    progress: f32,
+    viewport_w: u32,
+    viewport_h: u32,
+    horizontal: bool,
+    negative: bool,
+) -> (i32, i32, i32, i32) {
+    let viewport = if horizontal { viewport_w } else { viewport_h };
+    let (out, inc) = {
+        let (phase_t, first_half) = timing_half_phase(progress);
+        let gap = (viewport as f32 * 80.0 / 180.0).round() as i32;
+        let full = viewport as i32;
+        let sign = if negative { -1 } else { 1 };
+        if first_half {
+            (sign * (full - (gap as f32 * phase_t) as i32), sign * full)
+        } else {
+            (sign * gap, sign * ((gap as f32 * (1.0 - phase_t)) as i32))
+        }
+    };
+    if horizontal {
+        (out, 0, inc, 0)
+    } else {
+        (0, out, 0, inc)
+    }
 }
 
 impl ActiveScreenTransition {
@@ -188,38 +437,193 @@ impl ActiveScreenTransition {
                 let incoming = self.opacity_u8();
                 ScreenTransitionSample {
                     outgoing_offset_x: 0,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: 0,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255u8.saturating_sub(incoming),
                     incoming_opacity: incoming,
                     outgoing_clip: None,
                     incoming_clip: None,
                 }
             }
-            ScreenTransitionEffect::SlideLeft => {
+            ScreenTransitionEffect::SlideLeft | ScreenTransitionEffect::PushMoook => {
                 let out = self.slide_offset_x(viewport_w);
                 ScreenTransitionSample {
                     outgoing_offset_x: out,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: out + viewport_w as i32,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255,
                     incoming_opacity: 255,
                     outgoing_clip: None,
                     incoming_clip: None,
                 }
             }
-            ScreenTransitionEffect::SlideRight => {
+            ScreenTransitionEffect::SlideRight | ScreenTransitionEffect::PopMoook => {
                 let out = self.slide_offset_x(viewport_w);
                 ScreenTransitionSample {
                     outgoing_offset_x: out,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: out - viewport_w as i32,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255,
                     incoming_opacity: 255,
                     outgoing_clip: None,
                     incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::SlideUp | ScreenTransitionEffect::ModalSlideUp => {
+                let out = self.slide_offset_y(viewport_h);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    outgoing_offset_y: out,
+                    incoming_offset_x: 0,
+                    incoming_offset_y: out + viewport_h as i32,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::SlideDown | ScreenTransitionEffect::ModalSlideDown => {
+                let out = self.slide_offset_y(viewport_h);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    outgoing_offset_y: out,
+                    incoming_offset_x: 0,
+                    incoming_offset_y: out - viewport_h as i32,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::ShutterLeft => {
+                let (ox, ix) = shutter_offset(self.progress, viewport_w, true, true);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: 0,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: 0,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::ShutterRight => {
+                let (ox, ix) = shutter_offset(self.progress, viewport_w, true, false);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: 0,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: 0,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::ShutterUp => {
+                let (oy, iy) = shutter_offset(self.progress, viewport_h, false, true);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: 0,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::ShutterDown => {
+                let (oy, iy) = shutter_offset(self.progress, viewport_h, false, false);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: 0,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::PortHoleLeft => {
+                let (ox, oy, ix, iy) =
+                    port_hole_offsets(self.progress, viewport_w, viewport_h, true, true);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::PortHoleRight => {
+                let (ox, oy, ix, iy) =
+                    port_hole_offsets(self.progress, viewport_w, viewport_h, true, false);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::PortHoleUp => {
+                let (ox, oy, ix, iy) =
+                    port_hole_offsets(self.progress, viewport_w, viewport_h, false, true);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::PortHoleDown => {
+                let (ox, oy, ix, iy) =
+                    port_hole_offsets(self.progress, viewport_w, viewport_h, false, false);
+                ScreenTransitionSample {
+                    outgoing_offset_x: ox,
+                    outgoing_offset_y: oy,
+                    incoming_offset_x: ix,
+                    incoming_offset_y: iy,
+                    outgoing_opacity: 255,
+                    incoming_opacity: 255,
+                    outgoing_clip: None,
+                    incoming_clip: None,
+                }
+            }
+            ScreenTransitionEffect::RoundFlipLeft | ScreenTransitionEffect::RoundFlipRight => {
+                let (out_clip, in_clip) = round_flip_clip(viewport_w, viewport_h, self.progress);
+                ScreenTransitionSample {
+                    outgoing_offset_x: 0,
+                    outgoing_offset_y: 0,
+                    incoming_offset_x: 0,
+                    incoming_offset_y: 0,
+                    outgoing_opacity: if self.progress < 0.5 { 255 } else { 128 },
+                    incoming_opacity: if self.progress < 0.5 { 128 } else { 255 },
+                    outgoing_clip: out_clip,
+                    incoming_clip: in_clip,
                 }
             }
             ScreenTransitionEffect::None => ScreenTransitionSample {
                 outgoing_offset_x: 0,
+                outgoing_offset_y: 0,
                 incoming_offset_x: 0,
+                incoming_offset_y: 0,
                 outgoing_opacity: 255,
                 incoming_opacity: 255,
                 outgoing_clip: None,
@@ -229,7 +633,9 @@ impl ActiveScreenTransition {
                 let incoming = self.opacity_u8();
                 ScreenTransitionSample {
                     outgoing_offset_x: 0,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: 0,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255u8.saturating_sub(incoming / 2),
                     incoming_opacity: incoming,
                     outgoing_clip: None,
@@ -241,7 +647,9 @@ impl ActiveScreenTransition {
                 let clip = reveal_clip(viewport_w, viewport_h, self.progress, self.origin);
                 ScreenTransitionSample {
                     outgoing_offset_x: 0,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: 0,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255u8.saturating_sub(incoming / 4),
                     incoming_opacity: incoming,
                     outgoing_clip: None,
@@ -255,7 +663,9 @@ impl ActiveScreenTransition {
                 let clip = wipe_clip(viewport_w, viewport_h, self.progress, self.effect);
                 ScreenTransitionSample {
                     outgoing_offset_x: 0,
+                    outgoing_offset_y: 0,
                     incoming_offset_x: 0,
+                    incoming_offset_y: 0,
                     outgoing_opacity: 255,
                     incoming_opacity: 255,
                     outgoing_clip: None,
@@ -263,6 +673,28 @@ impl ActiveScreenTransition {
                 }
             }
         }
+    }
+}
+
+fn round_flip_clip(
+    viewport_w: u32,
+    viewport_h: u32,
+    progress: f32,
+) -> (Option<Rect>, Option<Rect>) {
+    let h = viewport_h as i32;
+    let mid = h / 2;
+    let scale = if progress < 0.5 {
+        1.0 - progress * 2.0
+    } else {
+        (progress - 0.5) * 2.0
+    };
+    let visible = ((h as f32 * scale).round() as i32).max(1);
+    let top = mid - visible / 2;
+    let clip = Rect::new(0, top.max(0), viewport_w, visible.max(1) as u32);
+    if progress < 0.5 {
+        (None, Some(clip))
+    } else {
+        (Some(clip), Some(clip))
     }
 }
 
@@ -417,7 +849,7 @@ where
         outgoing.render_with_offset_opacity_and_clip(
             target,
             sample.outgoing_offset_x,
-            0,
+            sample.outgoing_offset_y,
             sample.outgoing_opacity,
             clip,
         )?;
@@ -425,7 +857,7 @@ where
         outgoing.render_with_offset_and_opacity(
             target,
             sample.outgoing_offset_x,
-            0,
+            sample.outgoing_offset_y,
             sample.outgoing_opacity,
         )?;
     }
@@ -433,7 +865,7 @@ where
         incoming.render_with_offset_opacity_and_clip(
             target,
             sample.incoming_offset_x,
-            0,
+            sample.incoming_offset_y,
             sample.incoming_opacity,
             clip,
         )?;
@@ -441,7 +873,7 @@ where
         incoming.render_with_offset_and_opacity(
             target,
             sample.incoming_offset_x,
-            0,
+            sample.incoming_offset_y,
             sample.incoming_opacity,
         )?;
     }

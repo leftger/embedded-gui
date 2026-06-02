@@ -41,8 +41,10 @@ fn main() {
     let mut lifecycle = heapless::Vec::<ScreenLifecycleEvent, 8>::new();
     let mut effect_idx = 0usize;
     let effects = [
-        ScreenTransitionSpec::slide_left(420),
+        TransitionPreset::WindowPush.spec(),
+        TransitionPreset::ShutterLeft.spec(),
         ScreenTransitionSpec::fade(420),
+        TransitionPreset::PortHoleLeft.spec(),
         ScreenTransitionSpec::circular_reveal(420),
     ];
 

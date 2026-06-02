@@ -37,6 +37,8 @@ pub enum Easing {
     InElastic,
     OutElastic,
     InOutElastic,
+    /// Spatial curve for stack push/pop (`interpolate_moook`).
+    Moook,
 }
 
 #[inline]
@@ -198,6 +200,7 @@ pub fn apply_easing(t: f32, easing: Easing) -> f32 {
                 }
             }
         }
+        Easing::Moook => crate::animation_timing::moook_curve(t),
     }
 }
 
