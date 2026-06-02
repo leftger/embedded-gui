@@ -1633,7 +1633,9 @@ fn transition_compositor_renders_outgoing_and_incoming_contexts() {
 
 #[test]
 fn transition_preset_specs_use_default_durations() {
-    use embedded_gui::{TransitionPreset, MOOOK_DURATION_MS, PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS};
+    use embedded_gui::{
+        MOOOK_DURATION_MS, PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, TransitionPreset,
+    };
 
     assert_eq!(
         TransitionPreset::WindowPush.spec().duration_ms,
@@ -1683,7 +1685,7 @@ fn shell_screen_effects_sample_with_offsets() {
 
 #[test]
 fn moook_curve_and_timing_helpers_behave() {
-    use embedded_gui::{moook_curve, timing_scaled, NORMALIZED_MAX};
+    use embedded_gui::{NORMALIZED_MAX, moook_curve, timing_scaled};
 
     assert!((moook_curve(0.0) - 0.0).abs() < 0.05);
     assert!((moook_curve(1.0) - 1.0).abs() < 0.05);

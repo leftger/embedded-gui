@@ -6,7 +6,6 @@ extern crate std;
 pub mod animation;
 pub mod animation_timeline;
 pub mod animation_timing;
-pub mod transition_preset;
 pub mod block;
 pub mod context;
 pub mod font;
@@ -24,6 +23,7 @@ pub mod style;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
+pub mod transition_preset;
 pub mod widget;
 pub mod widget_animation;
 pub mod widgets;
@@ -33,18 +33,16 @@ pub use animation::{
     AnimationManagerCallbacks, AnimationState, Easing, InertiaAnimator, PathAnimator, PathPoint,
     RepeatMode, SpringAnimator, Timer, Tween, apply_easing,
 };
-pub use animation_timing::{
-    DEFAULT_DURATION_MS, FRAME_INTERVAL_MS, MOOOK_DURATION_MS, NORMALIZED_MAX,
-    PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, interpolate_moook, moook_curve, moook_duration_ms,
-    timing_half_phase,
-    timing_scaled, timing_shutter_phase,
-};
-pub use transition_preset::TransitionPreset;
 pub use animation_timeline::{
     AnimationGroup, AnimationSequence, ComposedAnimation, ComposedAnimationCallbacks,
     ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
     Keyframe, KeyframeTrack, KeyframeTrackCallbacks, SequencePlayer, SequencePlayerStatus,
     SequenceRepeatMode, TimelineError, TimelineStep,
+};
+pub use animation_timing::{
+    DEFAULT_DURATION_MS, FRAME_INTERVAL_MS, MOOOK_DURATION_MS, NORMALIZED_MAX,
+    PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, interpolate_moook, moook_curve, moook_duration_ms,
+    timing_half_phase, timing_scaled, timing_shutter_phase,
 };
 pub use block::Block;
 pub use context::{
@@ -87,6 +85,7 @@ pub use test_buffer::{LayerCanvas, TestBuffer};
 pub use text::{
     BasicTextShaper, Line, ShapedGlyph, ShapingConfig, Span, Text, TextDirection, TextShaper,
 };
+pub use transition_preset::TransitionPreset;
 pub use widget::{
     EventContext, EventPhase, EventPolicy, FocusGroupId, StatefulWidget, StyleClassId, WidgetFlags,
     WidgetId,
@@ -114,14 +113,14 @@ pub mod prelude {
         PointerState, PresentRegion, PressTiming, Rect, RenderBackendCaps, RenderCtx,
         RenderQuality, RepeatMode, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent,
         ScreenStack, ScreenStackError, ScreenTransition, ScreenTransitionEffect,
-        TransitionPreset, ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
+        ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
         ScreenTransitionSpec, ScrollState, SequencePlayer, SequencePlayerStatus,
         SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState, Span, SpringAnimator,
         SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin, StrokeStyle, Style,
         StyleClassId, StyleTransition, TabsState, Text, TextAlign, TextDirection, TextMetrics,
         TextOverflow, TextOverflowPolicy, TextShaper, TextStyle, TextWrap, Theme, TimelineError,
-        TimelineStep, Timer, Transform2D, Tween, UiEvent, UiEventFilter, VerticalAlign,
-        VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
+        TimelineStep, Timer, Transform2D, TransitionPreset, Tween, UiEvent, UiEventFilter,
+        VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
         WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
         WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
         WidgetPropertyKeyframe, WidgetStyle, apply_easing, lerp_style, presets,

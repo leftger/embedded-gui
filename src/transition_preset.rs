@@ -53,12 +53,8 @@ impl TransitionPreset {
             Self::None => ScreenTransitionSpec::none(),
             Self::WindowPush => ScreenTransitionSpec::push_moook(MOOOK_DURATION_MS),
             Self::WindowPop => ScreenTransitionSpec::pop_moook(MOOOK_DURATION_MS),
-            Self::WindowPushRound => {
-                ScreenTransitionSpec::port_hole_left(PORT_HOLE_DURATION_MS)
-            }
-            Self::WindowPopRound => {
-                ScreenTransitionSpec::port_hole_right(PORT_HOLE_DURATION_MS)
-            }
+            Self::WindowPushRound => ScreenTransitionSpec::port_hole_left(PORT_HOLE_DURATION_MS),
+            Self::WindowPopRound => ScreenTransitionSpec::port_hole_right(PORT_HOLE_DURATION_MS),
             Self::ShutterUp => ScreenTransitionSpec::shutter_up(SHUTTER_DURATION_MS),
             Self::ShutterDown => ScreenTransitionSpec::shutter_down(SHUTTER_DURATION_MS),
             Self::ShutterLeft => ScreenTransitionSpec::shutter_left(SHUTTER_DURATION_MS),

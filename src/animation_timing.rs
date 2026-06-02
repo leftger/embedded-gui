@@ -27,11 +27,7 @@ const MOOOK_OUT: [i32; 4] = [4, 2, 1, 0];
 
 /// Remap normalized progress into `[interval_start, interval_end]`.
 #[inline]
-pub fn timing_scaled(
-    time_normalized: i32,
-    interval_start: i32,
-    interval_end: i32,
-) -> i32 {
+pub fn timing_scaled(time_normalized: i32, interval_start: i32, interval_end: i32) -> i32 {
     if interval_end == interval_start {
         return NORMALIZED_MAX;
     }
@@ -136,10 +132,9 @@ fn interpolate_moook_frames(
         return from + direction as i64 * frames_in[frame_idx as usize] as i64;
     }
     if frame_idx < num_in + mid_frames && mid_frames > 0 {
-        let shifted = normalized
-            - ((num_in as i64 * NORMALIZED_MAX as i64) / num_total as i64) as i32;
-        let mid_normalized =
-            ((num_total as i64 * shifted as i64) / mid_frames as i64) as i32;
+        let shifted =
+            normalized - ((num_in as i64 * NORMALIZED_MAX as i64) / num_total as i64) as i32;
+        let mid_normalized = ((num_total as i64 * shifted as i64) / mid_frames as i64) as i32;
         let from_mid = from + direction as i64 * frames_in[(num_in - 1) as usize] as i64;
         let to_mid = to + direction_out as i64 * frames_out[0] as i64;
         return interpolate_linear(mid_normalized, from_mid, to_mid);
@@ -150,27 +145,13 @@ fn interpolate_moook_frames(
 
 /// Full moook spatial interpolation (`interpolate_moook`).
 pub fn interpolate_moook(normalized: i32, from: i64, to: i64) -> i64 {
-    interpolate_moook_frames(
-        normalized,
-        from,
-        to,
-        &MOOOK_IN,
-        &MOOOK_OUT,
-        0,
-        true,
-    )
+    interpolate_moook_frames(normalized, from, to, &MOOOK_IN, &MOOOK_OUT, 0, true)
 }
 
 /// Moook with linear middle segment (`interpolate_moook_soft`).
 pub fn interpolate_moook_soft(normalized: i32, from: i64, to: i64, mid_frames: i32) -> i64 {
     interpolate_moook_frames(
-        normalized,
-        from,
-        to,
-        &MOOOK_IN,
-        &MOOOK_OUT,
-        mid_frames,
-        true,
+        normalized, from, to, &MOOOK_IN, &MOOOK_OUT, mid_frames, true,
     )
 }
 
@@ -184,9 +165,9 @@ pub fn moook_curve(t: f32) -> f32 {
 /// Table-based cubic ease-in sample (32-entry lookup).
 pub fn table_ease_in_sample(t: f32) -> f32 {
     const TABLE: [u16; 33] = [
-        0, 64, 256, 576, 1024, 1600, 2304, 3136, 4096, 5184, 6400, 7744, 9216, 10816, 12544,
-        14400, 16384, 18496, 20736, 23104, 25600, 28224, 30976, 33856, 36864, 40000, 43264,
-        46656, 50176, 53824, 57600, 61504, 65535,
+        0, 64, 256, 576, 1024, 1600, 2304, 3136, 4096, 5184, 6400, 7744, 9216, 10816, 12544, 14400,
+        16384, 18496, 20736, 23104, 25600, 28224, 30976, 33856, 36864, 40000, 43264, 46656, 50176,
+        53824, 57600, 61504, 65535,
     ];
     ease_table_sample(t, &TABLE)
 }

@@ -392,7 +392,10 @@ fn shutter_offset(progress: f32, viewport: u32, horizontal: bool, negative: bool
         if first_half {
             (sign * -((span as f32 * phase_t).round() as i32), 0)
         } else {
-            (sign * span, sign * (span - (span as f32 * phase_t).round() as i32))
+            (
+                sign * span,
+                sign * (span - (span as f32 * phase_t).round() as i32),
+            )
         }
     } else if first_half {
         (0, sign * -((span as f32 * phase_t).round() as i32))
@@ -673,7 +676,11 @@ impl ActiveScreenTransition {
     }
 }
 
-fn round_flip_clip(viewport_w: u32, viewport_h: u32, progress: f32) -> (Option<Rect>, Option<Rect>) {
+fn round_flip_clip(
+    viewport_w: u32,
+    viewport_h: u32,
+    progress: f32,
+) -> (Option<Rect>, Option<Rect>) {
     let h = viewport_h as i32;
     let mid = h / 2;
     let scale = if progress < 0.5 {
