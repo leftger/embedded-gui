@@ -1632,6 +1632,66 @@ fn transition_compositor_renders_outgoing_and_incoming_contexts() {
 }
 
 #[test]
+fn transition_preset_specs_use_default_durations() {
+    use embedded_gui::{TransitionPreset, MOOOK_DURATION_MS, PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS};
+
+    assert_eq!(
+        TransitionPreset::WindowPush.spec().duration_ms,
+        MOOOK_DURATION_MS
+    );
+    assert_eq!(
+        TransitionPreset::ShutterLeft.spec().duration_ms,
+        SHUTTER_DURATION_MS
+    );
+    assert_eq!(
+        TransitionPreset::PortHoleRight.spec().duration_ms,
+        PORT_HOLE_DURATION_MS
+    );
+}
+
+#[test]
+fn shell_screen_effects_sample_with_offsets() {
+    let push = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::PushMoook,
+        origin: ScreenTransitionOrigin::Center,
+        progress: 0.5,
+    };
+    let sample = push.sample(144, 168);
+    assert_ne!(sample.incoming_offset_x, sample.outgoing_offset_x);
+
+    let port = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::PortHoleLeft,
+        origin: ScreenTransitionOrigin::Center,
+        progress: 0.25,
+    };
+    let port_sample = port.sample(144, 168);
+    assert!(port_sample.outgoing_offset_x != 0 || port_sample.incoming_offset_x != 0);
+
+    let flip = ActiveScreenTransition {
+        from: Some(ScreenId::new(1)),
+        to: Some(ScreenId::new(2)),
+        effect: ScreenTransitionEffect::RoundFlipLeft,
+        origin: ScreenTransitionOrigin::Center,
+        progress: 0.25,
+    };
+    assert!(flip.sample(144, 168).incoming_clip.is_some());
+}
+
+#[test]
+fn moook_curve_and_timing_helpers_behave() {
+    use embedded_gui::{moook_curve, timing_scaled, NORMALIZED_MAX};
+
+    assert!((moook_curve(0.0) - 0.0).abs() < 0.05);
+    assert!((moook_curve(1.0) - 1.0).abs() < 0.05);
+    let mid = timing_scaled(NORMALIZED_MAX / 2, 0, NORMALIZED_MAX);
+    assert!((mid - NORMALIZED_MAX / 2).abs() <= 2);
+}
+
+#[test]
 fn transition_wipe_and_origin_variants_produce_clips() {
     let wipe = ActiveScreenTransition {
         from: Some(ScreenId::new(1)),

@@ -69,9 +69,10 @@ The current widget set includes:
 ### Animation and transitions
 
 - Core animation manager and easing/tween/path/spring/inertia primitives
+- Spatial timing (`moook_curve`, `TransitionPreset`) — see `docs/transition-presets.md`
 - Widget property animation (`WidgetAnimator`) and preset helpers (`presets`)
 - Timeline/keyframe sequencing support (`AnimationSequence`, `SequencePlayer`)
-- Screen stack + transition primitives for app-level flows
+- Screen stack + transition primitives for app-level flows (fade, slide, wipe, shutter, port-hole, round-flip, modal)
 
 ## Animation Quickstart
 

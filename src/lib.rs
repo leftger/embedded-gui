@@ -5,6 +5,8 @@ extern crate std;
 
 pub mod animation;
 pub mod animation_timeline;
+pub mod animation_timing;
+pub mod transition_preset;
 pub mod block;
 pub mod context;
 pub mod font;
@@ -31,6 +33,13 @@ pub use animation::{
     AnimationManagerCallbacks, AnimationState, Easing, InertiaAnimator, PathAnimator, PathPoint,
     RepeatMode, SpringAnimator, Timer, Tween, apply_easing,
 };
+pub use animation_timing::{
+    DEFAULT_DURATION_MS, FRAME_INTERVAL_MS, MOOOK_DURATION_MS, NORMALIZED_MAX,
+    PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, interpolate_moook, moook_curve, moook_duration_ms,
+    timing_half_phase,
+    timing_scaled, timing_shutter_phase,
+};
+pub use transition_preset::TransitionPreset;
 pub use animation_timeline::{
     AnimationGroup, AnimationSequence, ComposedAnimation, ComposedAnimationCallbacks,
     ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
@@ -105,7 +114,7 @@ pub mod prelude {
         PointerState, PresentRegion, PressTiming, Rect, RenderBackendCaps, RenderCtx,
         RenderQuality, RepeatMode, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent,
         ScreenStack, ScreenStackError, ScreenTransition, ScreenTransitionEffect,
-        ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
+        TransitionPreset, ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
         ScreenTransitionSpec, ScrollState, SequencePlayer, SequencePlayerStatus,
         SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState, Span, SpringAnimator,
         SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin, StrokeStyle, Style,
