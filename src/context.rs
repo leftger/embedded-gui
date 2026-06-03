@@ -1391,7 +1391,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 Ok(())
             }
             WidgetKind::PeekReveal {
-                progress: ref mut v, ..
+                progress: ref mut v,
+                ..
             } => {
                 *v = value.clamp(0.0, 1.0);
                 self.dirty.add(rect)?;
@@ -1401,7 +1402,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn set_glance_highlighted(&mut self, id: WidgetId, highlighted: bool) -> Result<(), GuiError> {
+    pub fn set_glance_highlighted(
+        &mut self,
+        id: WidgetId,
+        highlighted: bool,
+    ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
@@ -1417,7 +1422,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
-    pub fn set_card_deck_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+    pub fn set_card_deck_selected(
+        &mut self,
+        id: WidgetId,
+        selected: usize,
+    ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
@@ -1438,7 +1447,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
             WidgetKind::Reel {
-                player: ref mut reel, ..
+                player: ref mut reel,
+                ..
             } => {
                 reel.tick(dt_ms);
                 self.dirty.add(rect)?;

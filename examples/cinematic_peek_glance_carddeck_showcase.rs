@@ -60,7 +60,12 @@ fn main() {
     let icon = ImageRef::new(8, 8, &PEEK_ICON_PIXELS);
     let _ = setup_peek_timeline(&mut animator, ids.peek, None, None, 10, 14);
     gui.set_progress(ids.peek, 0.0).unwrap();
-    let _ = gui.add_image(Rect::new(10, 14, 24, 24), icon, ImageFit::Stretch, Style::panel());
+    let _ = gui.add_image(
+        Rect::new(10, 14, 24, 24),
+        icon,
+        ImageFit::Stretch,
+        Style::panel(),
+    );
 
     'running: loop {
         elapsed_ms = elapsed_ms.wrapping_add(16);
@@ -212,13 +217,31 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
         .unwrap();
 
     let glance_1 = gui
-        .add_glance_tile(Rect::new(8, 42, 90, 16), '*', "WORKOUT", "4.2 KM", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 42, 90, 16),
+            '*',
+            "WORKOUT",
+            "4.2 KM",
+            Style::button(),
+        )
         .unwrap();
     let glance_2 = gui
-        .add_glance_tile(Rect::new(8, 62, 90, 16), '+', "WEATHER", "68F CLOUDY", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 62, 90, 16),
+            '+',
+            "WEATHER",
+            "68F CLOUDY",
+            Style::button(),
+        )
         .unwrap();
     let glance_3 = gui
-        .add_glance_tile(Rect::new(8, 82, 90, 16), '#', "MUSIC", "NOW PLAYING", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 82, 90, 16),
+            '#',
+            "MUSIC",
+            "NOW PLAYING",
+            Style::button(),
+        )
         .unwrap();
     gui.set_glance_highlighted(glance_1, true).unwrap();
 
@@ -229,7 +252,12 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
     let sheet = SpriteSheet::new(ImageRef::new(16, 16, &REEL_PIXELS), 8, 8);
     let player = ReelPlayer::new(sheet, &REEL_FRAMES, true);
     let reel = gui
-        .add_reel(Rect::new(138, 78, 42, 42), player, ImageFit::Stretch, Style::panel())
+        .add_reel(
+            Rect::new(138, 78, 42, 42),
+            player,
+            ImageFit::Stretch,
+            Style::panel(),
+        )
         .unwrap();
 
     Ids {

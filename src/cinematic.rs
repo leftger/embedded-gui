@@ -157,9 +157,27 @@ pub fn animate_peek_reveal<const TRACKS: usize, const BINDINGS: usize>(
     spec: PeekRevealSpec,
 ) -> Result<(), WidgetAnimationError> {
     let dot = spec.dot_px.max(1);
-    animator.animate_widget_width(icon_widget, dot, spec.icon_expand_px.max(dot), spec.icon_duration_ms, Easing::OutBack)?;
-    animator.animate_widget_height(icon_widget, dot, spec.icon_expand_px.max(dot), spec.icon_duration_ms, Easing::OutBack)?;
-    animator.animate_opacity(icon_widget, 180, 255, spec.icon_duration_ms, Easing::OutSine)?;
+    animator.animate_widget_width(
+        icon_widget,
+        dot,
+        spec.icon_expand_px.max(dot),
+        spec.icon_duration_ms,
+        Easing::OutBack,
+    )?;
+    animator.animate_widget_height(
+        icon_widget,
+        dot,
+        spec.icon_expand_px.max(dot),
+        spec.icon_duration_ms,
+        Easing::OutBack,
+    )?;
+    animator.animate_opacity(
+        icon_widget,
+        180,
+        255,
+        spec.icon_duration_ms,
+        Easing::OutSine,
+    )?;
 
     if let Some(title) = title_widget {
         let title_anim = crate::animation::Animation::new(
@@ -175,7 +193,13 @@ pub fn animate_peek_reveal<const TRACKS: usize, const BINDINGS: usize>(
             title_anim,
             AnimationConflictPolicy::Replace,
         )?;
-        animator.animate_opacity(title, 0, 255, spec.text_duration_ms + spec.text_stagger_ms, Easing::OutSine)?;
+        animator.animate_opacity(
+            title,
+            0,
+            255,
+            spec.text_duration_ms + spec.text_stagger_ms,
+            Easing::OutSine,
+        )?;
     }
 
     if let Some(subtitle) = subtitle_widget {
@@ -212,7 +236,12 @@ pub fn animate_glance_focus<const TRACKS: usize, const BINDINGS: usize>(
     base_y: i32,
     spec: GlanceTileSpec,
 ) -> Result<(), WidgetAnimationError> {
-    animator.preset_selection_bump_settle(focused, base_y, spec.focus_bump_px, spec.focus_duration_ms)?;
+    animator.preset_selection_bump_settle(
+        focused,
+        base_y,
+        spec.focus_bump_px,
+        spec.focus_duration_ms,
+    )?;
     animator.animate_widget_x(
         focused,
         base_x,
@@ -230,12 +259,23 @@ pub fn animate_glance_focus<const TRACKS: usize, const BINDINGS: usize>(
             spec.focus_duration_ms,
             Easing::OutSine,
         )?;
-        animator.animate_opacity(neighbor, 255, spec.dim_opacity, spec.focus_duration_ms, Easing::OutSine)?;
+        animator.animate_opacity(
+            neighbor,
+            255,
+            spec.dim_opacity,
+            spec.focus_duration_ms,
+            Easing::OutSine,
+        )?;
     }
     Ok(())
 }
 
-pub fn apply_carddeck_visibility<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>(
+pub fn apply_carddeck_visibility<
+    'a,
+    const NODES: usize,
+    const EVENTS: usize,
+    const DIRTY: usize,
+>(
     gui: &mut GuiContext<'a, NODES, EVENTS, DIRTY>,
     cards: &[WidgetId],
     active: usize,

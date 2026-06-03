@@ -82,18 +82,15 @@ impl TransitionPreset {
             Self::TimelineSlide => {
                 ScreenTransitionSpec::slide_left(DEFAULT_DURATION_MS).with_easing(Easing::EaseInOut)
             }
-            Self::TimelinePeekIn => {
-                ScreenTransitionSpec::slide_right(MOOOK_DURATION_MS / 2).with_easing(Easing::OutBack)
-            }
+            Self::TimelinePeekIn => ScreenTransitionSpec::slide_right(MOOOK_DURATION_MS / 2)
+                .with_easing(Easing::OutBack),
             Self::TimelinePeekOut => {
                 ScreenTransitionSpec::slide_left(MOOOK_DURATION_MS / 2).with_easing(Easing::InSine)
             }
-            Self::TimelinePinExpand => {
-                ScreenTransitionSpec::modal_slide_up(MOOOK_DURATION_MS / 2).with_easing(Easing::OutCubic)
-            }
-            Self::TimelineScrubSettle => {
-                ScreenTransitionSpec::slide_left(DEFAULT_DURATION_MS / 2).with_easing(Easing::OutBounce)
-            }
+            Self::TimelinePinExpand => ScreenTransitionSpec::modal_slide_up(MOOOK_DURATION_MS / 2)
+                .with_easing(Easing::OutCubic),
+            Self::TimelineScrubSettle => ScreenTransitionSpec::slide_left(DEFAULT_DURATION_MS / 2)
+                .with_easing(Easing::OutBounce),
             Self::Fade => ScreenTransitionSpec::fade(DEFAULT_DURATION_MS),
         }
     }

@@ -487,7 +487,9 @@ impl<'a> WidgetNode<'a> {
                 title,
                 subtitle,
                 progress,
-            } => render_peek_reveal(ctx, rect, icon, title, subtitle, progress, self.style, state),
+            } => render_peek_reveal(
+                ctx, rect, icon, title, subtitle, progress, self.style, state,
+            ),
             WidgetKind::GlanceTile {
                 icon,
                 title,
@@ -1832,7 +1834,12 @@ where
     ctx.draw_image(icon_rect, icon, ImageFit::Stretch)?;
     if t > 0.25 {
         ctx.draw_text_in(
-            Rect::new(inner.x + icon_size as i32 + 2, inner.y, inner.w.saturating_sub(icon_size + 2), inner.h / 2),
+            Rect::new(
+                inner.x + icon_size as i32 + 2,
+                inner.y,
+                inner.w.saturating_sub(icon_size + 2),
+                inner.h / 2,
+            ),
             title,
             TextStyle::new(style.text).with_font(style.font),
         )?;
@@ -1877,10 +1884,17 @@ where
     ctx.draw_text_in(
         Rect::new(inner.x, inner.y, 10, inner.h),
         icon_str,
-        TextStyle::new(style.accent).with_font(style.font).centered(),
+        TextStyle::new(style.accent)
+            .with_font(style.font)
+            .centered(),
     )?;
     ctx.draw_text_in(
-        Rect::new(inner.x + 12, inner.y, inner.w.saturating_sub(12), inner.h / 2),
+        Rect::new(
+            inner.x + 12,
+            inner.y,
+            inner.w.saturating_sub(12),
+            inner.h / 2,
+        ),
         title,
         TextStyle::new(style.text).with_font(style.font),
     )?;
@@ -1956,10 +1970,7 @@ where
             let x = inner.x + 2 + (i * bar_w) as i32;
             let bar = Rect::new(x, inner.y + 2, bar_w.saturating_sub(1), h);
             let active = i as u8 <= (frame_index & 0x03);
-            ctx.fill_rect(
-                bar,
-                if active { accent } else { Rgb565::new(4, 6, 6) },
-            )?;
+            ctx.fill_rect(bar, if active { accent } else { Rgb565::new(4, 6, 6) })?;
         }
         if matches!(fit, ImageFit::Stretch | ImageFit::Center) {
             // Keep fit consumed so API remains stable while reel internals stay lightweight.

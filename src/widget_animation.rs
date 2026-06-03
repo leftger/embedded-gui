@@ -1198,7 +1198,9 @@ pub mod presets {
     use super::{
         AnimationConflictPolicy, Easing, PathPoint, WidgetAnimationError, WidgetAnimator, WidgetId,
     };
-    use crate::cinematic::{GlanceTileSpec, PeekRevealSpec, animate_glance_focus, animate_peek_reveal};
+    use crate::cinematic::{
+        GlanceTileSpec, PeekRevealSpec, animate_glance_focus, animate_peek_reveal,
+    };
 
     pub fn entrance_fade_in_up<const TRACKS: usize, const BINDINGS: usize>(
         animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
