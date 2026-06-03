@@ -11,7 +11,9 @@ use embedded_gui::prelude::*;
 const W: u32 = 220;
 const H: u32 = 130;
 
-static CARDS: [&str; 3] = ["ACTIVITY SUMMARY", "HEART RATE DETAIL", "SLEEP TREND"];
+static CARD_A: [&str; 1] = ["ACTIVITY SUMMARY"];
+static CARD_B: [&str; 1] = ["HEART RATE DETAIL"];
+static CARD_C: [&str; 1] = ["SLEEP TREND"];
 
 static PEEK_ICON_PIXELS: [u16; 64] = [0xFFFF; 64];
 static REEL_PIXELS: [u16; 256] = [0x07E0; 256];
@@ -40,7 +42,9 @@ struct Ids {
     glance_1: WidgetId,
     glance_2: WidgetId,
     glance_3: WidgetId,
-    carddeck: WidgetId,
+    card_1: WidgetId,
+    card_2: WidgetId,
+    card_3: WidgetId,
     reel: WidgetId,
 }
 
@@ -52,14 +56,26 @@ fn main() {
     let mut gui = GuiContext::<32, 48, 24>::new(Rect::new(0, 0, W, H));
     let ids = build_ui(&mut gui);
     let mut animator = WidgetAnimator::<64, 64>::new();
-    let mut deck_state = CardDeckState::new(CARDS.len());
+    let story_cards = [ids.card_1, ids.card_2, ids.card_3];
+    let mut card_story =
+        CardStory::new(&story_cards, TimelineMotionPreset::PeekIn).with_slide_px(18);
     let mut elapsed_ms: u32 = 0;
     let mut auto_step_ms: u32 = 0;
     let mut auto_glance_idx: usize = 0;
+    let tokens = MotionTokens {
+        peek_icon_duration_ms: 220,
+        peek_text_stagger_ms: 70,
+        peek_text_duration_ms: 140,
+        glance_focus_bump_px: 5,
+        glance_focus_slide_px: 10,
+        glance_focus_duration_ms: 150,
+        ..MotionTokens::default()
+    };
 
     let icon = ImageRef::new(8, 8, &PEEK_ICON_PIXELS);
-    let _ = setup_peek_timeline(&mut animator, ids.peek, None, None, 10, 14);
+    let _ = setup_peek_timeline_with_tokens(&mut animator, ids.peek, None, None, 10, 14, tokens);
     gui.set_progress(ids.peek, 0.0).unwrap();
+    card_story.apply(&mut gui).unwrap();
     let _ = gui.add_image(
         Rect::new(10, 14, 24, 24),
         icon,
@@ -82,46 +98,49 @@ fn main() {
                     gui.set_glance_highlighted(ids.glance_1, true).unwrap();
                     gui.set_glance_highlighted(ids.glance_2, false).unwrap();
                     gui.set_glance_highlighted(ids.glance_3, false).unwrap();
-                    let _ = setup_launcher_glance(
+                    let _ = setup_launcher_glance_with_tokens(
                         &mut animator,
                         ids.glance_1,
                         &[ids.glance_2, ids.glance_3],
                         8,
                         42,
+                        tokens,
                     );
                 }
                 1 => {
                     gui.set_glance_highlighted(ids.glance_1, false).unwrap();
                     gui.set_glance_highlighted(ids.glance_2, true).unwrap();
                     gui.set_glance_highlighted(ids.glance_3, false).unwrap();
-                    let _ = setup_launcher_glance(
+                    let _ = setup_launcher_glance_with_tokens(
                         &mut animator,
                         ids.glance_2,
                         &[ids.glance_1, ids.glance_3],
                         8,
                         62,
+                        tokens,
                     );
                 }
                 _ => {
                     gui.set_glance_highlighted(ids.glance_1, false).unwrap();
                     gui.set_glance_highlighted(ids.glance_2, false).unwrap();
                     gui.set_glance_highlighted(ids.glance_3, true).unwrap();
-                    let _ = setup_launcher_glance(
+                    let _ = setup_launcher_glance_with_tokens(
                         &mut animator,
                         ids.glance_3,
                         &[ids.glance_1, ids.glance_2],
                         8,
                         82,
+                        tokens,
                     );
                 }
             }
-            if deck_state.move_next().is_none() {
-                let _ = deck_state.move_prev();
-                let _ = deck_state.move_prev();
+            if let Some(transition) = card_story.next() {
+                transition.animate(&mut animator, 104).unwrap();
+                card_story.apply(&mut gui).unwrap();
+            } else {
+                let _ = card_story.jump_to(0);
+                card_story.apply(&mut gui).unwrap();
             }
-            gui.set_card_deck_selected(ids.carddeck, deck_state.current())
-                .unwrap();
-            setup_card_story(&mut gui, &[ids.carddeck], &deck_state).unwrap();
         }
 
         display.clear(Rgb565::BLACK).unwrap();
@@ -134,56 +153,65 @@ fn main() {
                 SimulatorEvent::KeyDown { keycode, .. } => match keycode {
                     Keycode::Escape => break 'running,
                     Keycode::Space => {
-                        let _ = setup_peek_timeline(&mut animator, ids.peek, None, None, 10, 14);
+                        let _ = setup_peek_timeline_with_tokens(
+                            &mut animator,
+                            ids.peek,
+                            None,
+                            None,
+                            10,
+                            14,
+                            tokens,
+                        );
                     }
                     Keycode::Down => {
-                        if deck_state.move_next().is_some() {
-                            gui.set_card_deck_selected(ids.carddeck, deck_state.current())
-                                .unwrap();
-                            setup_card_story(&mut gui, &[ids.carddeck], &deck_state).unwrap();
+                        if let Some(transition) = card_story.next() {
+                            transition.animate(&mut animator, 104).unwrap();
+                            card_story.apply(&mut gui).unwrap();
                         }
                     }
                     Keycode::Up => {
-                        if deck_state.move_prev().is_some() {
-                            gui.set_card_deck_selected(ids.carddeck, deck_state.current())
-                                .unwrap();
-                            setup_card_story(&mut gui, &[ids.carddeck], &deck_state).unwrap();
+                        if let Some(transition) = card_story.prev() {
+                            transition.animate(&mut animator, 104).unwrap();
+                            card_story.apply(&mut gui).unwrap();
                         }
                     }
                     Keycode::Num1 => {
                         gui.set_glance_highlighted(ids.glance_1, true).unwrap();
                         gui.set_glance_highlighted(ids.glance_2, false).unwrap();
                         gui.set_glance_highlighted(ids.glance_3, false).unwrap();
-                        let _ = setup_launcher_glance(
+                        let _ = setup_launcher_glance_with_tokens(
                             &mut animator,
                             ids.glance_1,
                             &[ids.glance_2, ids.glance_3],
                             8,
                             42,
+                            tokens,
                         );
                     }
                     Keycode::Num2 => {
                         gui.set_glance_highlighted(ids.glance_1, false).unwrap();
                         gui.set_glance_highlighted(ids.glance_2, true).unwrap();
                         gui.set_glance_highlighted(ids.glance_3, false).unwrap();
-                        let _ = setup_launcher_glance(
+                        let _ = setup_launcher_glance_with_tokens(
                             &mut animator,
                             ids.glance_2,
                             &[ids.glance_1, ids.glance_3],
                             8,
                             62,
+                            tokens,
                         );
                     }
                     Keycode::Num3 => {
                         gui.set_glance_highlighted(ids.glance_1, false).unwrap();
                         gui.set_glance_highlighted(ids.glance_2, false).unwrap();
                         gui.set_glance_highlighted(ids.glance_3, true).unwrap();
-                        let _ = setup_launcher_glance(
+                        let _ = setup_launcher_glance_with_tokens(
                             &mut animator,
                             ids.glance_3,
                             &[ids.glance_1, ids.glance_2],
                             8,
                             82,
+                            tokens,
                         );
                     }
                     _ => {}
@@ -245,8 +273,14 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
         .unwrap();
     gui.set_glance_highlighted(glance_1, true).unwrap();
 
-    let carddeck = gui
-        .add_card_deck(Rect::new(104, 24, 108, 48), &CARDS, 0, Style::panel())
+    let card_1 = gui
+        .add_card_deck(Rect::new(104, 24, 108, 48), &CARD_A, 0, Style::panel())
+        .unwrap();
+    let card_2 = gui
+        .add_card_deck(Rect::new(104, 24, 108, 48), &CARD_B, 0, Style::panel())
+        .unwrap();
+    let card_3 = gui
+        .add_card_deck(Rect::new(104, 24, 108, 48), &CARD_C, 0, Style::panel())
         .unwrap();
 
     let sheet = SpriteSheet::new(ImageRef::new(16, 16, &REEL_PIXELS), 8, 8);
@@ -265,7 +299,9 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
         glance_1,
         glance_2,
         glance_3,
-        carddeck,
+        card_1,
+        card_2,
+        card_3,
         reel,
     }
 }

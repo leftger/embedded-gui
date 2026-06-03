@@ -49,6 +49,56 @@ impl Default for GlanceTileSpec {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MotionTokens {
+    pub peek_dot_px: u32,
+    pub peek_icon_expand_px: u32,
+    pub peek_icon_duration_ms: u32,
+    pub peek_text_stagger_ms: u32,
+    pub peek_text_duration_ms: u32,
+    pub glance_focus_bump_px: i32,
+    pub glance_focus_slide_px: i32,
+    pub glance_focus_duration_ms: u32,
+    pub glance_dim_opacity: u8,
+}
+
+impl Default for MotionTokens {
+    fn default() -> Self {
+        Self {
+            peek_dot_px: 3,
+            peek_icon_expand_px: 24,
+            peek_icon_duration_ms: 300,
+            peek_text_stagger_ms: 90,
+            peek_text_duration_ms: 160,
+            glance_focus_bump_px: 3,
+            glance_focus_slide_px: 6,
+            glance_focus_duration_ms: 120,
+            glance_dim_opacity: 170,
+        }
+    }
+}
+
+impl MotionTokens {
+    pub const fn to_peek_spec(self) -> PeekRevealSpec {
+        PeekRevealSpec {
+            dot_px: self.peek_dot_px,
+            icon_expand_px: self.peek_icon_expand_px,
+            icon_duration_ms: self.peek_icon_duration_ms,
+            text_stagger_ms: self.peek_text_stagger_ms,
+            text_duration_ms: self.peek_text_duration_ms,
+        }
+    }
+
+    pub const fn to_glance_spec(self) -> GlanceTileSpec {
+        GlanceTileSpec {
+            focus_bump_px: self.glance_focus_bump_px,
+            focus_slide_px: self.glance_focus_slide_px,
+            focus_duration_ms: self.glance_focus_duration_ms,
+            dim_opacity: self.glance_dim_opacity,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CardDeckDirection {
     Forward,
     Backward,
@@ -100,6 +150,124 @@ impl CardDeckState {
         } else {
             None
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CardStory<'a> {
+    cards: &'a [WidgetId],
+    state: CardDeckState,
+    transition: TimelineMotionPreset,
+    slide_px: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CardStoryTransition {
+    pub from: WidgetId,
+    pub to: WidgetId,
+    pub direction: CardDeckDirection,
+    pub preset: TimelineMotionPreset,
+    pub slide_px: i32,
+}
+
+impl<'a> CardStory<'a> {
+    pub fn new(cards: &'a [WidgetId], transition: TimelineMotionPreset) -> Self {
+        Self {
+            cards,
+            state: CardDeckState::new(cards.len()),
+            transition,
+            slide_px: 14,
+        }
+    }
+
+    pub fn with_slide_px(mut self, slide_px: i32) -> Self {
+        self.slide_px = slide_px.max(1);
+        self
+    }
+
+    pub const fn state(&self) -> &CardDeckState {
+        &self.state
+    }
+
+    pub fn current_widget(&self) -> Option<WidgetId> {
+        self.cards.get(self.state.current()).copied()
+    }
+
+    pub fn apply<'g, const NODES: usize, const EVENTS: usize, const DIRTY: usize>(
+        &self,
+        gui: &mut GuiContext<'g, NODES, EVENTS, DIRTY>,
+    ) -> Result<(), GuiError> {
+        apply_carddeck_visibility(gui, self.cards, self.state.current())
+    }
+
+    pub fn next(&mut self) -> Option<CardStoryTransition> {
+        let from_idx = self.state.current();
+        self.state.move_next()?;
+        let to_idx = self.state.current();
+        Some(CardStoryTransition {
+            from: self.cards[from_idx],
+            to: self.cards[to_idx],
+            direction: CardDeckDirection::Forward,
+            preset: self.transition,
+            slide_px: self.slide_px,
+        })
+    }
+
+    pub fn prev(&mut self) -> Option<CardStoryTransition> {
+        let from_idx = self.state.current();
+        self.state.move_prev()?;
+        let to_idx = self.state.current();
+        Some(CardStoryTransition {
+            from: self.cards[from_idx],
+            to: self.cards[to_idx],
+            direction: CardDeckDirection::Backward,
+            preset: self.transition,
+            slide_px: self.slide_px,
+        })
+    }
+
+    pub fn jump_to(&mut self, index: usize) -> Option<CardStoryTransition> {
+        if self.cards.is_empty() {
+            return None;
+        }
+        let clamped = index.min(self.cards.len() - 1);
+        let from_idx = self.state.current();
+        if clamped == from_idx {
+            return None;
+        }
+        let direction = if clamped > from_idx {
+            CardDeckDirection::Forward
+        } else {
+            CardDeckDirection::Backward
+        };
+        self.state.current = clamped;
+        Some(CardStoryTransition {
+            from: self.cards[from_idx],
+            to: self.cards[clamped],
+            direction,
+            preset: self.transition,
+            slide_px: self.slide_px,
+        })
+    }
+}
+
+impl CardStoryTransition {
+    pub fn animate<const TRACKS: usize, const BINDINGS: usize>(
+        self,
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        base_x: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        let duration = self.preset.duration_ms();
+        let easing = self.preset.easing();
+        let delta = match self.direction {
+            CardDeckDirection::Forward => self.slide_px,
+            CardDeckDirection::Backward => -self.slide_px,
+        };
+        animator.animate_widget_x(self.from, base_x, base_x - delta, duration, easing)?;
+        animator.animate_opacity(self.from, 255, 90, duration, Easing::OutSine)?;
+        animator.animate_widget_x(self.to, base_x + delta, base_x, duration, easing)?;
+        animator.animate_opacity(self.to, 90, 255, duration, Easing::OutSine)?;
+        Ok(())
     }
 }
 
@@ -294,6 +462,26 @@ pub fn setup_peek_timeline<const TRACKS: usize, const BINDINGS: usize>(
     base_x: i32,
     base_y: i32,
 ) -> Result<(), WidgetAnimationError> {
+    setup_peek_timeline_with_tokens(
+        animator,
+        peek_widget,
+        title_widget,
+        subtitle_widget,
+        base_x,
+        base_y,
+        MotionTokens::default(),
+    )
+}
+
+pub fn setup_peek_timeline_with_tokens<const TRACKS: usize, const BINDINGS: usize>(
+    animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+    peek_widget: WidgetId,
+    title_widget: Option<WidgetId>,
+    subtitle_widget: Option<WidgetId>,
+    base_x: i32,
+    base_y: i32,
+    tokens: MotionTokens,
+) -> Result<(), WidgetAnimationError> {
     animate_peek_reveal(
         animator,
         peek_widget,
@@ -301,7 +489,7 @@ pub fn setup_peek_timeline<const TRACKS: usize, const BINDINGS: usize>(
         subtitle_widget,
         base_x,
         base_y,
-        PeekRevealSpec::default(),
+        tokens.to_peek_spec(),
     )
 }
 
@@ -312,13 +500,31 @@ pub fn setup_launcher_glance<const TRACKS: usize, const BINDINGS: usize>(
     base_x: i32,
     base_y: i32,
 ) -> Result<(), WidgetAnimationError> {
+    setup_launcher_glance_with_tokens(
+        animator,
+        focused,
+        neighbors,
+        base_x,
+        base_y,
+        MotionTokens::default(),
+    )
+}
+
+pub fn setup_launcher_glance_with_tokens<const TRACKS: usize, const BINDINGS: usize>(
+    animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+    focused: WidgetId,
+    neighbors: &[WidgetId],
+    base_x: i32,
+    base_y: i32,
+    tokens: MotionTokens,
+) -> Result<(), WidgetAnimationError> {
     animate_glance_focus(
         animator,
         focused,
         neighbors,
         base_x,
         base_y,
-        GlanceTileSpec::default(),
+        tokens.to_glance_spec(),
     )
 }
 

@@ -47,9 +47,10 @@ pub use animation_timing::{
 };
 pub use block::Block;
 pub use cinematic::{
-    CardDeckDirection, CardDeckState, CinematicPreset, GlanceTileSpec, PeekRevealSpec,
-    TimelineMotionPreset, animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility,
-    setup_card_story, setup_launcher_glance, setup_peek_timeline,
+    CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, CinematicPreset,
+    GlanceTileSpec, MotionTokens, PeekRevealSpec, TimelineMotionPreset, animate_glance_focus,
+    animate_peek_reveal, apply_carddeck_visibility, setup_card_story, setup_launcher_glance,
+    setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
 };
 pub use context::{
     GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetKeyBindings, WidgetKeyInputPolicy,
@@ -83,7 +84,7 @@ pub use screen_transition::{
     ActiveScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
     ScreenTransitionSample, ScreenTransitionSpec, render_transition_pair,
 };
-pub use state::{ListState, ScrollState, SliderState, TabsState};
+pub use state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState};
 pub use style::{
     Border, GradientDirection, LinearGradient, Shadow, StateStyle, Style, StyleTransition, Theme,
     VisualState, WidgetStyle, lerp_style,
@@ -95,15 +96,17 @@ pub use text::{
 };
 pub use transition_preset::TransitionPreset;
 pub use widget::{
-    EventContext, EventPhase, EventPolicy, FocusGroupId, StatefulWidget, StyleClassId, WidgetFlags,
-    WidgetId,
+    EventContext, EventPhase, EventPolicy, FocusGroupId, MenuContract, StatefulWidget,
+    StyleClassId, WidgetFlags, WidgetId,
 };
 pub use widget_animation::presets;
 pub use widget_animation::{
     AnimatedProperty, AnimationConflictPolicy, BindingSnapshot, WidgetAnimationCallbacks,
     WidgetAnimationError, WidgetAnimator, WidgetKeyframeState, WidgetPropertyKeyframe,
 };
-pub use widgets::{ChartMode, KeyboardLayout, WidgetKind, WidgetNode};
+pub use widgets::{
+    ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,
+};
 
 pub mod prelude {
     pub use crate::{
@@ -111,14 +114,15 @@ pub mod prelude {
         AnimationError, AnimationGroup, AnimationHandlers, AnimationId, AnimationManager,
         AnimationManagerCallbacks, AnimationSequence, AnimationState, AntiAliasMode, Axis,
         BasicTextShaper, BindingSnapshot, BlendMode, Block, Border, CardDeckDirection,
-        CardDeckState, ChartMode, CinematicPreset, ColorFormat, ComposedAnimation,
-        ComposedAnimationCallbacks, ComposedAnimationPlayer, ComposedAnimationStatus,
-        CompositionControls, CompositionMode, Constraint, DirtyTracker, Easing, EdgeInsets,
-        EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy, FocusGroupId, FontId,
-        GlanceTileSpec, GradientDirection, GuiContext, GuiError, ImageAtlas, ImageAtlasEntry,
-        ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout,
-        Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line,
-        LinearGradient, LinearLayout, ListState, PathAnimator, PathPoint, PeekRevealSpec,
+        CardDeckState, CardStory, CardStoryTransition, ChartMode, CinematicPreset, ColorFormat,
+        ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
+        ComposedAnimationStatus, CompositionControls, CompositionMode, Constraint, DirtyTracker,
+        Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
+        FeedTimelineState, FocusGroupId, FontId, GlanceTileSpec, GradientDirection, GuiContext,
+        GuiError, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator, InputEvent,
+        KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks,
+        LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout, ListState,
+        MenuContract, MotionTokens, NotificationLevel, PathAnimator, PathPoint, PeekRevealSpec,
         PointerButton, PointerState, PresentRegion, PressTiming, Rect, ReelFrame, ReelPlayer,
         RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, Screen, ScreenCommand, ScreenId,
         ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
@@ -126,16 +130,16 @@ pub mod prelude {
         ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SequencePlayer,
         SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState,
         Span, SpringAnimator, SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin,
-        StrokeStyle, Style, StyleClassId, StyleTransition, TabsState, Text, TextAlign,
-        TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper, TextStyle,
-        TextWrap, Theme, TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D,
-        TransitionPreset, Tween, UiEvent, UiEventFilter, VerticalAlign, VisualState,
+        StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TabsState, Text,
+        TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
+        TextStyle, TextWrap, Theme, TimelineError, TimelineMotionPreset, TimelineStep, Timer,
+        Transform2D, TransitionPreset, Tween, UiEvent, UiEventFilter, VerticalAlign, VisualState,
         WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy,
         WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings,
         WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind, WidgetPropertyKeyframe, WidgetStyle,
         animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility, apply_easing,
         lerp_style, presets, render_transition_pair, setup_card_story, setup_launcher_glance,
-        setup_peek_timeline,
+        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
     };
 
     #[cfg(all(feature = "std", feature = "image-decode"))]

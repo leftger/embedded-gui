@@ -12,12 +12,16 @@ use crate::{
     math::F32Ext as _,
     present::PresentRegion,
     render::{RenderCtx, RenderQuality, TextAlign},
-    state::{ListState, ScrollState, SliderState, TabsState},
+    state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState},
     style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
     widget::{
-        EventContext, EventPhase, EventPolicy, FocusGroupId, StyleClassId, WidgetFlags, WidgetId,
+        EventContext, EventPhase, EventPolicy, FocusGroupId, MenuContract, StyleClassId,
+        WidgetFlags, WidgetId,
     },
-    widgets::{ChartMode, KeyboardLayout, TEXTAREA_CAPACITY, WidgetKind, WidgetNode},
+    widgets::{
+        ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, TEXTAREA_CAPACITY, WidgetKind,
+        WidgetNode,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +174,7 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     widget_press_timings: Vec<(WidgetId, PressTiming), NODES>,
     widget_key_policies: Vec<(WidgetId, WidgetKeyInputPolicy), NODES>,
     widget_key_bindings: Vec<(WidgetId, WidgetKeyBindings), NODES>,
+    menu_contract: MenuContract,
     textarea_undo: Vec<TextareaHistoryEntry, NODES>,
     textarea_redo: Vec<TextareaHistoryEntry, NODES>,
     next_id: u16,
@@ -212,6 +217,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             widget_press_timings: Vec::new(),
             widget_key_policies: Vec::new(),
             widget_key_bindings: Vec::new(),
+            menu_contract: MenuContract::default(),
             textarea_undo: Vec::new(),
             textarea_redo: Vec::new(),
             next_id: 1,
@@ -269,6 +275,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn set_double_pointer_window_ms(&mut self, window_ms: u32) {
         self.pointer_double_window_ms = window_ms.max(1);
+    }
+
+    pub fn menu_contract(&self) -> MenuContract {
+        self.menu_contract
+    }
+
+    pub fn set_menu_contract(&mut self, contract: MenuContract) {
+        self.menu_contract = contract;
     }
 
     pub fn set_widget_press_timing(
@@ -783,6 +797,34 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 selected,
                 offset: selected,
                 visible_rows: visible_rows.max(1),
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_feed_timeline<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+        expanded: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::FeedTimeline {
+                items,
+                selected,
+                offset: selected,
+                visible_rows: visible_rows.max(1),
+                expanded,
             },
             style,
         )?;
@@ -1354,6 +1396,82 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Reel { player, fit }, style)
     }
 
+    pub fn add_state_surface<S>(
+        &mut self,
+        rect: Rect,
+        state: SurfaceState,
+        title: &'a str,
+        message: &'a str,
+        action: Option<&'a str>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::StateSurface {
+                state,
+                title,
+                message,
+                action,
+                busy_phase: 0.0,
+            },
+            style,
+        )
+    }
+
+    pub fn add_heads_up_banner<S>(
+        &mut self,
+        rect: Rect,
+        level: NotificationLevel,
+        text: &'a str,
+        ttl_ms: u32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::HeadsUpBanner {
+                level,
+                text,
+                ttl_ms,
+            },
+            style,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_notification_action_sheet<S>(
+        &mut self,
+        rect: Rect,
+        level: NotificationLevel,
+        title: &'a str,
+        body: &'a str,
+        actions: &'a [&'a str],
+        selected: usize,
+        open: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::NotificationActionSheet {
+                level,
+                title,
+                body,
+                actions,
+                selected: selected.min(actions.len().saturating_sub(1)),
+                open,
+            },
+            style,
+        )
+    }
+
     pub fn add_border<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
@@ -1458,6 +1576,166 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub fn set_state_surface_state(
+        &mut self,
+        id: WidgetId,
+        state: SurfaceState,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::StateSurface {
+                state: ref mut current,
+                ..
+            } => {
+                *current = state;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_state_surface_message(
+        &mut self,
+        id: WidgetId,
+        message: &'a str,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::StateSurface {
+                message: ref mut current,
+                ..
+            } => {
+                *current = message;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_state_surface_action(
+        &mut self,
+        id: WidgetId,
+        action: Option<&'a str>,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::StateSurface {
+                action: ref mut current,
+                ..
+            } => {
+                *current = action;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_state_surface_busy_phase(
+        &mut self,
+        id: WidgetId,
+        phase: f32,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::StateSurface {
+                busy_phase: ref mut current,
+                ..
+            } => {
+                *current = phase;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn tick_state_surface(
+        &mut self,
+        id: WidgetId,
+        dt_ms: u32,
+        cycles_per_sec: f32,
+    ) -> Result<(), GuiError> {
+        let phase = match self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::StateSurface { busy_phase, .. } => {
+                busy_phase + (dt_ms as f32 / 1000.0) * cycles_per_sec
+            }
+            _ => return Err(GuiError::NotFound),
+        };
+        self.set_state_surface_busy_phase(id, phase)
+    }
+
+    pub fn set_heads_up_ttl(&mut self, id: WidgetId, ttl_ms: u32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::HeadsUpBanner {
+                ttl_ms: ref mut current,
+                ..
+            } => {
+                *current = ttl_ms;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn tick_heads_up(&mut self, id: WidgetId, dt_ms: u32) -> Result<(), GuiError> {
+        let ttl = match self.node(id).ok_or(GuiError::NotFound)?.kind {
+            WidgetKind::HeadsUpBanner { ttl_ms, .. } => ttl_ms.saturating_sub(dt_ms),
+            _ => return Err(GuiError::NotFound),
+        };
+        self.set_heads_up_ttl(id, ttl)
+    }
+
+    pub fn set_notification_sheet_open(
+        &mut self,
+        id: WidgetId,
+        open: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::NotificationActionSheet {
+                open: ref mut current,
+                ..
+            } => {
+                *current = open;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_notification_sheet_selected(
+        &mut self,
+        id: WidgetId,
+        selected: usize,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::NotificationActionSheet {
+                actions,
+                selected: ref mut current,
+                ..
+            } => {
+                *current = selected.min(actions.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
     pub fn set_menu_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -1502,6 +1780,51 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 state.set_selected(selected, items.len());
                 *current = state.selected;
                 *offset = state.offset;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn feed_selected(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::FeedTimeline { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    pub fn set_feed_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::FeedTimeline {
+                items,
+                selected: ref mut current,
+                ref mut offset,
+                visible_rows,
+                ..
+            } => {
+                let mut state = FeedTimelineState::new(*current, *offset, visible_rows, false);
+                state.set_selected(selected, items.len());
+                *current = state.selected;
+                *offset = state.offset;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_feed_expanded(&mut self, id: WidgetId, expanded: bool) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::FeedTimeline {
+                expanded: ref mut current,
+                ..
+            } => {
+                *current = expanded;
                 self.dirty.add(rect)?;
                 Ok(())
             }
@@ -3468,6 +3791,23 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         .max(text_height),
                 )
             }
+            WidgetKind::FeedTimeline {
+                items,
+                visible_rows,
+                expanded,
+                ..
+            } => {
+                let max = items.iter().map(|s| text_width(s)).max().unwrap_or(0);
+                let row_h = if expanded {
+                    text_height.saturating_mul(2).saturating_add(2)
+                } else {
+                    text_height.saturating_add(2)
+                };
+                (
+                    max.saturating_add(8),
+                    row_h.saturating_mul(visible_rows as u32).max(text_height),
+                )
+            }
             _ => (node.rect.w.max(1), node.rect.h.max(1)),
         };
 
@@ -3612,6 +3952,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let Some(id) = self.focus else {
             return Ok(false);
         };
+        let wrap_navigation = self.menu_contract.wrap_navigation;
 
         let mut changed_rect = None;
         let mut changed = false;
@@ -3625,7 +3966,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     if items.is_empty() {
                         return Ok(true);
                     }
-                    changed = bump_index(current, items.len(), delta);
+                    changed = bump_index_with_wrap(current, items.len(), delta, wrap_navigation);
                     changed_rect = changed.then_some(node.rect);
                 }
                 WidgetKind::Dropdown {
@@ -3639,7 +3980,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     if items.is_empty() {
                         return Ok(true);
                     }
-                    changed = bump_index(current, items.len(), delta);
+                    changed = bump_index_with_wrap(current, items.len(), delta, wrap_navigation);
                     changed_rect = changed.then_some(node.rect);
                 }
                 WidgetKind::Roller {
@@ -3649,7 +3990,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     if items.is_empty() {
                         return Ok(true);
                     }
-                    changed = bump_index(current, items.len(), delta);
+                    changed = bump_index_with_wrap(current, items.len(), delta, wrap_navigation);
                     changed_rect = changed.then_some(node.rect);
                 }
                 WidgetKind::Keyboard {
@@ -3660,7 +4001,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     if keys.is_empty() {
                         return Ok(true);
                     }
-                    changed = bump_index(current, keys.len(), delta);
+                    changed = bump_index_with_wrap(current, keys.len(), delta, wrap_navigation);
                     changed_rect = changed.then_some(node.rect);
                 }
                 WidgetKind::List {
@@ -3673,7 +4014,32 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         return Ok(true);
                     }
                     let mut state = ListState::new(*current, *offset, visible_rows);
-                    changed = state.bump(items.len(), delta);
+                    let mut next = state.selected;
+                    changed = bump_index_with_wrap(&mut next, items.len(), delta, wrap_navigation);
+                    if changed {
+                        let _ = state.set_selected(next, items.len());
+                    }
+                    *current = state.selected;
+                    *offset = state.offset;
+                    changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::FeedTimeline {
+                    items,
+                    selected: ref mut current,
+                    ref mut offset,
+                    visible_rows,
+                    expanded,
+                } => {
+                    if items.is_empty() {
+                        return Ok(true);
+                    }
+                    let mut state =
+                        FeedTimelineState::new(*current, *offset, visible_rows, expanded);
+                    let mut next = state.selected;
+                    changed = bump_index_with_wrap(&mut next, items.len(), delta, wrap_navigation);
+                    if changed {
+                        let _ = state.set_selected(next, items.len());
+                    }
                     *current = state.selected;
                     *offset = state.offset;
                     changed_rect = changed.then_some(node.rect);
@@ -3768,6 +4134,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let mut changed_rect = None;
         let mut changed = false;
         let mut dropdown_state_event = None;
+        let select_opens_dropdown = self.menu_contract.select_opens_dropdown;
 
         if let Some(node) = self.node_mut(id) {
             match node.kind {
@@ -3804,10 +4171,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     open: ref mut is_open,
                     ..
                 } => {
-                    *is_open = !*is_open;
-                    changed = true;
-                    changed_rect = Some(node.rect);
-                    dropdown_state_event = Some(*is_open);
+                    if select_opens_dropdown {
+                        *is_open = !*is_open;
+                        changed = true;
+                        changed_rect = Some(node.rect);
+                        dropdown_state_event = Some(*is_open);
+                    }
                 }
                 _ => {}
             }
@@ -4302,6 +4671,19 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     fn handle_select_activation(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        if let Some(node) = self.node(id) {
+            if self.menu_contract.select_toggles_feed_expanded
+                && matches!(node.kind, WidgetKind::FeedTimeline { .. })
+            {
+                let expanded = if let WidgetKind::FeedTimeline { expanded, .. } = node.kind {
+                    expanded
+                } else {
+                    false
+                };
+                self.set_feed_expanded(id, !expanded)?;
+                self.push_event(UiEvent::ValueChanged(id))?;
+            }
+        }
         let double_select = self.last_select_id == Some(id)
             && self.select_elapsed_ms <= self.select_double_window_ms;
         self.dispatch_activation(id, false)?;
@@ -4328,8 +4710,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             if matches!(
                 self.node(id).map(|n| n.kind),
                 Some(WidgetKind::Dropdown { open: true, .. })
-            ) {
+            ) && self.menu_contract.back_closes_dropdown
+            {
                 self.set_dropdown_open(id, false)?;
+                return Ok(());
+            }
+            if matches!(
+                self.node(id).map(|n| n.kind),
+                Some(WidgetKind::NotificationActionSheet { open: true, .. })
+            ) && self.menu_contract.back_closes_notification_sheet
+            {
+                self.set_notification_sheet_open(id, false)?;
                 return Ok(());
             }
         }
@@ -4337,14 +4728,18 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 }
 
-fn bump_index(current: &mut usize, len: usize, delta: i8) -> bool {
+fn bump_index_with_wrap(current: &mut usize, len: usize, delta: i8, wrap: bool) -> bool {
     if len == 0 {
         return false;
     }
     let next = if delta >= 0 {
-        (*current + 1) % len
+        if *current + 1 >= len {
+            if wrap { 0 } else { *current }
+        } else {
+            *current + 1
+        }
     } else if *current == 0 {
-        len - 1
+        if wrap { len - 1 } else { *current }
     } else {
         *current - 1
     };

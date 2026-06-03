@@ -127,6 +127,62 @@ pub struct SliderState {
     pub max: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FeedTimelineState {
+    pub selected: usize,
+    pub offset: usize,
+    pub visible_rows: usize,
+    pub expanded: bool,
+}
+
+impl FeedTimelineState {
+    pub const fn new(selected: usize, offset: usize, visible_rows: usize, expanded: bool) -> Self {
+        Self {
+            selected,
+            offset,
+            visible_rows,
+            expanded,
+        }
+    }
+
+    pub fn set_selected(&mut self, selected: usize, len: usize) -> bool {
+        let next = selected.min(len.saturating_sub(1));
+        let changed = next != self.selected;
+        self.selected = next;
+        self.keep_selected_visible();
+        changed
+    }
+
+    pub fn bump(&mut self, len: usize, delta: i8) -> bool {
+        if len == 0 {
+            return false;
+        }
+        let next = if delta >= 0 {
+            (self.selected + 1) % len
+        } else if self.selected == 0 {
+            len - 1
+        } else {
+            self.selected - 1
+        };
+        self.set_selected(next, len)
+    }
+
+    pub fn set_expanded(&mut self, expanded: bool) -> bool {
+        let changed = self.expanded != expanded;
+        self.expanded = expanded;
+        changed
+    }
+
+    pub fn keep_selected_visible(&mut self) {
+        let rows = self.visible_rows.max(1);
+        if self.selected < self.offset {
+            self.offset = self.selected;
+        } else if self.selected >= self.offset.saturating_add(rows) {
+            self.offset = self.selected.saturating_add(1).saturating_sub(rows);
+        }
+    }
+}
+
 impl SliderState {
     pub const fn new(value: f32, min: f32, max: f32) -> Self {
         Self { value, min, max }

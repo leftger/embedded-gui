@@ -134,3 +134,24 @@ impl StyleClassId {
         self.0
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuContract {
+    pub wrap_navigation: bool,
+    pub select_opens_dropdown: bool,
+    pub back_closes_dropdown: bool,
+    pub back_closes_notification_sheet: bool,
+    pub select_toggles_feed_expanded: bool,
+}
+
+impl Default for MenuContract {
+    fn default() -> Self {
+        Self {
+            wrap_navigation: true,
+            select_opens_dropdown: true,
+            back_closes_dropdown: true,
+            back_closes_notification_sheet: true,
+            select_toggles_feed_expanded: true,
+        }
+    }
+}

@@ -15,6 +15,23 @@ use crate::{
 
 pub const TEXTAREA_CAPACITY: usize = 128;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SurfaceState {
+    Ready,
+    Loading,
+    Empty,
+    Error,
+    Offline,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotificationLevel {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetKind<'a> {
     Panel,
@@ -177,6 +194,33 @@ pub enum WidgetKind<'a> {
         player: ReelPlayer<'a>,
         fit: ImageFit,
     },
+    StateSurface {
+        state: SurfaceState,
+        title: &'a str,
+        message: &'a str,
+        action: Option<&'a str>,
+        busy_phase: f32,
+    },
+    HeadsUpBanner {
+        level: NotificationLevel,
+        text: &'a str,
+        ttl_ms: u32,
+    },
+    NotificationActionSheet {
+        level: NotificationLevel,
+        title: &'a str,
+        body: &'a str,
+        actions: &'a [&'a str],
+        selected: usize,
+        open: bool,
+    },
+    FeedTimeline {
+        items: &'a [&'a str],
+        selected: usize,
+        offset: usize,
+        visible_rows: usize,
+        expanded: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -209,6 +253,7 @@ impl WidgetKind<'_> {
                 | Self::TextArea { .. }
                 | Self::Keyboard { .. }
                 | Self::Menu { .. }
+                | Self::FeedTimeline { .. }
         )
     }
 }
@@ -511,6 +556,55 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Reel { player, fit } => {
                 render_reel(ctx, rect, player, fit, self.style, state)
             }
+            WidgetKind::StateSurface {
+                state: surface_state,
+                title,
+                message,
+                action,
+                busy_phase,
+            } => render_state_surface(
+                ctx,
+                rect,
+                surface_state,
+                title,
+                message,
+                action,
+                busy_phase,
+                self.style,
+                state,
+            ),
+            WidgetKind::HeadsUpBanner {
+                level,
+                text,
+                ttl_ms,
+            } => render_heads_up_banner(ctx, rect, level, text, ttl_ms, self.style, state),
+            WidgetKind::NotificationActionSheet {
+                level,
+                title,
+                body,
+                actions,
+                selected,
+                open,
+            } => render_notification_action_sheet(
+                ctx, rect, level, title, body, actions, selected, open, self.style, state,
+            ),
+            WidgetKind::FeedTimeline {
+                items,
+                selected,
+                offset,
+                visible_rows,
+                expanded,
+            } => render_feed_timeline(
+                ctx,
+                rect,
+                items,
+                selected,
+                offset,
+                visible_rows,
+                expanded,
+                self.style,
+                state,
+            ),
         }
     }
 }
@@ -1974,6 +2068,252 @@ where
         }
         if matches!(fit, ImageFit::Stretch | ImageFit::Center) {
             // Keep fit consumed so API remains stable while reel internals stay lightweight.
+        }
+    }
+    Ok(())
+}
+
+fn render_state_surface<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    surface: SurfaceState,
+    title: &str,
+    message: &str,
+    action: Option<&str>,
+    busy_phase: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style)
+        .title(title)
+        .title_align(TextAlign::Center);
+    block.render(rect, ctx)?;
+    let inner = block.content_area(rect);
+
+    let badge = match surface {
+        SurfaceState::Ready => "READY",
+        SurfaceState::Loading => "LOADING",
+        SurfaceState::Empty => "EMPTY",
+        SurfaceState::Error => "ERROR",
+        SurfaceState::Offline => "OFFLINE",
+    };
+    ctx.draw_text_in(
+        Rect::new(inner.x, inner.y, inner.w, style.font.line_height()),
+        badge,
+        TextStyle::new(style.accent)
+            .with_font(style.font)
+            .centered(),
+    )?;
+
+    if matches!(surface, SurfaceState::Loading) {
+        let y = inner.y + style.font.line_height() as i32 + 3;
+        let w = inner.w.saturating_sub(10);
+        let x = inner.x + 5;
+        ctx.stroke_rect(Rect::new(x, y, w, 5), Border::one(style.border.color))?;
+        let t = busy_phase.fract().abs();
+        let pulse = ((w as f32 * 0.2) as u32).max(2);
+        let offset = ((w.saturating_sub(pulse) as f32) * t) as i32;
+        ctx.fill_rect(Rect::new(x + offset, y + 1, pulse, 3), style.accent)?;
+    }
+
+    ctx.draw_text_in(
+        Rect::new(
+            inner.x + 2,
+            inner.y + style.font.line_height() as i32 + 10,
+            inner.w.saturating_sub(4),
+            inner.h.saturating_sub(style.font.line_height() + 20),
+        ),
+        message,
+        TextStyle::new(style.text)
+            .with_font(style.font)
+            .with_align(TextAlign::Center)
+            .with_wrap(TextWrap::Character),
+    )?;
+
+    if let Some(action_label) = action {
+        let action_h = style.font.line_height() + 3;
+        let action_rect = Rect::new(
+            inner.x + 4,
+            inner.bottom() - action_h as i32 - 2,
+            inner.w.saturating_sub(8),
+            action_h,
+        );
+        ctx.stroke_rect(action_rect, Border::one(style.accent))?;
+        ctx.draw_text_in(
+            action_rect,
+            action_label,
+            TextStyle::new(style.accent)
+                .with_font(style.font)
+                .with_align(TextAlign::Center),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn render_heads_up_banner<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    level: NotificationLevel,
+    text: &str,
+    ttl_ms: u32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    if ttl_ms == 0 {
+        return Ok(());
+    }
+    let mut style = style.resolve(state);
+    style.accent = match level {
+        NotificationLevel::Info => Rgb565::new(0, 32, 31),
+        NotificationLevel::Success => Rgb565::new(0, 50, 0),
+        NotificationLevel::Warning => Rgb565::new(31, 40, 0),
+        NotificationLevel::Error => Rgb565::new(31, 0, 0),
+    };
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    ctx.draw_text_in(
+        block.inner(rect),
+        text,
+        TextStyle::new(style.text)
+            .with_font(style.font)
+            .with_align(TextAlign::Center),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_notification_action_sheet<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    level: NotificationLevel,
+    title: &str,
+    body: &str,
+    actions: &[&str],
+    selected: usize,
+    open: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    if !open {
+        return Ok(());
+    }
+    let mut style = style.resolve(state);
+    style.accent = match level {
+        NotificationLevel::Info => Rgb565::new(0, 32, 31),
+        NotificationLevel::Success => Rgb565::new(0, 50, 0),
+        NotificationLevel::Warning => Rgb565::new(31, 40, 0),
+        NotificationLevel::Error => Rgb565::new(31, 0, 0),
+    };
+    let block = Block::styled(style)
+        .title(title)
+        .title_align(TextAlign::Center);
+    block.render(rect, ctx)?;
+    let inner = block.content_area(rect);
+    let body_h = inner.h.saturating_sub(style.font.line_height() + 12);
+    ctx.draw_text_in(
+        Rect::new(inner.x + 2, inner.y + 2, inner.w.saturating_sub(4), body_h),
+        body,
+        TextStyle::new(style.text)
+            .with_font(style.font)
+            .with_wrap(TextWrap::Character),
+    )?;
+    if actions.is_empty() {
+        return Ok(());
+    }
+    let action_h = style.font.line_height() + 2;
+    let y = inner.bottom() - action_h as i32 - 2;
+    let action_w = (inner.w / actions.len() as u32).max(1);
+    for (i, action) in actions.iter().enumerate() {
+        let cell = Rect::new(
+            inner.x + (i as u32 * action_w) as i32,
+            y,
+            action_w,
+            action_h,
+        );
+        if i == selected.min(actions.len() - 1) {
+            ctx.fill_rect(cell, style.accent)?;
+        } else {
+            ctx.stroke_rect(cell, Border::one(style.border.color))?;
+        }
+        ctx.draw_text_in(
+            cell,
+            action,
+            TextStyle::new(style.text)
+                .with_font(style.font)
+                .with_align(TextAlign::Center),
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_feed_timeline<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    offset: usize,
+    visible_rows: usize,
+    expanded: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if items.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let rows = visible_rows.max(1).min(items.len());
+    let row_h = (inner.h / rows as u32).max(1);
+    for row_idx in 0..rows {
+        let item_idx = offset.saturating_add(row_idx);
+        if item_idx >= items.len() {
+            break;
+        }
+        let row = Rect::new(
+            inner.x,
+            inner.y + (row_idx as u32 * row_h) as i32,
+            inner.w,
+            row_h,
+        );
+        let is_selected = item_idx == selected;
+        if is_selected {
+            ctx.fill_rect(row, style.accent)?;
+        }
+        ctx.draw_text_in(
+            row.inset(EdgeInsets::symmetric(2, 1)),
+            items[item_idx],
+            TextStyle::new(style.text)
+                .with_font(style.font)
+                .with_wrap(TextWrap::Character),
+        )?;
+        if expanded && is_selected && row_h > style.font.line_height() + 4 {
+            let detail = Rect::new(
+                row.x + 2,
+                row.y + style.font.line_height() as i32,
+                row.w.saturating_sub(4),
+                row.h.saturating_sub(style.font.line_height()),
+            );
+            ctx.draw_text_in(
+                detail,
+                "details...",
+                TextStyle::new(style.text).with_font(style.font),
+            )?;
         }
     }
     Ok(())
