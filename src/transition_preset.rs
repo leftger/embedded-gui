@@ -43,6 +43,14 @@ pub enum TransitionPreset {
     ModalDismiss,
     /// Timeline-style horizontal slide.
     TimelineSlide,
+    /// Timeline peek card enters with a soft rightward reveal.
+    TimelinePeekIn,
+    /// Timeline peek card exits with a soft leftward collapse.
+    TimelinePeekOut,
+    /// Timeline pin details expand from lower edge.
+    TimelinePinExpand,
+    /// Timeline scrub release settles quickly.
+    TimelineScrubSettle,
     /// Cross-fade.
     Fade,
 }
@@ -73,6 +81,18 @@ impl TransitionPreset {
             Self::ModalDismiss => ScreenTransitionSpec::modal_slide_down(DEFAULT_DURATION_MS),
             Self::TimelineSlide => {
                 ScreenTransitionSpec::slide_left(DEFAULT_DURATION_MS).with_easing(Easing::EaseInOut)
+            }
+            Self::TimelinePeekIn => {
+                ScreenTransitionSpec::slide_right(MOOOK_DURATION_MS / 2).with_easing(Easing::OutBack)
+            }
+            Self::TimelinePeekOut => {
+                ScreenTransitionSpec::slide_left(MOOOK_DURATION_MS / 2).with_easing(Easing::InSine)
+            }
+            Self::TimelinePinExpand => {
+                ScreenTransitionSpec::modal_slide_up(MOOOK_DURATION_MS / 2).with_easing(Easing::OutCubic)
+            }
+            Self::TimelineScrubSettle => {
+                ScreenTransitionSpec::slide_left(DEFAULT_DURATION_MS / 2).with_easing(Easing::OutBounce)
             }
             Self::Fade => ScreenTransitionSpec::fade(DEFAULT_DURATION_MS),
         }

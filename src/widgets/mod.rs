@@ -6,7 +6,7 @@ use heapless::String;
 use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
-    image::{ImageFit, ImageRef},
+    image::{ImageFit, ImageRef, ReelPlayer},
     math::F32Ext as _,
     render::{RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
@@ -156,6 +156,26 @@ pub enum WidgetKind<'a> {
     Menu {
         items: &'a [&'a str],
         selected: usize,
+    },
+    PeekReveal {
+        icon: ImageRef<'a>,
+        title: &'a str,
+        subtitle: &'a str,
+        progress: f32,
+    },
+    GlanceTile {
+        icon: char,
+        title: &'a str,
+        subtitle: &'a str,
+        highlighted: bool,
+    },
+    CardDeck {
+        titles: &'a [&'a str],
+        selected: usize,
+    },
+    Reel {
+        player: ReelPlayer<'a>,
+        fit: ImageFit,
     },
 }
 
@@ -461,6 +481,33 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Spacer => Ok(()),
             WidgetKind::Menu { items, selected } => {
                 render_menu(ctx, rect, items, selected, self.style, state)
+            }
+            WidgetKind::PeekReveal {
+                icon,
+                title,
+                subtitle,
+                progress,
+            } => render_peek_reveal(ctx, rect, icon, title, subtitle, progress, self.style, state),
+            WidgetKind::GlanceTile {
+                icon,
+                title,
+                subtitle,
+                highlighted,
+            } => render_glance_tile(
+                ctx,
+                rect,
+                icon,
+                title,
+                subtitle,
+                highlighted,
+                self.style,
+                state,
+            ),
+            WidgetKind::CardDeck { titles, selected } => {
+                render_card_deck(ctx, rect, titles, selected, self.style, state)
+            }
+            WidgetKind::Reel { player, fit } => {
+                render_reel(ctx, rect, player, fit, self.style, state)
             }
         }
     }
@@ -1758,6 +1805,167 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     ctx.draw_image(block.inner(rect), image, fit)
+}
+
+fn render_peek_reveal<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    icon: ImageRef<'_>,
+    title: &str,
+    subtitle: &str,
+    progress: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    let t = progress.clamp(0.0, 1.0);
+    let icon_size = ((inner.h.min(inner.w / 3) as f32) * (0.2 + 0.8 * t))
+        .max(2.0)
+        .round() as u32;
+    let icon_rect = Rect::new(inner.x + 1, inner.y + 1, icon_size, icon_size);
+    ctx.draw_image(icon_rect, icon, ImageFit::Stretch)?;
+    if t > 0.25 {
+        ctx.draw_text_in(
+            Rect::new(inner.x + icon_size as i32 + 2, inner.y, inner.w.saturating_sub(icon_size + 2), inner.h / 2),
+            title,
+            TextStyle::new(style.text).with_font(style.font),
+        )?;
+    }
+    if t > 0.5 {
+        ctx.draw_text_in(
+            Rect::new(
+                inner.x + icon_size as i32 + 2,
+                inner.y + (inner.h / 2) as i32,
+                inner.w.saturating_sub(icon_size + 2),
+                inner.h / 2,
+            ),
+            subtitle,
+            TextStyle::new(style.accent).with_font(style.font),
+        )?;
+    }
+    Ok(())
+}
+
+fn render_glance_tile<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    icon: char,
+    title: &str,
+    subtitle: &str,
+    highlighted: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    if highlighted {
+        ctx.fill_rect(Rect::new(inner.x, inner.y, inner.w, 2), style.accent)?;
+    }
+    let mut icon_buf = [0u8; 4];
+    let icon_str = icon.encode_utf8(&mut icon_buf);
+    ctx.draw_text_in(
+        Rect::new(inner.x, inner.y, 10, inner.h),
+        icon_str,
+        TextStyle::new(style.accent).with_font(style.font).centered(),
+    )?;
+    ctx.draw_text_in(
+        Rect::new(inner.x + 12, inner.y, inner.w.saturating_sub(12), inner.h / 2),
+        title,
+        TextStyle::new(style.text).with_font(style.font),
+    )?;
+    ctx.draw_text_in(
+        Rect::new(
+            inner.x + 12,
+            inner.y + (inner.h / 2) as i32,
+            inner.w.saturating_sub(12),
+            inner.h / 2,
+        ),
+        subtitle,
+        TextStyle::new(style.accent).with_font(style.font),
+    )?;
+    Ok(())
+}
+
+fn render_card_deck<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    titles: &[&str],
+    selected: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    if titles.is_empty() {
+        return Ok(());
+    }
+    let active = titles[selected.min(titles.len() - 1)];
+    ctx.draw_text_in(
+        inner,
+        active,
+        TextStyle::new(style.text).with_font(style.font).centered(),
+    )?;
+    Ok(())
+}
+
+fn render_reel<D>(
+    ctx: &mut RenderCtx<'_, D>,
+    rect: Rect,
+    player: ReelPlayer<'_>,
+    fit: ImageFit,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if let Some(src) = player.current_sprite_rect() {
+        let inner = block.inner(rect);
+        let frame_index = (src.x / player.sheet.sprite_w.max(1) as i32) as u8
+            + ((src.y / player.sheet.sprite_h.max(1) as i32) as u8) * 2;
+        let accent = match frame_index & 0x03 {
+            0 => Rgb565::new(0, 40, 31),
+            1 => Rgb565::new(31, 20, 0),
+            2 => Rgb565::new(20, 0, 31),
+            _ => Rgb565::new(31, 40, 0),
+        };
+        ctx.stroke_rect(inner, Border::one(accent))?;
+        let w = inner.w.saturating_sub(4);
+        let h = inner.h.saturating_sub(4);
+        let bar_w = (w / 4).max(1);
+        for i in 0..4u32 {
+            let x = inner.x + 2 + (i * bar_w) as i32;
+            let bar = Rect::new(x, inner.y + 2, bar_w.saturating_sub(1), h);
+            let active = i as u8 <= (frame_index & 0x03);
+            ctx.fill_rect(
+                bar,
+                if active { accent } else { Rgb565::new(4, 6, 6) },
+            )?;
+        }
+        if matches!(fit, ImageFit::Stretch | ImageFit::Center) {
+            // Keep fit consumed so API remains stable while reel internals stay lightweight.
+        }
+    }
+    Ok(())
 }
 
 fn draw_i32_right<D>(

@@ -42,6 +42,75 @@ pub struct SpriteSheet<'a> {
     pub columns: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReelFrame {
+    pub sprite_index: u16,
+    pub duration_ms: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReelPlayer<'a> {
+    pub sheet: SpriteSheet<'a>,
+    pub frames: &'a [ReelFrame],
+    pub repeat: bool,
+    current: usize,
+    elapsed_in_frame_ms: u32,
+    finished: bool,
+}
+
+impl<'a> ReelPlayer<'a> {
+    pub const fn new(sheet: SpriteSheet<'a>, frames: &'a [ReelFrame], repeat: bool) -> Self {
+        Self {
+            sheet,
+            frames,
+            repeat,
+            current: 0,
+            elapsed_in_frame_ms: 0,
+            finished: false,
+        }
+    }
+
+    pub fn tick(&mut self, dt_ms: u32) {
+        if self.frames.is_empty() || self.finished {
+            return;
+        }
+        self.elapsed_in_frame_ms = self.elapsed_in_frame_ms.saturating_add(dt_ms);
+        loop {
+            let frame = self.frames[self.current];
+            let frame_ms = u32::from(frame.duration_ms).max(1);
+            if self.elapsed_in_frame_ms < frame_ms {
+                break;
+            }
+            self.elapsed_in_frame_ms -= frame_ms;
+            if self.current + 1 < self.frames.len() {
+                self.current += 1;
+                continue;
+            }
+            if self.repeat {
+                self.current = 0;
+            } else {
+                self.finished = true;
+            }
+            break;
+        }
+    }
+
+    pub const fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    pub fn restart(&mut self) {
+        self.current = 0;
+        self.elapsed_in_frame_ms = 0;
+        self.finished = false;
+    }
+
+    pub fn current_sprite_rect(&self) -> Option<Rect> {
+        let frame = self.frames.get(self.current)?;
+        Some(self.sheet.sprite_rect(frame.sprite_index as u32))
+    }
+}
+
 impl<'a> SpriteSheet<'a> {
     pub const fn new(image: ImageRef<'a>, sprite_w: u32, sprite_h: u32) -> Self {
         let columns = if sprite_w == 0 {

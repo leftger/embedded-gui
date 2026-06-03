@@ -3,7 +3,7 @@ use heapless::Vec;
 
 use crate::{
     geometry::{DirtyError, DirtyTracker, Rect},
-    image::{ImageFit, ImageRef},
+    image::{ImageFit, ImageRef, ReelPlayer},
     input::{
         InputEvent, PointerState, UiEvent, UiEventFilter, WidgetDispatchPolicy, WidgetEvent,
         WidgetEventKind,
@@ -1273,6 +1273,87 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Image { image, fit }, style)
     }
 
+    pub fn add_peek_reveal<S>(
+        &mut self,
+        rect: Rect,
+        icon: ImageRef<'a>,
+        title: &'a str,
+        subtitle: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::PeekReveal {
+                icon,
+                title,
+                subtitle,
+                progress: 0.0,
+            },
+            style,
+        )
+    }
+
+    pub fn add_glance_tile<S>(
+        &mut self,
+        rect: Rect,
+        icon: char,
+        title: &'a str,
+        subtitle: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::GlanceTile {
+                icon,
+                title,
+                subtitle,
+                highlighted: false,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_card_deck<S>(
+        &mut self,
+        rect: Rect,
+        titles: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::CardDeck {
+                titles,
+                selected: selected.min(titles.len().saturating_sub(1)),
+            },
+            style,
+        )
+    }
+
+    pub fn add_reel<S>(
+        &mut self,
+        rect: Rect,
+        player: ReelPlayer<'a>,
+        fit: ImageFit,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Reel { player, fit }, style)
+    }
+
     pub fn add_border<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
@@ -1306,6 +1387,60 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         match node.kind {
             WidgetKind::ProgressBar { value: ref mut v } => {
                 *v = value.clamp(0.0, 1.0);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            WidgetKind::PeekReveal {
+                progress: ref mut v, ..
+            } => {
+                *v = value.clamp(0.0, 1.0);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_glance_highlighted(&mut self, id: WidgetId, highlighted: bool) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::GlanceTile {
+                highlighted: ref mut h,
+                ..
+            } => {
+                *h = highlighted;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_card_deck_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::CardDeck {
+                titles,
+                selected: ref mut current,
+            } => {
+                *current = selected.min(titles.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn tick_reel(&mut self, id: WidgetId, dt_ms: u32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Reel {
+                player: ref mut reel, ..
+            } => {
+                reel.tick(dt_ms);
                 self.dirty.add(rect)?;
                 Ok(())
             }

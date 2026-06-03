@@ -1198,6 +1198,7 @@ pub mod presets {
     use super::{
         AnimationConflictPolicy, Easing, PathPoint, WidgetAnimationError, WidgetAnimator, WidgetId,
     };
+    use crate::cinematic::{GlanceTileSpec, PeekRevealSpec, animate_glance_focus, animate_peek_reveal};
 
     pub fn entrance_fade_in_up<const TRACKS: usize, const BINDINGS: usize>(
         animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
@@ -1362,5 +1363,41 @@ pub mod presets {
             animator.animate_opacity(neighbor, 255, 170, 120, Easing::OutSine)?;
         }
         Ok(())
+    }
+
+    pub fn peek_reveal<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        icon_widget: WidgetId,
+        title_widget: Option<WidgetId>,
+        subtitle_widget: Option<WidgetId>,
+        base_x: i32,
+        base_y: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        animate_peek_reveal(
+            animator,
+            icon_widget,
+            title_widget,
+            subtitle_widget,
+            base_x,
+            base_y,
+            PeekRevealSpec::default(),
+        )
+    }
+
+    pub fn glance_focus<const TRACKS: usize, const BINDINGS: usize>(
+        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,
+        focused: WidgetId,
+        neighbors: &[WidgetId],
+        base_x: i32,
+        base_y: i32,
+    ) -> Result<(), WidgetAnimationError> {
+        animate_glance_focus(
+            animator,
+            focused,
+            neighbors,
+            base_x,
+            base_y,
+            GlanceTileSpec::default(),
+        )
     }
 }

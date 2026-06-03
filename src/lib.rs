@@ -8,6 +8,7 @@ pub mod animation_timeline;
 pub mod animation_timing;
 pub mod block;
 pub mod context;
+pub mod cinematic;
 pub mod font;
 pub mod geometry;
 pub mod image;
@@ -55,7 +56,12 @@ pub use image::{
     BasicImageDecoder, EncodedImageFormat, ImageDecodeError, ImageDecoder, decode_image_auto,
     decode_image_with, decode_ppm_ascii,
 };
-pub use image::{ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, SpriteSheet};
+pub use image::{ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, ReelFrame, ReelPlayer, SpriteSheet};
+pub use cinematic::{
+    CardDeckDirection, CardDeckState, CinematicPreset, GlanceTileSpec, PeekRevealSpec,
+    TimelineMotionPreset, animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility,
+    setup_card_story, setup_launcher_glance, setup_peek_timeline,
+};
 pub use input::{
     EventPhaseMask, InputEvent, PointerButton, PointerState, UiEvent, UiEventFilter,
     WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
@@ -108,10 +114,12 @@ pub mod prelude {
         Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
         FocusGroupId, FontId, GradientDirection, GuiContext, GuiError, ImageAtlas, ImageAtlasEntry,
         ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout,
+        GlanceTileSpec, PeekRevealSpec, CardDeckDirection, CardDeckState, CinematicPreset,
+        TimelineMotionPreset,
         Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line,
         LinearGradient, LinearLayout, ListState, PathAnimator, PathPoint, PointerButton,
         PointerState, PresentRegion, PressTiming, Rect, RenderBackendCaps, RenderCtx,
-        RenderQuality, RepeatMode, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent,
+        RenderQuality, RepeatMode, ReelFrame, ReelPlayer, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent,
         ScreenStack, ScreenStackError, ScreenTransition, ScreenTransitionEffect,
         ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
         ScreenTransitionSpec, ScrollState, SequencePlayer, SequencePlayerStatus,
@@ -123,7 +131,9 @@ pub mod prelude {
         VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
         WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
         WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
-        WidgetPropertyKeyframe, WidgetStyle, apply_easing, lerp_style, presets,
+        WidgetPropertyKeyframe, WidgetStyle, animate_glance_focus, animate_peek_reveal,
+        apply_carddeck_visibility, apply_easing, lerp_style, presets, setup_card_story,
+        setup_launcher_glance, setup_peek_timeline,
         render_transition_pair,
     };
 
