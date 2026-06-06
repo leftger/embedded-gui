@@ -1,5 +1,5 @@
 use core::convert::Infallible;
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use embedded_graphics_core::{
     Pixel,
