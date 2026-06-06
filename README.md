@@ -1,8 +1,15 @@
 # embedded-gui
 
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 `embedded-gui` is a `no_std` GUI/HUD crate for `embedded-graphics` displays.
 It is built around fixed-capacity data structures, deterministic rendering, and
 embedded-friendly interaction patterns (pointer, encoder, and keyboard-style input).
+
+Heavily inspired by the [Pebble](https://developer.rebble.io/developer.pebble.com/docs/index.html)
+smartwatch UI framework — its animation model, interaction contracts, and cinematic motion
+primitives draw directly from Pebble's design language. [LVGL](https://lvgl.io) is a
+secondary influence, particularly for widget composition and style-state conventions.
 
 ## Current State
 
@@ -168,6 +175,14 @@ The `examples/` folder currently includes:
 Animation and transition capabilities (generated from simulator output):
 
 ![Animation and transition showcase](docs/screenshots/motion.gif)
+
+Flip-card screen transition (`RoundFlipLeft`) — card selection between views:
+
+![Flipcard selection transition](docs/screenshots/flipcard.gif)
+
+Cinematic peek/glance/carddeck — launcher-style glance tiles cycling with slide-prominence animation, peek reveal, and card story transitions:
+
+![Cinematic peek glance carddeck showcase](docs/screenshots/cinematic.gif)
 
 Dashboard-style UI composition:
 

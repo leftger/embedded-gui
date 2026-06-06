@@ -11,6 +11,8 @@ const FONT_W: u32 = 240;
 const FONT_H: u32 = 140;
 const MOTION_W: u32 = 220;
 const MOTION_H: u32 = 128;
+const FLIP_W: u32 = 176;
+const FLIP_H: u32 = 176;
 
 static TABS: [&str; 3] = ["SYS", "GFX", "NET"];
 static SETTINGS_ITEMS: [&str; 6] = ["DITHER", "AUDIO", "RADAR", "VIBRO", "DEBUG", "ABOUT"];
@@ -56,8 +58,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .to_rgb_output_image(&motion_settings)
         .save_png("docs/screenshots/motion.png")?;
 
+    let flip_settings = OutputSettingsBuilder::new().scale(4).build();
+    const FLIP_FRAMES: usize = 40;
+    for frame_idx in 0..FLIP_FRAMES {
+        let mut flip_display = SimulatorDisplay::<Rgb565>::new(Size::new(FLIP_W, FLIP_H));
+        let t = frame_idx as f32 / (FLIP_FRAMES - 1) as f32;
+        draw_flipcard_showcase(&mut flip_display, t);
+        let path = format!("docs/screenshots/flipcard_{frame_idx:02}.png");
+        flip_display
+            .to_rgb_output_image(&flip_settings)
+            .save_png(path)?;
+    }
+
     println!(
-        "wrote dashboard/fonts/motion PNGs to docs/screenshots (motion_00..motion_31 + motion.png)"
+        "wrote dashboard/fonts/motion/flipcard PNGs to docs/screenshots"
     );
     Ok(())
 }
@@ -169,6 +183,76 @@ fn draw_font_showcase(display: &mut SimulatorDisplay<Rgb565>) {
         TextStyle::new(Rgb565::WHITE).with_align(TextAlign::Center),
     )
     .expect("hint");
+}
+
+fn draw_flipcard_showcase(display: &mut SimulatorDisplay<Rgb565>, t: f32) {
+    let mut gui_a = GuiContext::<16, 16, 8>::new(Rect::new(0, 0, FLIP_W, FLIP_H));
+    gui_a
+        .add_themed_panel(Rect::new(8, 8, FLIP_W - 16, FLIP_H - 16))
+        .expect("panel");
+    gui_a
+        .add_themed_label(Rect::new(16, 18, FLIP_W - 32, 10), "DAILY ACTIVITY")
+        .expect("title");
+    gui_a
+        .add_themed_progress_bar(Rect::new(16, 36, FLIP_W - 32, 10), 0.72)
+        .expect("steps progress");
+    gui_a
+        .add_themed_label(Rect::new(16, 48, FLIP_W - 32, 8), "STEPS  72%")
+        .expect("steps label");
+    gui_a
+        .add_themed_progress_bar(Rect::new(16, 62, FLIP_W - 32, 10), 0.55)
+        .expect("cal progress");
+    gui_a
+        .add_themed_label(Rect::new(16, 74, FLIP_W - 32, 8), "CALS   55%")
+        .expect("cal label");
+    gui_a
+        .add_themed_slider(Rect::new(16, 90, FLIP_W - 32, 10), 0.72, 0.0, 1.0)
+        .expect("slider");
+    gui_a
+        .add_themed_value_label(Rect::new(16, 108, FLIP_W - 32, 10), "BPM", 74)
+        .expect("bpm");
+    gui_a
+        .add_themed_icon_button(Rect::new(16, 124, FLIP_W - 32, 14), 'A', "SELECT CARD")
+        .expect("button");
+
+    let mut gui_b = GuiContext::<16, 16, 8>::new(Rect::new(0, 0, FLIP_W, FLIP_H));
+    gui_b
+        .add_themed_panel(Rect::new(8, 8, FLIP_W - 16, FLIP_H - 16))
+        .expect("panel");
+    gui_b
+        .add_themed_label(Rect::new(16, 18, FLIP_W - 32, 10), "HEART RATE")
+        .expect("title");
+    gui_b
+        .add_gauge(
+            Rect::new(FLIP_W as i32 / 2 - 24, 32, 48, 48),
+            0.62,
+            0.0,
+            1.0,
+            Style::progress(),
+        )
+        .expect("gauge");
+    gui_b
+        .add_themed_value_label(Rect::new(16, 86, FLIP_W - 32, 10), "MAX", 142)
+        .expect("max bpm");
+    gui_b
+        .add_themed_value_label(Rect::new(16, 100, FLIP_W - 32, 10), "AVG", 88)
+        .expect("avg bpm");
+    gui_b
+        .add_themed_toggle(Rect::new(16, 116, FLIP_W - 32, 14), "ALERTS", true)
+        .expect("toggle");
+    gui_b
+        .add_themed_icon_button(Rect::new(16, 136, FLIP_W - 32, 14), 'B', "BACK")
+        .expect("button");
+
+    let active = ActiveScreenTransition {
+        from: Some(ScreenId(0)),
+        to: Some(ScreenId(1)),
+        effect: ScreenTransitionEffect::RoundFlipLeft,
+        origin: ScreenTransitionOrigin::Center,
+        progress: t,
+    };
+    render_transition_pair(display, &gui_a, &gui_b, active, FLIP_W, FLIP_H)
+        .expect("flip transition");
 }
 
 fn draw_motion_showcase(display: &mut SimulatorDisplay<Rgb565>, t: f32) {
