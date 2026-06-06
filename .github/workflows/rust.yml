@@ -19,6 +19,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo check
         run: cargo check --lib --all-features
+        env:
+          RUSTFLAGS: "-D warnings"
+
+  check-no-std:
+    name: Check (no_std + libm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check no_std
+        run: cargo check --lib --no-default-features --features libm --target thumbv7em-none-eabihf
+        env:
+          RUSTFLAGS: "-D warnings"
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check on MSRV
+        run: cargo check --lib --all-features
 
   test:
     name: Test
@@ -31,6 +57,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: cargo test
         run: cargo test --all-features
+        env:
+          RUSTFLAGS: "-D warnings"
 
   fmt:
     name: Formatting
@@ -52,8 +80,22 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: cargo clippy
-        run: cargo clippy --lib --all-features
+      - name: cargo clippy (std)
+        run: cargo clippy --lib --all-features -- -D warnings
+      - name: cargo clippy (no_std)
+        run: cargo clippy --lib --no-default-features --features libm -- -D warnings
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo doc
+        run: cargo doc --lib --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
 
   examples:
     name: Examples
@@ -66,3 +108,22 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: Build examples
         run: cargo build --examples --all-features
+
+  publish-dry-run:
+    name: Publish dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo publish --dry-run
+        run: cargo publish --dry-run
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

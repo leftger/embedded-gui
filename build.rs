@@ -18,7 +18,7 @@ fn main() {
         ));
     }
     src.push_str("];\n");
-    src.push_str("\n");
+    src.push('\n');
     src.push_str("pub static ASCII_4X7_GLYPHS: [[u8; 5]; 95] = [\n");
     for code in 32u8..=126u8 {
         let ch = code as char;
