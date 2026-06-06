@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
-# Pre-commit hook: format staged Rust files and run the test suite.
-#
-# Activation (one-time per clone):
-#   git config core.hooksPath .githooks
-#
-# Behaviour:
-#   1. Runs `cargo fmt --all` and re-stages any files that were already staged.
-#   2. Runs `cargo test` to catch compile errors and failing tests before the
-#      commit lands. Only triggered when at least one .rs or Cargo.toml file is
-#      staged — pure doc/asset commits are unaffected.
+# Pre-commit: fast quality gate — format, compile-check, and lint.
+# Runs only when at least one .rs, build.rs, or Cargo.toml file is staged.
+# Tests live in pre-push to keep commits snappy.
 set -euo pipefail
 
 if ! command -v cargo >/dev/null 2>&1; then
@@ -19,28 +12,27 @@ fi
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-# Collect staged Rust-related files.
-staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
-if [[ -z "$staged_files" ]]; then
-  exit 0
-fi
-
-rust_related=()
+# Only run when Rust source or manifests are staged.
+staged_rs=()
 while IFS= read -r file; do
-  if [[ "$file" == *.rs ]] || [[ "$file" == "Cargo.toml" ]]; then
-    rust_related+=("$file")
+  if [[ "$file" == *.rs || "$file" == "Cargo.toml" || "$file" == "build.rs" ]]; then
+    staged_rs+=("$file")
   fi
-done <<< "$staged_files"
+done < <(git diff --cached --name-only --diff-filter=ACMR)
 
-if [[ "${#rust_related[@]}" -eq 0 ]]; then
+if [[ "${#staged_rs[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-echo "pre-commit: running cargo fmt --all"
+echo "pre-commit: rustfmt"
 cargo fmt --all
+# Re-stage anything rustfmt touched that was already staged.
+git add -- "${staged_rs[@]}"
 
-echo "pre-commit: staging rustfmt updates"
-git add -- "${rust_related[@]}"
+echo "pre-commit: cargo check"
+RUSTFLAGS="-D warnings" cargo check --lib --all-features
 
-echo "pre-commit: running cargo test"
-cargo test
+echo "pre-commit: cargo clippy"
+cargo clippy --lib --all-features -- -D warnings
+
+echo "pre-commit: ok"

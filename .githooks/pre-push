@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
+# Pre-push: thorough gate — fmt check, tests, and publish dry-run.
+# Heavier than pre-commit; runs on every push regardless of file types changed.
 set -euo pipefail
 
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "pre-push: cargo not found, skipping rustfmt check." >&2
+  echo "pre-push: cargo not found, skipping." >&2
   exit 0
 fi
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "pre-push: running cargo fmt --all --check"
+echo "pre-push: cargo fmt check"
 cargo fmt --all --check
+
+echo "pre-push: cargo test"
+cargo test --all-features
+
+echo "pre-push: cargo publish dry-run"
+cargo publish --dry-run --allow-dirty
+
+echo "pre-push: ok"
