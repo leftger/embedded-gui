@@ -329,6 +329,7 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn animate_widget_x_with_custom_interpolator(
         &mut self,
         widget_id: WidgetId,
@@ -379,6 +380,7 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn animate_widget_y_with_custom_curve(
         &mut self,
         widget_id: WidgetId,
@@ -499,6 +501,7 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn animate_opacity_with_custom_interpolator(
         &mut self,
         widget_id: WidgetId,

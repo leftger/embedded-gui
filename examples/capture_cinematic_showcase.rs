@@ -16,10 +16,22 @@ static CARD_C: [&str; 1] = ["SLEEP TREND"];
 static PEEK_ICON_PIXELS: [u16; 64] = [0xFFFF; 64];
 static REEL_PIXELS: [u16; 256] = [0x07E0; 256];
 static REEL_FRAMES: [ReelFrame; 4] = [
-    ReelFrame { sprite_index: 0, duration_ms: 80 },
-    ReelFrame { sprite_index: 1, duration_ms: 80 },
-    ReelFrame { sprite_index: 2, duration_ms: 80 },
-    ReelFrame { sprite_index: 3, duration_ms: 80 },
+    ReelFrame {
+        sprite_index: 0,
+        duration_ms: 80,
+    },
+    ReelFrame {
+        sprite_index: 1,
+        duration_ms: 80,
+    },
+    ReelFrame {
+        sprite_index: 2,
+        duration_ms: 80,
+    },
+    ReelFrame {
+        sprite_index: 3,
+        duration_ms: 80,
+    },
 ];
 
 #[derive(Clone, Copy)]
@@ -35,7 +47,8 @@ struct Ids {
 }
 
 fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
-    gui.add_panel(Rect::new(4, 4, 212, 122), Style::panel()).unwrap();
+    gui.add_panel(Rect::new(4, 4, 212, 122), Style::panel())
+        .unwrap();
     gui.add_label(
         Rect::new(8, 8, 204, 10),
         "auto-cycling demo | 1/2/3 focus, up/down cards, space replay",
@@ -54,13 +67,31 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
         .unwrap();
 
     let glance_1 = gui
-        .add_glance_tile(Rect::new(8, 42, 90, 16), '*', "WORKOUT", "4.2 KM", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 42, 90, 16),
+            '*',
+            "WORKOUT",
+            "4.2 KM",
+            Style::button(),
+        )
         .unwrap();
     let glance_2 = gui
-        .add_glance_tile(Rect::new(8, 62, 90, 16), '+', "WEATHER", "68F CLOUDY", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 62, 90, 16),
+            '+',
+            "WEATHER",
+            "68F CLOUDY",
+            Style::button(),
+        )
         .unwrap();
     let glance_3 = gui
-        .add_glance_tile(Rect::new(8, 82, 90, 16), '#', "MUSIC", "NOW PLAYING", Style::button())
+        .add_glance_tile(
+            Rect::new(8, 82, 90, 16),
+            '#',
+            "MUSIC",
+            "NOW PLAYING",
+            Style::button(),
+        )
         .unwrap();
     gui.set_glance_highlighted(glance_1, true).unwrap();
 
@@ -77,10 +108,24 @@ fn build_ui(gui: &mut GuiContext<'static, 32, 48, 24>) -> Ids {
     let sheet = SpriteSheet::new(ImageRef::new(16, 16, &REEL_PIXELS), 8, 8);
     let player = ReelPlayer::new(sheet, &REEL_FRAMES, true);
     let reel = gui
-        .add_reel(Rect::new(138, 78, 42, 42), player, ImageFit::Stretch, Style::panel())
+        .add_reel(
+            Rect::new(138, 78, 42, 42),
+            player,
+            ImageFit::Stretch,
+            Style::panel(),
+        )
         .unwrap();
 
-    Ids { peek, glance_1, glance_2, glance_3, card_1, card_2, card_3, reel }
+    Ids {
+        peek,
+        glance_1,
+        glance_2,
+        glance_3,
+        card_1,
+        card_2,
+        card_3,
+        reel,
+    }
 }
 
 fn main() {
@@ -108,7 +153,12 @@ fn main() {
     let _ = setup_peek_timeline_with_tokens(&mut animator, ids.peek, None, None, 10, 14, tokens);
     gui.set_progress(ids.peek, 0.0).unwrap();
     card_story.apply(&mut gui).unwrap();
-    let _ = gui.add_image(Rect::new(10, 14, 24, 24), icon, ImageFit::Stretch, Style::panel());
+    let _ = gui.add_image(
+        Rect::new(10, 14, 24, 24),
+        icon,
+        ImageFit::Stretch,
+        Style::panel(),
+    );
 
     // Fire the initial glance setup so frame 0 already has the focused state.
     let _ = setup_launcher_glance_with_tokens(
@@ -136,7 +186,8 @@ fn main() {
 
         animator.tick(dt, &mut gui).unwrap();
         gui.tick_reel(ids.reel, dt).unwrap();
-        gui.set_progress(ids.peek, ((elapsed_ms % 1200) as f32) / 1200.0).unwrap();
+        gui.set_progress(ids.peek, ((elapsed_ms % 1200) as f32) / 1200.0)
+            .unwrap();
 
         if auto_step_ms >= 1100 {
             auto_step_ms = 0;
@@ -206,5 +257,8 @@ fn main() {
         frame_idx += 1;
     }
 
-    println!("captured {} frames to docs/screenshots/cinematic_*.png", frame_idx / 2);
+    println!(
+        "captured {} frames to docs/screenshots/cinematic_*.png",
+        frame_idx / 2
+    );
 }

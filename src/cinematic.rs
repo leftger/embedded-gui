@@ -200,6 +200,7 @@ impl<'a> CardStory<'a> {
         apply_carddeck_visibility(gui, self.cards, self.state.current())
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<CardStoryTransition> {
         let from_idx = self.state.current();
         self.state.move_next()?;

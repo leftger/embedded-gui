@@ -33,7 +33,7 @@ pub enum NotificationLevel {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WidgetKind<'a> {
     Panel,
     Label(&'a str),
@@ -170,6 +170,7 @@ pub enum WidgetKind<'a> {
         fit: ImageFit,
     },
     Border,
+    #[default]
     Spacer,
     Menu {
         items: &'a [&'a str],
@@ -1193,6 +1194,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_gauge<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1274,6 +1276,7 @@ where
     ctx.fill_circle(cx, cy, 2, style.accent)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_chart<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1465,11 +1468,7 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     let inner = block.inner(rect);
-    let text = if open {
-        items.get(selected).copied().unwrap_or("-")
-    } else {
-        items.get(selected).copied().unwrap_or("-")
-    };
+    let text = items.get(selected).copied().unwrap_or("-");
     ctx.draw_text_in(
         Rect::new(inner.x, inner.y, inner.w.saturating_sub(8), inner.h),
         text,
@@ -1487,7 +1486,7 @@ where
         let popup_h = (row_h.saturating_mul(items.len() as u32))
             .min(40)
             .max(row_h);
-        let popup = Rect::new(inner.x, inner.bottom() as i32 + 1, inner.w, popup_h);
+        let popup = Rect::new(inner.x, inner.bottom() + 1, inner.w, popup_h);
         ctx.fill_rect(popup, style.background.unwrap_or(Rgb565::new(8, 12, 16)))?;
         ctx.stroke_rect(popup, Border::one(style.border.color))?;
         let visible = (popup_h / row_h).max(1) as usize;
@@ -1556,6 +1555,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_table<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1674,6 +1674,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_textarea<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1761,6 +1762,7 @@ fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
     core::str::from_utf8(&buf[..used]).unwrap_or("")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_keyboard<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1904,6 +1906,7 @@ where
     ctx.draw_image(block.inner(rect), image, fit)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_peek_reveal<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -1954,6 +1957,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_glance_tile<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -2074,6 +2078,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_state_surface<D>(
     ctx: &mut RenderCtx<'_, D>,
     rect: Rect,
@@ -2368,12 +2373,6 @@ where
             line_spacing: 0,
         },
     )
-}
-
-impl Default for WidgetKind<'_> {
-    fn default() -> Self {
-        Self::Spacer
-    }
 }
 
 impl Default for WidgetNode<'_> {

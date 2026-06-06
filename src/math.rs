@@ -24,7 +24,6 @@ compile_error!("Select at most one math backend: `libm` or `micromath`.");
 ))]
 compile_error!("no_std requires a math backend feature: enable `libm` or `micromath`.");
 
-
 #[cfg(not(feature = "std"))]
 #[cfg(feature = "libm")]
 impl F32Ext for f32 {

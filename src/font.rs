@@ -64,6 +64,6 @@ pub fn glyph_rows(font: FontId, ch: char) -> [u8; 5] {
             return packed.glyphs[idx];
         }
     }
-    let fallback = ('?' as u8).saturating_sub(packed.first_char) as usize;
+    let fallback = b'?'.saturating_sub(packed.first_char) as usize;
     packed.glyphs.get(fallback).copied().unwrap_or([0; 5])
 }

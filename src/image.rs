@@ -113,10 +113,9 @@ impl<'a> ReelPlayer<'a> {
 
 impl<'a> SpriteSheet<'a> {
     pub const fn new(image: ImageRef<'a>, sprite_w: u32, sprite_h: u32) -> Self {
-        let columns = if sprite_w == 0 {
-            1
-        } else {
-            image.width / sprite_w
+        let columns = match image.width.checked_div(sprite_w) {
+            Some(c) => c,
+            None => 1,
         };
         Self {
             image,

@@ -292,11 +292,7 @@ impl LinearLayout {
         }
 
         let remaining = available.saturating_sub(fixed);
-        let fill_unit = if fill_weight > 0 {
-            remaining / fill_weight
-        } else {
-            0
-        };
+        let fill_unit = remaining.checked_div(fill_weight).unwrap_or(0);
 
         let mut cursor = match self.axis {
             Axis::Horizontal => inner.x,
@@ -398,9 +394,9 @@ impl LinearLayout {
             grow_total = grow_total.saturating_add(item.grow as u32);
             shrink_total = shrink_total.saturating_add(item.shrink.max(1) as u32);
         }
+        let remaining = available.saturating_sub(used);
+        let unit = remaining.checked_div(fill_weight).unwrap_or(0);
         if fill_weight > 0 {
-            let remaining = available.saturating_sub(used);
-            let unit = remaining / fill_weight;
             let mut seen = 0u32;
             let mut used_fill = 0u32;
             for (idx, item) in items.iter().take(count).enumerate() {

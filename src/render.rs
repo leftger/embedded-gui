@@ -1326,6 +1326,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_chars_with_font(
         &mut self,
         x: i32,

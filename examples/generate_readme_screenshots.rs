@@ -70,9 +70,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .save_png(path)?;
     }
 
-    println!(
-        "wrote dashboard/fonts/motion/flipcard PNGs to docs/screenshots"
-    );
+    println!("wrote dashboard/fonts/motion/flipcard PNGs to docs/screenshots");
     Ok(())
 }
 

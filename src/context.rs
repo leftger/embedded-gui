@@ -1026,6 +1026,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_gauge_needle<S>(
         &mut self,
         rect: Rect,
@@ -2822,10 +2823,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .ok_or(GuiError::NotFound)?
             .flags
             .set(flag, enabled);
-        if flag == WidgetFlags::DISABLED && enabled {
-            if self.pressed.is_some_and(|pressed| pressed.id == id) {
-                self.pressed = None;
-            }
+        if flag == WidgetFlags::DISABLED
+            && enabled
+            && self.pressed.is_some_and(|pressed| pressed.id == id)
+        {
+            self.pressed = None;
         }
         self.mark_subtree_dirty(id)?;
         if self
@@ -3039,7 +3041,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     ) -> Result<usize, GuiError> {
         let mut rects = [Rect::empty(); 16];
         let count = layout.arrange(area, ids.len().min(rects.len()), &mut rects);
-        for (id, rect) in ids.iter().copied().zip(rects.into_iter()).take(count) {
+        for (id, rect) in ids.iter().copied().zip(rects).take(count) {
             self.set_widget_rect(id, rect)?;
         }
         Ok(count)
@@ -3063,7 +3065,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             enable_grow,
             enable_shrink,
         );
-        for (id, rect) in ids.iter().copied().zip(rects.into_iter()).take(laid_out) {
+        for (id, rect) in ids.iter().copied().zip(rects).take(laid_out) {
             self.set_widget_rect(id, rect)?;
         }
         Ok(laid_out)
@@ -3106,7 +3108,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
 
         let laid_out = layout.arrange_items(area, &specs[..count], &mut rects);
-        for (id, rect) in ids.iter().copied().zip(rects.into_iter()).take(laid_out) {
+        for (id, rect) in ids.iter().copied().zip(rects).take(laid_out) {
             self.set_widget_rect(id, rect)?;
         }
         Ok(laid_out)
@@ -4171,13 +4173,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 WidgetKind::Dropdown {
                     open: ref mut is_open,
                     ..
-                } => {
-                    if select_opens_dropdown {
-                        *is_open = !*is_open;
-                        changed = true;
-                        changed_rect = Some(node.rect);
-                        dropdown_state_event = Some(*is_open);
-                    }
+                } if select_opens_dropdown => {
+                    *is_open = !*is_open;
+                    changed = true;
+                    changed_rect = Some(node.rect);
+                    dropdown_state_event = Some(*is_open);
                 }
                 _ => {}
             }
