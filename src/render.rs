@@ -5,11 +5,12 @@ use embedded_graphics_core::{
     pixelcolor::{Rgb565, RgbColor},
 };
 
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
 use crate::{
     font::{FontId, glyph_rows},
     geometry::Rect,
     image::{ImageFit, ImageRef},
-    math::F32Ext as _,
     style::{Border, GradientDirection, LinearGradient},
     text,
 };

@@ -3,11 +3,12 @@ use core::fmt::Write;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use heapless::String;
 
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
 use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
     image::{ImageFit, ImageRef, ReelPlayer},
-    math::F32Ext as _,
     render::{RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},

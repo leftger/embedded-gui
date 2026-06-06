@@ -1,11 +1,12 @@
 use heapless::Vec;
 
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
 use crate::{
     animation::{Animation, Easing},
     animation_timing::{self, timing_half_phase, timing_shutter_phase},
     context::GuiContext,
     geometry::Rect,
-    math::F32Ext as _,
     screen::{ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError},
 };
 

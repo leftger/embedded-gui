@@ -1,6 +1,8 @@
 use embedded_graphics_core::pixelcolor::Rgb565;
 use heapless::Vec;
 
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
 use crate::{
     geometry::{DirtyError, DirtyTracker, Rect},
     image::{ImageFit, ImageRef, ReelPlayer},
@@ -9,7 +11,6 @@ use crate::{
         WidgetEventKind,
     },
     layout::{Axis, LayoutItem, LinearLayout},
-    math::F32Ext as _,
     present::PresentRegion,
     render::{RenderCtx, RenderQuality, TextAlign},
     state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState},

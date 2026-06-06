@@ -1,3 +1,4 @@
+#[cfg(not(feature = "std"))]
 pub trait F32Ext {
     fn atan2(self, other: f32) -> f32;
     fn sin(self) -> f32;
@@ -23,68 +24,6 @@ compile_error!("Select at most one math backend: `libm` or `micromath`.");
 ))]
 compile_error!("no_std requires a math backend feature: enable `libm` or `micromath`.");
 
-#[cfg(feature = "std")]
-impl F32Ext for f32 {
-    #[inline]
-    fn atan2(self, other: f32) -> f32 {
-        f32::atan2(self, other)
-    }
-
-    #[inline]
-    fn sin(self) -> f32 {
-        f32::sin(self)
-    }
-
-    #[inline]
-    fn cos(self) -> f32 {
-        f32::cos(self)
-    }
-
-    #[inline]
-    fn tan(self) -> f32 {
-        f32::tan(self)
-    }
-
-    #[inline]
-    fn sqrt(self) -> f32 {
-        f32::sqrt(self)
-    }
-
-    #[inline]
-    fn floor(self) -> f32 {
-        f32::floor(self)
-    }
-
-    #[inline]
-    fn ceil(self) -> f32 {
-        f32::ceil(self)
-    }
-
-    #[inline]
-    fn round(self) -> f32 {
-        f32::round(self)
-    }
-
-    #[inline]
-    fn fract(self) -> f32 {
-        f32::fract(self)
-    }
-
-    #[inline]
-    fn powf(self, n: f32) -> f32 {
-        f32::powf(self, n)
-    }
-
-    #[inline]
-    fn powi(self, n: i32) -> f32 {
-        f32::powi(self, n)
-    }
-
-    #[inline]
-    fn hypot(self, other: f32) -> f32 {
-        f32::hypot(self, other)
-    }
-}
 
 #[cfg(not(feature = "std"))]
 #[cfg(feature = "libm")]

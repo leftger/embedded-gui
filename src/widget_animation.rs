@@ -4,10 +4,11 @@
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use heapless::Vec;
 
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
 use crate::{
     animation::{Animation, AnimationError, AnimationId, AnimationManager, Easing, PathPoint},
     context::{GuiContext, GuiError},
-    math::F32Ext as _,
     widget::WidgetId,
 };
 

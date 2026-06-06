@@ -3,6 +3,7 @@
 //! Provides interval remapping, table-based cubic easing samples, and the
 //! moook spatial interpolation curve used for stack push/pop motion.
 
+#[cfg(not(feature = "std"))]
 use crate::math::F32Ext as _;
 
 /// Normalized animation progress maximum (16-bit).

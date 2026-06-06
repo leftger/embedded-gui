@@ -1,5 +1,6 @@
 //! Core animation primitives for `embedded-gui`.
 //! Designed for deterministic, fixed-capacity operation.
+#[cfg(not(feature = "std"))]
 use crate::math::F32Ext as _;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

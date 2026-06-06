@@ -2,10 +2,21 @@
 name = "embedded-gui"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+authors = ["Gerzain Mata <leftger@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "no_std GUI and HUD primitives for embedded-graphics displays"
 keywords = ["embedded-graphics", "gui", "hud", "embedded", "no_std"]
 categories = ["embedded", "gui", "no-std"]
+repository = "https://github.com/leftger/embedded-gui"
+homepage = "https://github.com/leftger/embedded-gui"
+documentation = "https://docs.rs/embedded-gui"
+readme = "README.md"
+exclude = [
+    "docs/screenshots/*.gif",
+    "docs/screenshots/*.png",
+    "assets/",
+]
 
 [features]
 default = ["std"]
