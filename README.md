@@ -198,3 +198,11 @@ Static motion frame preview:
 
 ![Motion frame screenshot](docs/screenshots/motion.png)
 
+## License
+
+The contents of this repository are dual-licensed under the _MIT OR Apache 2.0_
+License. That means you can choose either the MIT license or the Apache 2.0
+license when you re-use this code. See [`LICENSE-MIT`](./LICENSE-MIT) or
+[`LICENSE-APACHE`](./LICENSE-APACHE) for more information on each specific
+license. Our Apache 2.0 notices can be found in [`NOTICE`](./NOTICE).
+
