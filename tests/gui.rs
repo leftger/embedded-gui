@@ -4444,3 +4444,194 @@ fn new_widgets_handle_input() {
     gui.render(&mut target).unwrap();
     assert!(!target.pixels.is_empty());
 }
+
+#[test]
+fn framebuffer_true_alpha_composites_not_dithers() {
+    // A Framebuffer is PixelRead, so `fill_rect_true_alpha` must blend against
+    // the existing contents, producing an intermediate colour at EVERY pixel —
+    // unlike the dithered opacity path, which only ever writes full-on or
+    // full-off pixels.
+    let mut fb = Framebuffer::<{ 8 * 8 }>::new(8, 8);
+    let base = Rgb565::new(0, 0, 0); // black
+    let over = Rgb565::new(31, 63, 31); // white
+    fb.clear_color(base);
+
+    {
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 8, 8));
+        ctx.fill_rect_true_alpha(Rect::new(0, 0, 8, 8), over, 128)
+            .unwrap();
+    }
+
+    // Expected 50%-ish lerp of black→white: mid grey, not black and not white.
+    let expected = {
+        let t = 128u16;
+        let inv = 255 - t;
+        Rgb565::new(
+            ((0 * inv + 31 * t) / 255) as u8,
+            ((0 * inv + 63 * t) / 255) as u8,
+            ((0 * inv + 31 * t) / 255) as u8,
+        )
+    };
+    for y in 0..8 {
+        for x in 0..8 {
+            let px = fb.get_pixel(Point::new(x, y));
+            assert_eq!(
+                px, expected,
+                "every pixel must be the blended mid-tone at ({x},{y})"
+            );
+            // Prove it's a true composite: strictly between the two endpoints.
+            assert_ne!(px, base, "pixel should not be pure backdrop (dither)");
+            assert_ne!(px, over, "pixel should not be pure source (dither)");
+        }
+    }
+}
+
+#[test]
+fn compositor_routes_same_alpha_call_to_blend_or_dither() {
+    // The SAME `fill_rect_alpha` call must composite differently depending only
+    // on the ctx's compositor type: true blend on `RenderCtx::compositing`,
+    // ordered dither on `RenderCtx::new`.
+    let base = Rgb565::new(0, 0, 0); // black
+    let over = Rgb565::new(31, 63, 31); // white
+    let midtone = Rgb565::new(
+        ((31u16 * 128) / 255) as u8,
+        ((63u16 * 128) / 255) as u8,
+        ((31u16 * 128) / 255) as u8,
+    );
+
+    // Blend ctx over a Framebuffer: every pixel becomes the mid-tone.
+    let mut fb = Framebuffer::<{ 8 * 8 }>::new(8, 8);
+    fb.clear_color(base);
+    {
+        let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 8, 8));
+        ctx.fill_rect_alpha(Rect::new(0, 0, 8, 8), over, 128)
+            .unwrap();
+    }
+    for y in 0..8 {
+        for x in 0..8 {
+            assert_eq!(
+                fb.get_pixel(Point::new(x, y)),
+                midtone,
+                "compositing ctx must blend to the mid-tone at ({x},{y})"
+            );
+        }
+    }
+
+    // Dither ctx over the same target type: pixels are full-on or full-off
+    // (a Bayer pattern), never the blended mid-tone.
+    let mut fb2 = Framebuffer::<{ 8 * 8 }>::new(8, 8);
+    fb2.clear_color(base);
+    {
+        let mut ctx = RenderCtx::new(&mut fb2, Rect::new(0, 0, 8, 8));
+        ctx.fill_rect_alpha(Rect::new(0, 0, 8, 8), over, 128)
+            .unwrap();
+    }
+    let (mut any_on, mut any_off, mut any_mid) = (false, false, false);
+    for y in 0..8 {
+        for x in 0..8 {
+            match fb2.get_pixel(Point::new(x, y)) {
+                p if p == over => any_on = true,
+                p if p == base => any_off = true,
+                p if p == midtone => any_mid = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(!any_mid, "dither ctx must not produce blended mid-tones");
+    assert!(
+        any_on && any_off,
+        "dither ctx should mix full-on and full-off pixels"
+    );
+}
+
+#[test]
+fn widget_opacity_blends_via_render_composited() {
+    // End-to-end 2b: a translucent widget rendered through
+    // `GuiContext::render_composited` (Blend) must alpha-composite against the
+    // back buffer, while the same widget through `render` (Dither) stipples.
+    let base = Rgb565::new(0, 0, 0); // black back buffer
+    let over = Rgb565::new(31, 63, 31); // white panel
+    let midtone = Rgb565::new(
+        ((31u16 * 128) / 255) as u8,
+        ((63u16 * 128) / 255) as u8,
+        ((31u16 * 128) / 255) as u8,
+    );
+    // Flat, solid-fill panel style at 50% opacity (no gradient/border/shadow).
+    let style = Style {
+        background: Some(over),
+        opacity: 128,
+        ..Style::new()
+    };
+
+    // --- Composited (Blend) ---
+    let mut fb = Framebuffer::<{ 16 * 16 }>::new(16, 16);
+    fb.clear_color(base);
+    let mut gui = GuiContext::<4, 4, 8>::new(Rect::new(0, 0, 16, 16));
+    let panel = gui.add_panel(Rect::new(0, 0, 16, 16), style).unwrap();
+    gui.set_widget_opacity(panel, 128).unwrap();
+    gui.render_composited(&mut fb).unwrap();
+    assert_eq!(
+        fb.get_pixel(Point::new(8, 8)),
+        midtone,
+        "widget opacity must blend to the mid-tone under render_composited"
+    );
+
+    // --- Same widget tree, ordinary dithered render ---
+    let mut fb2 = Framebuffer::<{ 16 * 16 }>::new(16, 16);
+    fb2.clear_color(base);
+    gui.render(&mut fb2).unwrap();
+    let (mut any_on, mut any_off, mut any_mid) = (false, false, false);
+    for y in 0..16 {
+        for x in 0..16 {
+            match fb2.get_pixel(Point::new(x, y)) {
+                p if p == over => any_on = true,
+                p if p == base => any_off = true,
+                p if p == midtone => any_mid = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        !any_mid,
+        "dithered render must not produce blended mid-tones"
+    );
+    assert!(any_on && any_off, "dithered render should stipple on/off");
+}
+
+#[test]
+fn sweeping_arc_renders_and_grows_with_progress() {
+    let arc_color = Rgb565::new(28, 0, 15);
+    let mut gui = GuiContext::<4, 4, 8>::new(Rect::new(0, 0, 96, 64));
+    let arc = gui
+        .add_sweeping_arc(
+            Rect::new(0, 0, 96, 64),
+            0.25,
+            60,
+            12,
+            4,
+            Rgb565::new(5, 10, 5),
+            arc_color,
+            Rgb565::BLACK,
+            Style::panel(),
+        )
+        .unwrap();
+
+    let mut quarter = TestBuffer::new(96, 64);
+    gui.render(&mut quarter).unwrap();
+    let quarter_pixels = quarter.count_color(arc_color);
+    assert!(quarter_pixels > 0, "arc sweep should paint at 25%");
+
+    // Driving progress up (as WidgetAnimator does via set_progress) must
+    // enlarge the swept sector, and only mark the widget dirty.
+    gui.clear_dirty();
+    gui.set_progress(arc, 0.9).unwrap();
+    assert!(gui.pop_event().is_none());
+    assert!(!gui.dirty_regions().is_empty());
+
+    let mut most = TestBuffer::new(96, 64);
+    gui.render(&mut most).unwrap();
+    assert!(
+        most.count_color(arc_color) > quarter_pixels,
+        "90% sweep should paint more than 25%"
+    );
+}

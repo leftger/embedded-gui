@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use embedded_graphics_core::{
     Pixel,
     draw_target::DrawTarget,
@@ -280,6 +282,87 @@ pub enum BlendMode {
     Screen,
 }
 
+/// Capability trait for draw targets that can read back a pixel they've
+/// already written. Optional: the default opacity/blend APIs on
+/// [`RenderCtx`] only require [`DrawTarget`] and approximate translucency
+/// with ordered dithering, so they keep working on write-only displays.
+/// Implementing `PixelRead` additionally unlocks the `*_true_alpha` methods,
+/// which composite against the destination's actual current contents
+/// instead of dithering.
+pub trait PixelRead: DrawTarget {
+    fn get_pixel(&self, point: Point) -> Self::Color;
+}
+
+/// Pixel-plotting policy for a [`RenderCtx`]. Selected by the ctx's `C` type
+/// parameter so the *same* drawing calls composite differently depending on
+/// the target's capabilities — with no runtime branch and no specialization.
+///
+/// - [`Dither`] (the default) approximates translucency with ordered dithering
+///   and works on any write-only [`DrawTarget`].
+/// - [`Blend`] performs true per-pixel alpha compositing and requires a
+///   readback-capable target ([`PixelRead`]), e.g. a
+///   [`Framebuffer`](crate::Framebuffer).
+///
+/// `plot` receives screen-space coords already transformed and clipped, the
+/// layer-combined `opacity`, and the active layer blend mode + backdrop.
+pub trait Compositor<D: DrawTarget<Color = Rgb565>> {
+    fn plot(
+        target: &mut D,
+        x: i32,
+        y: i32,
+        color: Rgb565,
+        opacity: u8,
+        blend: BlendMode,
+        backdrop: Rgb565,
+    ) -> Result<(), D::Error>;
+}
+
+/// Ordered-dither compositor (default). No readback required.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Dither;
+
+/// True alpha-blending compositor. Requires a [`PixelRead`] target.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Blend;
+
+impl<D: DrawTarget<Color = Rgb565>> Compositor<D> for Dither {
+    fn plot(
+        target: &mut D,
+        x: i32,
+        y: i32,
+        color: Rgb565,
+        opacity: u8,
+        blend: BlendMode,
+        backdrop: Rgb565,
+    ) -> Result<(), D::Error> {
+        if !should_draw_at_opacity(x, y, opacity) {
+            return Ok(());
+        }
+        let color = apply_blend_mode(color, blend, backdrop);
+        target.draw_iter([Pixel(Point::new(x, y), color)])
+    }
+}
+
+impl<D: DrawTarget<Color = Rgb565> + PixelRead> Compositor<D> for Blend {
+    fn plot(
+        target: &mut D,
+        x: i32,
+        y: i32,
+        color: Rgb565,
+        opacity: u8,
+        blend: BlendMode,
+        backdrop: Rgb565,
+    ) -> Result<(), D::Error> {
+        if opacity == 0 {
+            return Ok(());
+        }
+        let bg = target.get_pixel(Point::new(x, y));
+        let blended = lerp_rgb565(bg, color, opacity);
+        let blended = apply_blend_mode(blended, blend, backdrop);
+        target.draw_iter([Pixel(Point::new(x, y), blended)])
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColorFormat {
     Rgb565,
@@ -368,7 +451,7 @@ impl StrokeStyle {
     }
 }
 
-pub struct RenderCtx<'a, D>
+pub struct RenderCtx<'a, D, C = Dither>
 where
     D: DrawTarget<Color = Rgb565>,
 {
@@ -381,9 +464,10 @@ where
     transform_len: usize,
     layer_stack: [LayerState; 8],
     layer_len: usize,
+    _compositor: PhantomData<C>,
 }
 
-impl<'a, D> RenderCtx<'a, D>
+impl<'a, D> RenderCtx<'a, D, Dither>
 where
     D: DrawTarget<Color = Rgb565>,
 {
@@ -398,6 +482,7 @@ where
             transform_len: 1,
             layer_stack: [LayerState::normal(); 8],
             layer_len: 1,
+            _compositor: PhantomData,
         }
     }
 
@@ -412,9 +497,40 @@ where
             transform_len: 1,
             layer_stack: [LayerState::normal(); 8],
             layer_len: 1,
+            _compositor: PhantomData,
         }
     }
+}
 
+impl<'a, D> RenderCtx<'a, D, Blend>
+where
+    D: DrawTarget<Color = Rgb565> + PixelRead,
+{
+    /// Like [`RenderCtx::new`], but every drawing call alpha-composites against
+    /// the target's current contents (true blending) instead of dithering.
+    /// Requires a readback-capable target ([`PixelRead`]), e.g. a
+    /// [`Framebuffer`](crate::Framebuffer).
+    pub fn compositing(target: &'a mut D, viewport: Rect) -> Self {
+        Self {
+            target,
+            clip: viewport,
+            dirty: None,
+            quality: RenderQuality::High,
+            backend_caps: RenderBackendCaps::software_rgb565(),
+            transform_stack: [Transform2D::IDENTITY; 8],
+            transform_len: 1,
+            layer_stack: [LayerState::normal(); 8],
+            layer_len: 1,
+            _compositor: PhantomData,
+        }
+    }
+}
+
+impl<'a, D, C> RenderCtx<'a, D, C>
+where
+    D: DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
     pub const fn clip(&self) -> Rect {
         self.clip
     }
@@ -1501,11 +1617,18 @@ where
         }
         let layer = self.current_layer();
         let combined_opacity = ((opacity as u16 * layer.opacity as u16) / 255) as u8;
-        if !should_draw_at_opacity(x, y, combined_opacity) {
-            return Ok(());
-        }
-        let color = apply_blend_mode(color, layer.blend, layer.backdrop);
-        self.target.draw_iter([Pixel(Point::new(x, y), color)])
+        // The compositor policy (`Dither` vs `Blend`) decides how the pixel
+        // lands: ordered dither for write-only targets, true alpha blend for
+        // readback-capable ones. Zero-cost — resolved by `C` at monomorphization.
+        C::plot(
+            self.target,
+            x,
+            y,
+            color,
+            combined_opacity,
+            layer.blend,
+            layer.backdrop,
+        )
     }
 
     fn visible_rect(&self, rect: Rect) -> Rect {
@@ -1551,6 +1674,73 @@ where
                 }
             }
         }
+    }
+}
+
+impl<'a, D, C> RenderCtx<'a, D, C>
+where
+    D: DrawTarget<Color = Rgb565> + PixelRead,
+    C: Compositor<D>,
+{
+    /// Alpha-composite `color` over whatever is already at `(x, y)` in the
+    /// destination, using true per-pixel blending (`lerp_rgb565`) rather
+    /// than the dithered approximation `pixel()` uses.
+    fn pixel_blended(&mut self, x: i32, y: i32, color: Rgb565, alpha: u8) -> Result<(), D::Error> {
+        let (x, y) = self.current_transform().apply(x, y);
+        if !self.clip.contains(x, y) {
+            return Ok(());
+        }
+        if let Some(dirty) = self.dirty {
+            if !dirty.contains(x, y) {
+                return Ok(());
+            }
+        }
+        let layer = self.current_layer();
+        let combined_alpha = ((alpha as u16 * layer.opacity as u16) / 255) as u8;
+        if combined_alpha == 0 {
+            return Ok(());
+        }
+        let backdrop = self.target.get_pixel(Point::new(x, y));
+        let blended = lerp_rgb565(backdrop, color, combined_alpha);
+        let blended = apply_blend_mode(blended, layer.blend, layer.backdrop);
+        self.target.draw_iter([Pixel(Point::new(x, y), blended)])
+    }
+
+    /// Like [`RenderCtx::fill_rect_alpha`], but alpha-composites against the
+    /// destination's real current pixels instead of dithering.
+    pub fn fill_rect_true_alpha(
+        &mut self,
+        rect: Rect,
+        color: Rgb565,
+        alpha: u8,
+    ) -> Result<(), D::Error> {
+        self.fill_rounded_rect_true_alpha(rect, 0, color, alpha)
+    }
+
+    /// Like [`RenderCtx::fill_rounded_rect_alpha`], but alpha-composites
+    /// against the destination's real current pixels instead of dithering.
+    pub fn fill_rounded_rect_true_alpha(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        color: Rgb565,
+        alpha: u8,
+    ) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || alpha == 0 {
+            return Ok(());
+        }
+        let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
+
+        for y in draw.y..draw.bottom() {
+            for x in draw.x..draw.right() {
+                if !in_rounded_rect(x, y, rect, radius) {
+                    continue;
+                }
+                self.pixel_blended(x, y, color, alpha)?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -2,7 +2,7 @@ use embedded_graphics_core::{draw_target::DrawTarget, pixelcolor::Rgb565};
 
 use crate::{
     geometry::{EdgeInsets, Rect},
-    render::{RenderCtx, TextAlign, TextStyle},
+    render::{Compositor, RenderCtx, TextAlign, TextStyle},
     style::{Border, Style},
 };
 
@@ -95,9 +95,10 @@ impl<'a> Block<'a> {
         )
     }
 
-    pub fn render<D>(self, rect: Rect, ctx: &mut RenderCtx<'_, D>) -> Result<(), D::Error>
+    pub fn render<D, C>(self, rect: Rect, ctx: &mut RenderCtx<'_, D, C>) -> Result<(), D::Error>
     where
         D: DrawTarget<Color = Rgb565>,
+        C: Compositor<D>,
     {
         if let Some(shadow) = self.style.shadow {
             let spread = ctx.shadow_spread_for(shadow.spread);

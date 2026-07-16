@@ -9,7 +9,7 @@ use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
     image::{ImageFit, ImageRef, ReelPlayer},
-    render::{RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
+    render::{Compositor, RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},
 };
@@ -115,6 +115,21 @@ pub enum WidgetKind<'a> {
         max: f32,
         start_deg: i32,
         end_deg: i32,
+    },
+    /// Countdown/progress sweep: a filled pie-sector that grows clockwise
+    /// with `progress` (0.0..=1.0) over a solid background, with a
+    /// rounded-rect "window" punched in the middle for a caller-drawn value
+    /// (e.g. a large countdown numeral in a font the crate doesn't own).
+    /// Numeric-only, so it needs no lifetime and is drivable by
+    /// [`crate::WidgetAnimator`] through `set_progress`.
+    SweepingArc {
+        progress: f32,
+        arc_radius: u32,
+        frame_inset: u16,
+        corner_radius: u8,
+        bg_color: Rgb565,
+        arc_color: Rgb565,
+        frame_color: Rgb565,
     },
     Chart {
         values: &'a [f32],
@@ -313,21 +328,27 @@ impl<'a> WidgetNode<'a> {
         !self.hidden() && !self.disabled() && self.flags.contains(WidgetFlags::FOCUSABLE)
     }
 
-    pub fn render<D>(&self, ctx: &mut RenderCtx<'_, D>, state: VisualState) -> Result<(), D::Error>
+    pub fn render<D, C>(
+        &self,
+        ctx: &mut RenderCtx<'_, D, C>,
+        state: VisualState,
+    ) -> Result<(), D::Error>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+        C: Compositor<D>,
     {
         self.render_at(ctx, self.rect, state)
     }
 
-    pub fn render_at<D>(
+    pub fn render_at<D, C>(
         &self,
-        ctx: &mut RenderCtx<'_, D>,
+        ctx: &mut RenderCtx<'_, D, C>,
         rect: Rect,
         state: VisualState,
     ) -> Result<(), D::Error>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+        C: Compositor<D>,
     {
         if self.hidden() {
             return Ok(());
@@ -440,6 +461,25 @@ impl<'a> WidgetNode<'a> {
                 end_deg,
             } => render_gauge_needle(
                 ctx, rect, value, min, max, start_deg, end_deg, self.style, state,
+            ),
+            WidgetKind::SweepingArc {
+                progress,
+                arc_radius,
+                frame_inset,
+                corner_radius,
+                bg_color,
+                arc_color,
+                frame_color,
+            } => render_sweeping_arc(
+                ctx,
+                rect,
+                progress,
+                arc_radius,
+                frame_inset,
+                corner_radius,
+                bg_color,
+                arc_color,
+                frame_color,
             ),
             WidgetKind::Chart {
                 values,
@@ -626,27 +666,29 @@ const fn default_flags(kind: WidgetKind<'_>) -> WidgetFlags {
     flags
 }
 
-fn render_panel<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_panel<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     style: WidgetStyle,
     state: VisualState,
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     Block::styled(style).render(rect, ctx)
 }
 
-fn render_label<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_label<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     text: &str,
     style: WidgetStyle,
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(VisualState::Normal);
     let block = Block::styled(style);
@@ -659,8 +701,8 @@ where
     )
 }
 
-fn render_button<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_button<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     text: &str,
     style: WidgetStyle,
@@ -668,6 +710,7 @@ fn render_button<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let active_style = style.resolve(state);
     let block = Block::styled(active_style);
@@ -682,8 +725,8 @@ where
     )
 }
 
-fn render_progress<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_progress<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     style: WidgetStyle,
@@ -691,6 +734,7 @@ fn render_progress<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -708,8 +752,8 @@ where
     Ok(())
 }
 
-fn render_toggle<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_toggle<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     label: &str,
     on: bool,
@@ -718,6 +762,7 @@ fn render_toggle<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -750,8 +795,8 @@ where
     )
 }
 
-fn render_checkbox<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_checkbox<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     label: &str,
     checked: bool,
@@ -760,6 +805,7 @@ fn render_checkbox<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -791,8 +837,8 @@ where
     )
 }
 
-fn render_slider<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_slider<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     min: f32,
@@ -802,6 +848,7 @@ fn render_slider<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -815,8 +862,8 @@ where
     ctx.fill_rect(Rect::new(knob_x, track_y - 2, 3, 5), style.accent)
 }
 
-fn render_value_label<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_value_label<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     label: &str,
     value: i32,
@@ -825,6 +872,7 @@ fn render_value_label<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -848,8 +896,8 @@ where
     )
 }
 
-fn render_icon_button<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_icon_button<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     icon: char,
     label: &str,
@@ -858,6 +906,7 @@ fn render_icon_button<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -880,8 +929,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_list<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_list<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     items: &[&str],
     selected: usize,
@@ -892,6 +941,7 @@ fn render_list<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -940,8 +990,8 @@ where
     Ok(())
 }
 
-fn render_scroll_view<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_scroll_view<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     offset_y: i32,
     content_h: u32,
@@ -950,6 +1000,7 @@ fn render_scroll_view<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -968,8 +1019,8 @@ where
     Ok(())
 }
 
-fn render_tabs<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_tabs<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     labels: &[&str],
     selected: usize,
@@ -978,6 +1029,7 @@ fn render_tabs<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1006,8 +1058,8 @@ where
     Ok(())
 }
 
-fn render_dialog<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_dialog<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     title: &str,
     body: &str,
@@ -1016,6 +1068,7 @@ fn render_dialog<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style)
@@ -1045,8 +1098,8 @@ where
     )
 }
 
-fn render_toast<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_toast<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     text: &str,
     ttl_ms: u32,
@@ -1055,6 +1108,7 @@ fn render_toast<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     if ttl_ms == 0 {
         return Ok(());
@@ -1084,8 +1138,8 @@ where
     )
 }
 
-fn render_meter<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_meter<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     min: f32,
@@ -1095,6 +1149,7 @@ fn render_meter<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1127,8 +1182,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_arc_gauge<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_arc_gauge<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     min: f32,
@@ -1145,6 +1200,7 @@ fn render_arc_gauge<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1195,8 +1251,41 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_gauge<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_sweeping_arc<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    progress: f32,
+    arc_radius: u32,
+    frame_inset: u16,
+    corner_radius: u8,
+    bg_color: Rgb565,
+    arc_color: Rgb565,
+    frame_color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    // Solid background behind the sweep.
+    ctx.fill_rect(rect, bg_color)?;
+    // Sweeping pie-sector, growing clockwise from 12 o'clock.
+    let cx = rect.x + rect.w as i32 / 2;
+    let cy = rect.y + rect.h as i32 / 2;
+    let sweep = progress.clamp(0.0, 1.0) * 360.0;
+    ctx.fill_sector_sweep(cx, cy, arc_radius, -90.0, sweep, arc_color)?;
+    // Rounded-rect "window" punched in the middle for the caller's value.
+    let inset = frame_inset as i32;
+    let fw = (rect.w as i32 - 2 * inset).max(0) as u32;
+    let fh = (rect.h as i32 - 2 * inset).max(0) as u32;
+    let frame = Rect::new(rect.x + inset, rect.y + inset, fw, fh);
+    ctx.fill_rounded_rect(frame, corner_radius, frame_color)?;
+    ctx.stroke_rounded_rect(frame, corner_radius, Border::one(frame_color))?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_gauge<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     min: f32,
@@ -1209,6 +1298,7 @@ fn render_gauge<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     render_arc_gauge(
         ctx,
@@ -1229,8 +1319,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_gauge_needle<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_gauge_needle<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: f32,
     min: f32,
@@ -1242,6 +1332,7 @@ fn render_gauge_needle<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1277,8 +1368,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_chart<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_chart<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     values: &[f32],
     min: f32,
@@ -1295,6 +1386,7 @@ fn render_chart<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1422,8 +1514,8 @@ where
     Ok(())
 }
 
-fn render_spinner<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_spinner<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     phase: f32,
     style: WidgetStyle,
@@ -1431,6 +1523,7 @@ fn render_spinner<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1452,8 +1545,8 @@ where
     )
 }
 
-fn render_dropdown<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_dropdown<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     items: &[&str],
     selected: usize,
@@ -1463,6 +1556,7 @@ fn render_dropdown<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1513,8 +1607,8 @@ where
     Ok(())
 }
 
-fn render_roller<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_roller<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     items: &[&str],
     selected: usize,
@@ -1523,6 +1617,7 @@ fn render_roller<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1556,8 +1651,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_table<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_table<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     rows: &[&[&str]],
     separators: bool,
@@ -1568,6 +1663,7 @@ fn render_table<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1604,8 +1700,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_arc_ticks<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn draw_arc_ticks<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     cx: i32,
     cy: i32,
     radius: u32,
@@ -1617,6 +1713,7 @@ fn draw_arc_ticks<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let major_ticks = major_ticks.max(1);
     let minor_ticks = minor_ticks.max(1);
@@ -1645,8 +1742,8 @@ where
     Ok(())
 }
 
-fn draw_gauge_value_label<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn draw_gauge_value_label<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     inner: Rect,
     value: f32,
     min: f32,
@@ -1655,6 +1752,7 @@ fn draw_gauge_value_label<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let range = (max - min).max(f32::EPSILON);
     let percent = (((value - min) / range).clamp(0.0, 1.0) * 100.0).round() as i32;
@@ -1675,8 +1773,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_textarea<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_textarea<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     text: &str,
     cursor: usize,
@@ -1688,6 +1786,7 @@ fn render_textarea<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1763,8 +1862,8 @@ fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_keyboard<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_keyboard<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     keys: &[char],
     selected: usize,
@@ -1776,6 +1875,7 @@ fn render_keyboard<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1838,8 +1938,8 @@ fn keyboard_key_for_layout(
     }
 }
 
-fn render_menu<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_menu<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     items: &[&str],
     selected: usize,
@@ -1848,6 +1948,7 @@ fn render_menu<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1889,8 +1990,8 @@ where
     Ok(())
 }
 
-fn render_image<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_image<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     image: ImageRef<'_>,
     fit: ImageFit,
@@ -1899,6 +2000,7 @@ fn render_image<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1907,8 +2009,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_peek_reveal<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_peek_reveal<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     icon: ImageRef<'_>,
     title: &str,
@@ -1919,6 +2021,7 @@ fn render_peek_reveal<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -1958,8 +2061,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_glance_tile<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_glance_tile<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     icon: char,
     title: &str,
@@ -1970,6 +2073,7 @@ fn render_glance_tile<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -2010,8 +2114,8 @@ where
     Ok(())
 }
 
-fn render_card_deck<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_card_deck<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     titles: &[&str],
     selected: usize,
@@ -2020,6 +2124,7 @@ fn render_card_deck<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -2037,8 +2142,8 @@ where
     Ok(())
 }
 
-fn render_reel<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_reel<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     player: ReelPlayer<'_>,
     fit: ImageFit,
@@ -2047,6 +2152,7 @@ fn render_reel<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -2079,8 +2185,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_state_surface<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_state_surface<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     surface: SurfaceState,
     title: &str,
@@ -2092,6 +2198,7 @@ fn render_state_surface<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style)
@@ -2161,8 +2268,8 @@ where
     Ok(())
 }
 
-fn render_heads_up_banner<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_heads_up_banner<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     level: NotificationLevel,
     text: &str,
@@ -2172,6 +2279,7 @@ fn render_heads_up_banner<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     if ttl_ms == 0 {
         return Ok(());
@@ -2195,8 +2303,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_notification_action_sheet<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_notification_action_sheet<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     level: NotificationLevel,
     title: &str,
@@ -2209,6 +2317,7 @@ fn render_notification_action_sheet<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     if !open {
         return Ok(());
@@ -2263,8 +2372,8 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_feed_timeline<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn render_feed_timeline<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     items: &[&str],
     selected: usize,
@@ -2276,6 +2385,7 @@ fn render_feed_timeline<D>(
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
@@ -2325,14 +2435,15 @@ where
     Ok(())
 }
 
-fn draw_i32_right<D>(
-    ctx: &mut RenderCtx<'_, D>,
+fn draw_i32_right<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     value: i32,
     color: Rgb565,
 ) -> Result<(), D::Error>
 where
     D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
 {
     let mut buf = [0u8; 12];
     let mut n = value.unsigned_abs();

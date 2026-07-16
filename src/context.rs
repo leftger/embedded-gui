@@ -1027,6 +1027,37 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn add_sweeping_arc<S>(
+        &mut self,
+        rect: Rect,
+        progress: f32,
+        arc_radius: u32,
+        frame_inset: u16,
+        corner_radius: u8,
+        bg_color: Rgb565,
+        arc_color: Rgb565,
+        frame_color: Rgb565,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::SweepingArc {
+                progress: progress.clamp(0.0, 1.0),
+                arc_radius,
+                frame_inset,
+                corner_radius,
+                bg_color,
+                arc_color,
+                frame_color,
+            },
+            style,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn add_gauge_needle<S>(
         &mut self,
         rect: Rect,
@@ -1511,6 +1542,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 Ok(())
             }
             WidgetKind::PeekReveal {
+                progress: ref mut v,
+                ..
+            } => {
+                *v = value.clamp(0.0, 1.0);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            WidgetKind::SweepingArc {
                 progress: ref mut v,
                 ..
             } => {
@@ -3123,6 +3162,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.render_into(&mut ctx, 0, 0, 255)
     }
 
+    /// Like [`GuiContext::render`], but every widget's translucency is composited
+    /// with true per-pixel alpha blending instead of ordered dithering. Requires
+    /// a readback-capable target ([`PixelRead`](crate::PixelRead)), e.g. a
+    /// [`Framebuffer`](crate::Framebuffer) used as a software back buffer.
+    pub fn render_composited<D>(&self, target: &mut D) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>
+            + crate::render::PixelRead,
+    {
+        let mut ctx = RenderCtx::compositing(target, self.viewport);
+        ctx.set_quality(self.render_quality);
+        self.render_into::<D, crate::render::Blend>(&mut ctx, 0, 0, 255)
+    }
+
     pub fn render_dirty<D>(&self, target: &mut D) -> Result<(), D::Error>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
@@ -3627,15 +3680,16 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
-    fn render_into<D>(
+    fn render_into<D, C>(
         &self,
-        ctx: &mut RenderCtx<'_, D>,
+        ctx: &mut RenderCtx<'_, D, C>,
         offset_x: i32,
         offset_y: i32,
         opacity: u8,
     ) -> Result<(), D::Error>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+        C: crate::render::Compositor<D>,
     {
         for node in &self.widgets {
             if !self.effective_visible(node.id) {
