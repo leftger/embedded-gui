@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "embedded-3dgfx",
  "embedded-graphics",
