@@ -539,6 +539,22 @@ where
         self.clip = clip;
     }
 
+    /// Draws any `embedded_graphics::Drawable` (e.g. an `embedded_text::TextBox`
+    /// built via [`crate::interop::text::text_box`], or an arranged
+    /// `embedded_layout` view group) onto this context's target, clipped to
+    /// the current [`clip`](Self::clip) rect.
+    #[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
+    pub fn draw_embedded_graphics<T>(&mut self, drawable: &T) -> Result<T::Output, D::Error>
+    where
+        T: embedded_graphics::Drawable<Color = Rgb565>,
+    {
+        use embedded_graphics::draw_target::DrawTargetExt;
+
+        let clip_rect: embedded_graphics::primitives::Rectangle = self.clip.into();
+        let mut clipped = self.target.clipped(&clip_rect);
+        drawable.draw(&mut clipped)
+    }
+
     pub const fn quality(&self) -> RenderQuality {
         self.quality
     }

@@ -35,9 +35,7 @@ impl TestBuffer {
     }
 
     pub fn clear_color(&mut self, color: Rgb565) {
-        for pixel in &mut self.pixels {
-            *pixel = color;
-        }
+        self.pixels.fill(color);
     }
 
     pub fn count_color(&self, color: Rgb565) -> usize {

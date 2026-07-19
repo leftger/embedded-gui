@@ -14,6 +14,8 @@ pub mod framebuffer;
 pub mod geometry;
 pub mod image;
 pub mod input;
+#[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
+pub mod interop;
 pub mod layout;
 mod math;
 pub mod present;
