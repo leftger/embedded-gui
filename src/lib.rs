@@ -27,10 +27,15 @@ pub mod style;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
+pub mod visual_widgets;
 pub mod transition_preset;
 pub mod widget;
 pub mod widget_animation;
 pub mod widgets;
+
+pub use visual_widgets::{BusyWheel, GaugeWidget};
+#[cfg(feature = "embedded-dsp")]
+pub use visual_widgets::{SpectrumAnalyzerWidget, TouchInputFilter};
 
 pub use animation::{
     Animation, AnimationError, AnimationHandlers, AnimationId, AnimationManager,

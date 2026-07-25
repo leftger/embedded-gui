@@ -122,13 +122,13 @@ impl<const N: usize> Framebuffer<N> {
         Some((y as usize) * (self.width as usize) + (x as usize))
     }
 
-    /// Apply Arm-2D Fast IIR Blur to the whole framebuffer.
+    /// Apply Fast IIR Blur to the whole framebuffer.
     pub fn apply_iir_blur(&mut self, blur_degree: u8) {
         let rect = Rect::new(0, 0, self.width, self.height);
         self.blur_rect(rect, blur_degree);
     }
 
-    /// Apply Arm-2D Fast IIR Blur to a sub-region `rect` of the framebuffer.
+    /// Apply Fast IIR Blur to a sub-region `rect` of the framebuffer.
     pub fn blur_rect(&mut self, rect: Rect, blur_degree: u8) {
         if blur_degree == 0 || self.width == 0 || self.height == 0 {
             return;
@@ -259,6 +259,34 @@ impl<const N: usize> Framebuffer<N> {
                 self.pixels[idx] = Rgb565::new(r_out, g_out, b_out);
             }
         }
+    }
+
+    /// Apply reverse colour (color inversion) filter to a sub-region `rect`.
+    pub fn reverse_colour_rect(&mut self, rect: Rect) {
+        let x0 = rect.x.max(0) as u32;
+        let y0 = rect.y.max(0) as u32;
+        let x1 = (rect.right() as u32).min(self.width);
+        let y1 = (rect.bottom() as u32).min(self.height);
+
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+
+        let w = self.width as usize;
+        for y in y0..y1 {
+            let row_start = y as usize * w;
+            for x in x0..x1 {
+                let idx = row_start + x as usize;
+                let c = self.pixels[idx];
+                self.pixels[idx] = Rgb565::new(31 - c.r(), 63 - c.g(), 31 - c.b());
+            }
+        }
+    }
+
+    /// Apply reverse colour filter to the whole framebuffer.
+    pub fn apply_reverse_colour(&mut self) {
+        let rect = Rect::new(0, 0, self.width, self.height);
+        self.reverse_colour_rect(rect);
     }
 }
 
@@ -473,6 +501,39 @@ impl<const N: usize> FramebufferRgba8888<N> {
                 };
             }
         }
+    }
+
+    /// Apply reverse colour (color inversion) filter to a sub-region `rect`.
+    pub fn reverse_colour_rect(&mut self, rect: Rect) {
+        let x0 = rect.x.max(0) as u32;
+        let y0 = rect.y.max(0) as u32;
+        let x1 = (rect.right() as u32).min(self.width);
+        let y1 = (rect.bottom() as u32).min(self.height);
+
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+
+        let w = self.width as usize;
+        for y in y0..y1 {
+            let row_start = y as usize * w;
+            for x in x0..x1 {
+                let idx = row_start + x as usize;
+                let p = self.pixels[idx];
+                self.pixels[idx] = Rgba8888 {
+                    r: 255 - p.r,
+                    g: 255 - p.g,
+                    b: 255 - p.b,
+                    a: p.a,
+                };
+            }
+        }
+    }
+
+    /// Apply reverse colour filter to the whole framebuffer.
+    pub fn apply_reverse_colour(&mut self) {
+        let rect = Rect::new(0, 0, self.width, self.height);
+        self.reverse_colour_rect(rect);
     }
 }
 

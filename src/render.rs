@@ -582,7 +582,7 @@ where
         }
     }
 
-    /// Apply Arm-2D Fast IIR Blur to a sub-region `rect` on the destination target.
+    /// Apply Fast IIR Blur to a sub-region `rect` on the destination target.
     pub fn blur_rect(&mut self, rect: Rect, blur_degree: u8) -> Result<(), D::Error> {
         let draw = self.visible_rect(rect);
         if draw.is_empty() || blur_degree == 0 {
@@ -718,6 +718,92 @@ where
             }
         }
 
+        Ok(())
+    }
+
+    /// Apply reverse colour (color inversion) filter on `rect` (PixelRead target).
+    pub fn reverse_colour_rect(&mut self, rect: Rect) -> Result<(), D::Error> {
+        let bounds = self.clip.intersection(rect);
+        if bounds.is_empty() {
+            return Ok(());
+        }
+        let x0 = bounds.x;
+        let y0 = bounds.y;
+        let x1 = bounds.right();
+        let y1 = bounds.bottom();
+
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let pt = Point::new(x, y);
+                let c = self.target.get_pixel(pt);
+                let inv = Rgb565::new(31 - c.r(), 63 - c.g(), 31 - c.b());
+                self.target.draw_iter([Pixel(pt, inv)])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Fill `rect` using a horizontal 1D line mask array.
+    pub fn fill_rect_horizontal_line_mask(
+        &mut self,
+        rect: Rect,
+        mask: &[u8],
+        color: Rgb565,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        if mask.is_empty() || opacity == 0 {
+            return Ok(());
+        }
+        let bounds = self.clip.intersection(rect);
+        if bounds.is_empty() {
+            return Ok(());
+        }
+
+        for y in bounds.y..bounds.bottom() {
+            for x in bounds.x..bounds.right() {
+                let mask_x = ((x - rect.x) as usize) % mask.len();
+                let alpha = ((mask[mask_x] as u32 * opacity as u32) >> 8) as u8;
+                if alpha == 0 {
+                    continue;
+                }
+                let pt = Point::new(x, y);
+                let bg = self.target.get_pixel(pt);
+                let blended = lerp_rgb565(bg, color, alpha);
+                self.target.draw_iter([Pixel(pt, blended)])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Fill `rect` using a vertical 1D line mask array.
+    pub fn fill_rect_vertical_line_mask(
+        &mut self,
+        rect: Rect,
+        mask: &[u8],
+        color: Rgb565,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        if mask.is_empty() || opacity == 0 {
+            return Ok(());
+        }
+        let bounds = self.clip.intersection(rect);
+        if bounds.is_empty() {
+            return Ok(());
+        }
+
+        for y in bounds.y..bounds.bottom() {
+            let mask_y = ((y - rect.y) as usize) % mask.len();
+            let alpha = ((mask[mask_y] as u32 * opacity as u32) >> 8) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            for x in bounds.x..bounds.right() {
+                let pt = Point::new(x, y);
+                let bg = self.target.get_pixel(pt);
+                let blended = lerp_rgb565(bg, color, alpha);
+                self.target.draw_iter([Pixel(pt, blended)])?;
+            }
+        }
         Ok(())
     }
 }

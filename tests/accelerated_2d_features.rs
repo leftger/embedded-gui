@@ -5,7 +5,7 @@ use embedded_gui::{
 };
 
 #[test]
-fn test_arm2d_iir_blur_all_formats() {
+fn test_iir_blur_all_formats() {
     // RGB565
     let mut fb_rgb = Framebuffer::<400>::new(20, 20);
     fb_rgb.clear_color(Rgb565::WHITE);
@@ -41,7 +41,7 @@ fn test_arm2d_iir_blur_all_formats() {
 }
 
 #[test]
-fn test_arm2d_render_ctx_blur_rect() {
+fn test_render_ctx_blur_rect() {
     let mut fb = Framebuffer::<400>::new(20, 20);
     fb.clear_color(Rgb565::WHITE);
     for y in 5..15 {
@@ -60,7 +60,7 @@ fn test_arm2d_render_ctx_blur_rect() {
 }
 
 #[test]
-fn test_arm2d_alpha_gradients_and_masking() {
+fn test_alpha_gradients_and_masking() {
     let mut fb = Framebuffer::<900>::new(30, 30);
     fb.clear_color(Rgb565::BLACK);
 
@@ -96,7 +96,7 @@ fn test_arm2d_alpha_gradients_and_masking() {
 }
 
 #[test]
-fn test_arm2d_tile_transforms_and_2xssaa() {
+fn test_tile_transforms_and_2xssaa() {
     let mut fb = Framebuffer::<400>::new(20, 20);
     fb.clear_color(Rgb565::BLACK);
 
@@ -131,3 +131,43 @@ fn test_arm2d_tile_transforms_and_2xssaa() {
     ctx.draw_image_transformed_ssaa(Rect::new(10, 10, 8, 8), img, 1.2, 30.0, 255, true)
         .unwrap();
 }
+
+#[test]
+fn test_reverse_colour_and_line_masks() {
+    let mut fb = Framebuffer::<400>::new(20, 20);
+    fb.clear_color(Rgb565::WHITE);
+
+    // Test reverse colour on sub-rect
+    fb.reverse_colour_rect(Rect::new(5, 5, 10, 10));
+    assert_eq!(fb.pixels()[5 * 20 + 5], Rgb565::BLACK);
+
+    {
+        let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 20, 20));
+        ctx.reverse_colour_rect(Rect::new(5, 5, 10, 10)).unwrap();
+    }
+    assert_eq!(fb.pixels()[5 * 20 + 5], Rgb565::WHITE); // Inverted back to white
+
+    // Test line masks
+    let h_mask = [255, 128, 64, 0];
+    let v_mask = [255, 128, 64, 0];
+    let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 20, 20));
+    ctx.fill_rect_horizontal_line_mask(Rect::new(0, 0, 4, 4), &h_mask, Rgb565::RED, 255).unwrap();
+    ctx.fill_rect_vertical_line_mask(Rect::new(10, 0, 4, 4), &v_mask, Rgb565::BLUE, 255).unwrap();
+}
+
+#[test]
+fn test_widgets_busy_wheel_and_gauge() {
+    use embedded_gui::{BusyWheel, GaugeWidget};
+
+    let mut fb = Framebuffer::<1600>::new(40, 40);
+    fb.clear_color(Rgb565::BLACK);
+
+    let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 40, 40));
+
+    let spinner = BusyWheel::new(20, 20, 12);
+    spinner.draw(&mut ctx).unwrap();
+
+    let gauge = GaugeWidget::new(Rect::new(0, 0, 30, 30), 0.0, 100.0);
+    gauge.draw(&mut ctx).unwrap();
+}
+
