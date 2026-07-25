@@ -88,8 +88,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-3dgfx"
-version = "0.3.0"
-source = "git+https://github.com/leftger/embedded-3dgfx.git?branch=master#12409affa228849338c1ffae4ea821b1c27e1641"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7012bfcc5f0a416237fe0613e8004ddd3d04b07aaff30ff54ae439570b64fbb7"
 dependencies = [
  "embedded-graphics-core",
  "embedded-graphics-framebuf",
@@ -112,7 +113,8 @@ dependencies = [
 [[package]]
 name = "embedded-dsp"
 version = "0.1.0"
-source = "git+https://github.com/leftger/embedded-dsp.git?branch=master#9406a343dee119df9ffcbf7de860ad6fd569fd84"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b5ed77a21797b1a88531ca81d58af6cf3cc06d05d7617c8f8cf20b3258b620c"
 dependencies = [
  "libm",
 ]
@@ -165,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "embedded-3dgfx",
  "embedded-dsp",
