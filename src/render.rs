@@ -264,13 +264,28 @@ impl Transform2D {
         }
     }
 
+    #[inline(always)]
+    pub fn is_identity(self) -> bool {
+        self.m11 == 1.0
+            && self.m12 == 0.0
+            && self.m21 == 0.0
+            && self.m22 == 1.0
+            && self.tx == 0.0
+            && self.ty == 0.0
+    }
+
+    #[inline(always)]
     pub fn apply(self, x: i32, y: i32) -> (i32, i32) {
-        let xf = x as f32;
-        let yf = y as f32;
-        (
-            (self.m11 * xf + self.m12 * yf + self.tx).round() as i32,
-            (self.m21 * xf + self.m22 * yf + self.ty).round() as i32,
-        )
+        if self.is_identity() {
+            (x, y)
+        } else {
+            let xf = x as f32;
+            let yf = y as f32;
+            (
+                (self.m11 * xf + self.m12 * yf + self.tx).round() as i32,
+                (self.m21 * xf + self.m22 * yf + self.ty).round() as i32,
+            )
+        }
     }
 }
 
@@ -291,6 +306,14 @@ pub enum BlendMode {
 /// instead of dithering.
 pub trait PixelRead: DrawTarget {
     fn get_pixel(&self, point: Point) -> Self::Color;
+}
+
+/// Capability trait for hardware display controllers (e.g. ST7789, ILI9341, SSD1306)
+/// supporting direct column/row address window setting (`set_address_window`).
+/// Allows rendering dirty regions by transmitting SPI/DMA transfers exclusively to
+/// the target sub-window instead of the full screen.
+pub trait WindowedDrawTarget: DrawTarget {
+    fn set_window(&mut self, area: &embedded_graphics_core::primitives::Rectangle) -> Result<(), Self::Error>;
 }
 
 /// Pixel-plotting policy for a [`RenderCtx`]. Selected by the ctx's `C` type
@@ -543,7 +566,7 @@ where
     /// built via [`crate::interop::text::text_box`], or an arranged
     /// `embedded_layout` view group) onto this context's target, clipped to
     /// the current [`clip`](Self::clip) rect.
-    #[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
+    #[cfg(any(feature = "embedded-text", feature = "embedded-layout", feature = "embedded-graphics"))]
     pub fn draw_embedded_graphics<T>(&mut self, drawable: &T) -> Result<T::Output, D::Error>
     where
         T: embedded_graphics::Drawable<Color = Rgb565>,
@@ -669,6 +692,23 @@ where
             return Ok(());
         }
         let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
+
+        let layer = self.current_layer();
+        let combined_opacity = ((opacity as u16 * layer.opacity as u16) / 255) as u8;
+
+        // Fast path for solid un-transformed rectangular fills:
+        // Leverages hardware fill_solid on the display target instead of per-pixel loops
+        if radius == 0
+            && combined_opacity == 255
+            && self.current_transform().is_identity()
+            && layer.blend == BlendMode::Normal
+        {
+            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                embedded_graphics_core::geometry::Point::new(draw.x, draw.y),
+                embedded_graphics_core::geometry::Size::new(draw.w, draw.h),
+            );
+            return self.target.fill_solid(&eg_rect, color);
+        }
 
         for y in draw.y..draw.bottom() {
             for x in draw.x..draw.right() {
@@ -1056,11 +1096,12 @@ where
         if radius <= 0 {
             return Ok(());
         }
-        for y in -radius..=radius {
-            for x in -radius..=radius {
-                if x * x + y * y <= radius * radius {
-                    self.pixel(center_x + x, center_y + y, color, 255)?;
-                }
+        let r_sq = radius * radius;
+        for dy in -radius..=radius {
+            let dx = ((r_sq - dy * dy) as f32).sqrt() as i32;
+            if dx >= 0 {
+                let w = (dx * 2 + 1) as u32;
+                self.fill_rect(Rect::new(center_x - dx, center_y + dy, w, 1), color)?;
             }
         }
         Ok(())
@@ -1584,21 +1625,27 @@ where
         font: FontId,
     ) -> Result<(), D::Error> {
         let glyph = glyph_rows(font, ch);
+        let layer = self.current_layer();
+        let fast_spans = opacity == 255
+            && layer.opacity == 255
+            && self.current_transform().is_identity()
+            && layer.blend == BlendMode::Normal;
+
         match font {
-            FontId::Tiny3x5 => {
+            FontId::Tiny3x5 | FontId::Medium4x7 | FontId::Custom(_) => {
                 for (row, bits) in glyph.iter().enumerate() {
-                    for col in 0..3 {
-                        if bits & (1 << (2 - col)) != 0 {
-                            self.pixel(x + col, y + row as i32, color, opacity)?;
-                        }
-                    }
-                }
-            }
-            FontId::Medium4x7 => {
-                for (row, bits) in glyph.iter().enumerate() {
-                    for col in 0..3 {
-                        if bits & (1 << (2 - col)) != 0 {
-                            self.pixel(x + col, y + row as i32, color, opacity)?;
+                    let ry = y + row as i32;
+                    if fast_spans && *bits == 0b111 {
+                        self.fill_rect(Rect::new(x, ry, 3, 1), color)?;
+                    } else if fast_spans && *bits == 0b110 {
+                        self.fill_rect(Rect::new(x, ry, 2, 1), color)?;
+                    } else if fast_spans && *bits == 0b011 {
+                        self.fill_rect(Rect::new(x + 1, ry, 2, 1), color)?;
+                    } else {
+                        for col in 0..3 {
+                            if bits & (1 << (2 - col)) != 0 {
+                                self.pixel(x + col, ry, color, opacity)?;
+                            }
                         }
                     }
                 }
@@ -1937,5 +1984,40 @@ fn kerning_adjust(prev: Option<char>, next: char, enabled: bool) -> i32 {
     match (prev, next) {
         (Some('A'), 'V') | (Some('A'), 'W') | (Some('T'), 'o') | (Some('L'), 'T') => -1,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transform2d_is_identity() {
+        let id = Transform2D::IDENTITY;
+        assert!(id.is_identity());
+        assert_eq!(id.apply(10, 20), (10, 20));
+
+        let tr = Transform2D::translation(5.0, 10.0);
+        assert!(!tr.is_identity());
+        assert_eq!(tr.apply(10, 20), (15, 30));
+    }
+
+    #[test]
+    fn test_fill_circle_scanline_spans_correctness() {
+        let mut buf = crate::test_buffer::TestBuffer::new(50, 50);
+        let mut ctx = RenderCtx::new(&mut buf, Rect::new(0, 0, 50, 50));
+
+        // Draw a circle of radius 10 at center (25, 25)
+        ctx.fill_circle(25, 25, 10, Rgb565::RED).unwrap();
+
+        // Center pixel must be red
+        assert_eq!(buf.pixel_at(25, 25), Some(Rgb565::RED));
+
+        // Points inside radius 10 must be red (e.g. 25 + 7, 25 + 7 => dist^2 = 98 <= 100)
+        assert_eq!(buf.pixel_at(32, 32), Some(Rgb565::RED));
+
+        // Points outside radius 10 must remain black (e.g. 25 + 11, 25)
+        assert_eq!(buf.pixel_at(37, 25), Some(Rgb565::BLACK));
+        assert_eq!(buf.pixel_at(25, 37), Some(Rgb565::BLACK));
     }
 }

@@ -1,12 +1,17 @@
 use std::{collections::HashMap, env, fs, path::PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=EMBEDDED_GUI_FONT_DIR");
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let out_file = out_dir.join("generated_ascii_3x5.rs");
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir missing"));
-    let assets_dir = manifest_dir.join("assets").join("fonts");
-    let map_3x5 = load_glyph_overrides(&assets_dir.join("ascii_3x5.txt"));
-    let map_4x7 = load_glyph_overrides(&assets_dir.join("ascii_4x7.txt"));
+    
+    let font_dir = env::var("EMBEDDED_GUI_FONT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| manifest_dir.join("assets").join("fonts"));
+
+    let map_3x5 = load_glyph_overrides(&font_dir.join("ascii_3x5.txt"));
+    let map_4x7 = load_glyph_overrides(&font_dir.join("ascii_4x7.txt"));
 
     let mut src = String::from("pub static ASCII_3X5_GLYPHS: [[u8; 5]; 95] = [\n");
     for code in 32u8..=126u8 {

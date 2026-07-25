@@ -29,6 +29,7 @@ micromath = ["dep:micromath"]
 # and add opt-in bridges to the wider embedded-graphics ecosystem.
 embedded-text = ["dep:embedded-text", "dep:embedded-graphics"]
 embedded-layout = ["dep:embedded-layout", "dep:embedded-graphics"]
+embedded-graphics = ["dep:embedded-graphics"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"

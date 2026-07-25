@@ -2831,8 +2831,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .filter(move |node| node.parent == Some(parent))
     }
 
+    #[inline]
     pub fn absolute_rect(&self, id: WidgetId) -> Option<Rect> {
         let node = self.node(id)?;
+        if node.parent.is_none() {
+            return Some(node.rect);
+        }
         let mut rect = node.rect;
         let mut parent = node.parent;
         let mut depth = 0;
@@ -3180,11 +3184,56 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
     {
-        if self.dirty.is_empty() {
+        let slice = self.dirty.as_slice();
+        if slice.is_empty() {
             return Ok(());
         }
 
-        for dirty in self.dirty.as_slice() {
+        if slice.len() == 1 {
+            let mut ctx = RenderCtx::with_dirty(target, self.viewport, slice[0]);
+            ctx.set_quality(self.render_quality);
+            return self.render_into(&mut ctx, 0, 0, 255);
+        }
+
+        if let Some(bound) = self.dirty.bounding_rect() {
+            let area_bound = bound.w as u64 * bound.h as u64;
+            let sum_area: u64 = slice.iter().map(|r| r.w as u64 * r.h as u64).sum();
+            // If bounding rect area is close to sum of individual areas (overlap or cluster),
+            // render bounding rect in 1 pass to avoid multiple tree sweeps
+            if area_bound <= sum_area + (sum_area / 2) {
+                let mut ctx = RenderCtx::with_dirty(target, self.viewport, bound);
+                ctx.set_quality(self.render_quality);
+                return self.render_into(&mut ctx, 0, 0, 255);
+            }
+        }
+
+        for dirty in slice {
+            let mut ctx = RenderCtx::with_dirty(target, self.viewport, *dirty);
+            ctx.set_quality(self.render_quality);
+            self.render_into(&mut ctx, 0, 0, 255)?;
+        }
+        Ok(())
+    }
+
+    /// Renders dirty regions to a hardware display controller implementing [`WindowedDrawTarget`].
+    /// Sets the physical controller's column/row window bounds (`set_window`) before rendering,
+    /// enabling hardware SPI/DMA transfers exclusively to the dirty sub-window.
+    pub fn render_dirty_windowed<D>(&self, target: &mut D) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>
+            + crate::render::WindowedDrawTarget,
+    {
+        let slice = self.dirty.as_slice();
+        if slice.is_empty() {
+            return Ok(());
+        }
+
+        for dirty in slice {
+            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                embedded_graphics_core::geometry::Point::new(dirty.x, dirty.y),
+                embedded_graphics_core::geometry::Size::new(dirty.w, dirty.h),
+            );
+            target.set_window(&eg_rect)?;
             let mut ctx = RenderCtx::with_dirty(target, self.viewport, *dirty);
             ctx.set_quality(self.render_quality);
             self.render_into(&mut ctx, 0, 0, 255)?;
