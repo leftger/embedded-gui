@@ -94,6 +94,9 @@ mod tests {
         assert_eq!(font_id.advance(), 8);
         assert_eq!(font_id.line_height(), 12);
         assert_eq!(packed_font(font_id).first_char, 32);
-        assert_eq!(glyph_rows(font_id, ' '), [0b111, 0b101, 0b111, 0b101, 0b101]);
+        assert_eq!(
+            glyph_rows(font_id, ' '),
+            [0b111, 0b101, 0b111, 0b101, 0b101]
+        );
     }
 }

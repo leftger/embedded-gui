@@ -27,8 +27,8 @@ pub mod style;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
-pub mod visual_widgets;
 pub mod transition_preset;
+pub mod visual_widgets;
 pub mod widget;
 pub mod widget_animation;
 pub mod widgets;
@@ -125,8 +125,8 @@ pub mod prelude {
         Animation, AnimationConflictPolicy, AnimationError, AnimationGroup, AnimationHandlers,
         AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
         AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, Blend, BlendMode,
-        Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition,
-        ChartMode, CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
+        Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, ChartMode,
+        CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
         ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
         Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
         EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,

@@ -6,8 +6,17 @@
 //! 3. `TouchInputFilter` — DSP Biquad touch & pointer coordinate damping (`embedded-dsp` integration)
 //! 4. `SpectrumAnalyzerWidget` — Real-time DSP signal & telemetry bar visualizer (`embedded-dsp` integration)
 
-use embedded_graphics_core::{draw_target::DrawTarget, pixelcolor::{Rgb565, RgbColor, WebColors}};
-use crate::{geometry::Rect, render::{PixelRead, RenderCtx}};
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
+
+use crate::{
+    geometry::Rect,
+    render::{PixelRead, RenderCtx},
+};
+use embedded_graphics_core::{
+    draw_target::DrawTarget,
+    pixelcolor::{Rgb565, RgbColor, WebColors},
+};
 
 /// Activity Indicator / Busy Wheel widget.
 ///
@@ -23,7 +32,6 @@ pub struct BusyWheel {
     pub color: Rgb565,
     pub opacity: u8,
 }
-
 
 impl BusyWheel {
     pub fn new(center_x: i32, center_y: i32, radius: u32) -> Self {
@@ -163,7 +171,11 @@ impl TouchInputFilter {
             state: &mut self.state_x,
         };
         let mut out_x = 0.0f32;
-        embedded_dsp::filtering::biquad_cascade_df1_f32(&mut inst_x, &[raw_x], core::slice::from_mut(&mut out_x));
+        embedded_dsp::filtering::biquad_cascade_df1_f32(
+            &mut inst_x,
+            &[raw_x],
+            core::slice::from_mut(&mut out_x),
+        );
 
         let mut inst_y = embedded_dsp::filtering::BiquadCascadeInstanceF32 {
             num_stages: 1,
@@ -171,7 +183,11 @@ impl TouchInputFilter {
             state: &mut self.state_y,
         };
         let mut out_y = 0.0f32;
-        embedded_dsp::filtering::biquad_cascade_df1_f32(&mut inst_y, &[raw_y], core::slice::from_mut(&mut out_y));
+        embedded_dsp::filtering::biquad_cascade_df1_f32(
+            &mut inst_y,
+            &[raw_y],
+            core::slice::from_mut(&mut out_y),
+        );
 
         (out_x, out_y)
     }

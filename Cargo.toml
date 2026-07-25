@@ -40,7 +40,7 @@ micromath = {version = "2.1", optional = true}
 embedded-graphics = { version = "0.8", optional = true }
 embedded-text = { version = "0.7.3", optional = true }
 embedded-layout = { version = "0.4.2", optional = true }
-embedded-dsp = { path = "../embedded-dsp", optional = true }
+embedded-dsp = { git = "https://github.com/leftger/embedded-dsp.git", branch = "master", optional = true }
 
 [dev-dependencies]
 embedded-3dgfx = { git = "https://github.com/leftger/embedded-3dgfx.git", branch = "master" }

@@ -347,7 +347,10 @@ pub trait PixelRead: DrawTarget {
 /// Allows rendering dirty regions by transmitting SPI/DMA transfers exclusively to
 /// the target sub-window instead of the full screen.
 pub trait WindowedDrawTarget: DrawTarget {
-    fn set_window(&mut self, area: &embedded_graphics_core::primitives::Rectangle) -> Result<(), Self::Error>;
+    fn set_window(
+        &mut self,
+        area: &embedded_graphics_core::primitives::Rectangle,
+    ) -> Result<(), Self::Error>;
 }
 
 /// Pixel-plotting policy for a [`RenderCtx`]. Selected by the ctx's `C` type
@@ -652,7 +655,8 @@ where
             }
 
             for (i, x) in (x0..x1).take(r_len).enumerate() {
-                self.target.draw_iter([Pixel(Point::new(x, y), row_buf[i])])?;
+                self.target
+                    .draw_iter([Pixel(Point::new(x, y), row_buf[i])])?;
             }
         }
 
@@ -714,7 +718,8 @@ where
             }
 
             for (i, y) in (y0..y1).take(c_len).enumerate() {
-                self.target.draw_iter([Pixel(Point::new(x, y), col_buf[i])])?;
+                self.target
+                    .draw_iter([Pixel(Point::new(x, y), col_buf[i])])?;
             }
         }
 
@@ -825,7 +830,11 @@ where
     /// built via [`crate::interop::text::text_box`], or an arranged
     /// `embedded_layout` view group) onto this context's target, clipped to
     /// the current [`clip`](Self::clip) rect.
-    #[cfg(any(feature = "embedded-text", feature = "embedded-layout", feature = "embedded-graphics"))]
+    #[cfg(any(
+        feature = "embedded-text",
+        feature = "embedded-layout",
+        feature = "embedded-graphics"
+    ))]
     pub fn draw_embedded_graphics<T>(&mut self, drawable: &T) -> Result<T::Output, D::Error>
     where
         T: embedded_graphics::Drawable<Color = Rgb565>,
@@ -2317,10 +2326,10 @@ where
                         }
                     }
 
-                    if weight > 0 {
-                        let r_avg = (r_sum / weight) as u8;
-                        let g_avg = (g_sum / weight) as u8;
-                        let b_avg = (b_sum / weight) as u8;
+                    if let Some(w) = (weight > 0).then_some(weight) {
+                        let r_avg = (r_sum / w) as u8;
+                        let g_avg = (g_sum / w) as u8;
+                        let b_avg = (b_sum / w) as u8;
                         let color = Rgb565::new(r_avg, g_avg, b_avg);
                         let pix_opacity = ((weight * opacity as u32 + 2) / 4) as u8;
                         self.pixel(x, y, color, pix_opacity)?;

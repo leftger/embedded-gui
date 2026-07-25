@@ -26,7 +26,9 @@ fn test_dsp_spectrum_analyzer_widget() {
     let mut fb = Framebuffer::<1600>::new(40, 40);
     fb.clear_color(Rgb565::BLACK);
 
-    let samples: [f32; 16] = [0.1, 0.5, 0.9, 0.2, 0.4, 0.8, 0.3, 0.6, 0.2, 0.7, 0.5, 0.1, 0.3, 0.6, 0.8, 0.4];
+    let samples: [f32; 16] = [
+        0.1, 0.5, 0.9, 0.2, 0.4, 0.8, 0.3, 0.6, 0.2, 0.7, 0.5, 0.1, 0.3, 0.6, 0.8, 0.4,
+    ];
     let analyzer = SpectrumAnalyzerWidget::new(Rect::new(0, 0, 40, 40), &samples);
 
     let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 40, 40));

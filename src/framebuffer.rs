@@ -29,9 +29,24 @@ pub struct Rgba8888 {
 }
 
 impl Rgba8888 {
-    pub const BLACK: Self = Self { r: 0, g: 0, b: 0, a: 255 };
-    pub const WHITE: Self = Self { r: 255, g: 255, b: 255, a: 255 };
-    pub const TRANSPARENT: Self = Self { r: 0, g: 0, b: 0, a: 0 };
+    pub const BLACK: Self = Self {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+    pub const WHITE: Self = Self {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+    pub const TRANSPARENT: Self = Self {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
+    };
 
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
@@ -44,7 +59,12 @@ impl Rgba8888 {
         let r8 = (r5 << 3) | (r5 >> 2);
         let g8 = (g6 << 2) | (g6 >> 4);
         let b8 = (b5 << 3) | (b5 >> 2);
-        Self { r: r8, g: g8, b: b8, a: alpha }
+        Self {
+            r: r8,
+            g: g8,
+            b: b8,
+            a: alpha,
+        }
     }
 
     pub fn to_rgb565(self) -> Rgb565 {
@@ -782,4 +802,3 @@ mod tests {
         assert!(center_pixel > 0 && center_pixel < 255);
     }
 }
-

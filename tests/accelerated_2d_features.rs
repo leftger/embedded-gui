@@ -79,10 +79,7 @@ fn test_alpha_gradients_and_masking() {
 
     // Test 8-bit alpha mask blending
     let mask: [u8; 16] = [
-        255, 128, 64, 0,
-        255, 128, 64, 0,
-        255, 128, 64, 0,
-        255, 128, 64, 0,
+        255, 128, 64, 0, 255, 128, 64, 0, 255, 128, 64, 0, 255, 128, 64, 0,
     ];
     ctx.fill_rect_alpha_mask(Rect::new(0, 15, 4, 4), &mask, 4, Rgb565::YELLOW, 255)
         .unwrap();
@@ -102,10 +99,8 @@ fn test_tile_transforms_and_2xssaa() {
 
     // Create a 4x4 test texture
     let raw_pixels: [u16; 16] = [
-        0xF800, 0x07E0, 0x001F, 0xFFFF,
-        0xF800, 0x07E0, 0x001F, 0xFFFF,
-        0xF800, 0x07E0, 0x001F, 0xFFFF,
-        0xF800, 0x07E0, 0x001F, 0xFFFF,
+        0xF800, 0x07E0, 0x001F, 0xFFFF, 0xF800, 0x07E0, 0x001F, 0xFFFF, 0xF800, 0x07E0, 0x001F,
+        0xFFFF, 0xF800, 0x07E0, 0x001F, 0xFFFF,
     ];
 
     let tile_repeat = TileRef::new(4, 4, &raw_pixels, TileMode::Repeat);
@@ -151,8 +146,10 @@ fn test_reverse_colour_and_line_masks() {
     let h_mask = [255, 128, 64, 0];
     let v_mask = [255, 128, 64, 0];
     let mut ctx = RenderCtx::compositing(&mut fb, Rect::new(0, 0, 20, 20));
-    ctx.fill_rect_horizontal_line_mask(Rect::new(0, 0, 4, 4), &h_mask, Rgb565::RED, 255).unwrap();
-    ctx.fill_rect_vertical_line_mask(Rect::new(10, 0, 4, 4), &v_mask, Rgb565::BLUE, 255).unwrap();
+    ctx.fill_rect_horizontal_line_mask(Rect::new(0, 0, 4, 4), &h_mask, Rgb565::RED, 255)
+        .unwrap();
+    ctx.fill_rect_vertical_line_mask(Rect::new(10, 0, 4, 4), &v_mask, Rgb565::BLUE, 255)
+        .unwrap();
 }
 
 #[test]
@@ -170,4 +167,3 @@ fn test_widgets_busy_wheel_and_gauge() {
     let gauge = GaugeWidget::new(Rect::new(0, 0, 30, 30), 0.0, 100.0);
     gauge.draw(&mut ctx).unwrap();
 }
-

@@ -1,0 +1,140 @@
+# Shared CI template. Keep jobs in sync; customize only the env block per repo.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "1"
+  MSRV: "1.88"
+  NO_STD_TARGET: thumbv7em-none-eabihf
+  NO_STD_CARGO_ARGS: "--no-default-features --features libm"
+  CLIPPY_ARGS: "--lib --all-features"
+  DOCS_ARGS: "--lib --no-deps --all-features"
+  CHECK_ARGS: "--lib --all-features"
+  CI_HOST_TARGET: ""
+  CI_UNIT_TEST_ARGS: "--lib --all-features"
+  CI_INTEGRATION_TEST_ARGS: "--all-features"
+  CI_EXTRA_TEST_COMMANDS: ""
+  CI_INTEGRATION_CHECK: "true"
+  CI_INTEGRATION_CHECK_CMD: "cargo build --examples --all-features"
+  NEEDS_SDL: "true"
+
+jobs:
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          if [ -n "${{ env.CI_HOST_TARGET }}" ]; then
+            cargo check ${{ env.CHECK_ARGS }} --target ${{ env.CI_HOST_TARGET }}
+          else
+            cargo check ${{ env.CHECK_ARGS }}
+          fi
+
+  check-no-std:
+    name: Check (no_std)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.NO_STD_TARGET }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --lib ${{ env.NO_STD_CARGO_ARGS }} --target ${{ env.NO_STD_TARGET }}
+
+  msrv:
+    name: MSRV check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.MSRV }}
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          if [ -n "${{ env.CI_HOST_TARGET }}" ]; then
+            cargo check ${{ env.CHECK_ARGS }} --target ${{ env.CI_HOST_TARGET }}
+          else
+            cargo check ${{ env.CHECK_ARGS }}
+          fi
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy ${{ env.CLIPPY_ARGS }} -- -W clippy::all
+      - run: rustup target add ${{ env.NO_STD_TARGET }}
+      - run: cargo clippy --lib ${{ env.NO_STD_CARGO_ARGS }} --target ${{ env.NO_STD_TARGET }} -- -W clippy::all
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install SDL2
+        if: ${{ env.NEEDS_SDL == 'true' }}
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - run: bash .github/scripts/ci_test.sh
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc ${{ env.DOCS_ARGS }}
+
+  publish-dry-run:
+    name: Publish dry-run
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --dry-run
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
