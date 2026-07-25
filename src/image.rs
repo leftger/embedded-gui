@@ -35,6 +35,75 @@ impl<'a> ImageRef<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileMode {
+    None,
+    Repeat,
+    Mirror,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TileRef<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: &'a [u16],
+    pub mode: TileMode,
+}
+
+impl<'a> TileRef<'a> {
+    pub const fn new(width: u32, height: u32, pixels: &'a [u16], mode: TileMode) -> Self {
+        Self {
+            width,
+            height,
+            pixels,
+            mode,
+        }
+    }
+
+    pub const fn from_image(image: ImageRef<'a>, mode: TileMode) -> Self {
+        Self {
+            width: image.width,
+            height: image.height,
+            pixels: image.pixels,
+            mode,
+        }
+    }
+
+    pub fn get_pixel(&self, u: i32, v: i32) -> Option<embedded_graphics_core::pixelcolor::Rgb565> {
+        let w = self.width as i32;
+        let h = self.height as i32;
+        if w <= 0 || h <= 0 {
+            return None;
+        }
+
+        let (u_final, v_final) = match self.mode {
+            TileMode::None => {
+                if u < 0 || v < 0 || u >= w || v >= h {
+                    return None;
+                }
+                (u as usize, v as usize)
+            }
+            TileMode::Repeat => (u.rem_euclid(w) as usize, v.rem_euclid(h) as usize),
+            TileMode::Mirror => {
+                let m_u = u.rem_euclid(2 * w);
+                let m_v = v.rem_euclid(2 * h);
+                let final_u = if m_u >= w { 2 * w - 1 - m_u } else { m_u };
+                let final_v = if m_v >= h { 2 * h - 1 - m_v } else { m_v };
+                (final_u as usize, final_v as usize)
+            }
+        };
+
+        let idx = v_final * self.width as usize + u_final;
+        self.pixels.get(idx).map(|&raw| {
+            embedded_graphics_core::pixelcolor::Rgb565::new(
+                ((raw >> 11) & 0x1F) as u8,
+                ((raw >> 5) & 0x3F) as u8,
+                (raw & 0x1F) as u8,
+            )
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteSheet<'a> {
     pub image: ImageRef<'a>,
     pub sprite_w: u32,

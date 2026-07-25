@@ -78,6 +78,127 @@ impl LinearGradient {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AlphaLinearGradient {
+    pub start_color: Rgb565,
+    pub start_alpha: u8,
+    pub end_color: Rgb565,
+    pub end_alpha: u8,
+    pub direction: GradientDirection,
+}
+
+impl AlphaLinearGradient {
+    pub const fn new(
+        start_color: Rgb565,
+        start_alpha: u8,
+        end_color: Rgb565,
+        end_alpha: u8,
+        direction: GradientDirection,
+    ) -> Self {
+        Self {
+            start_color,
+            start_alpha,
+            end_color,
+            end_alpha,
+            direction,
+        }
+    }
+
+    pub const fn vertical(
+        start_color: Rgb565,
+        start_alpha: u8,
+        end_color: Rgb565,
+        end_alpha: u8,
+    ) -> Self {
+        Self::new(
+            start_color,
+            start_alpha,
+            end_color,
+            end_alpha,
+            GradientDirection::Vertical,
+        )
+    }
+
+    pub const fn horizontal(
+        start_color: Rgb565,
+        start_alpha: u8,
+        end_color: Rgb565,
+        end_alpha: u8,
+    ) -> Self {
+        Self::new(
+            start_color,
+            start_alpha,
+            end_color,
+            end_alpha,
+            GradientDirection::Horizontal,
+        )
+    }
+
+    pub fn sample(&self, t: u8) -> (Rgb565, u8) {
+        let color = lerp_rgb565_public(self.start_color, self.end_color, t);
+        let alpha = lerp_u8(self.start_alpha, self.end_alpha, t);
+        (color, alpha)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AlphaRadialGradient {
+    pub center_x: f32,
+    pub center_y: f32,
+    pub radius: f32,
+    pub start_color: Rgb565,
+    pub start_alpha: u8,
+    pub end_color: Rgb565,
+    pub end_alpha: u8,
+}
+
+impl AlphaRadialGradient {
+    pub fn new(
+        center_x: f32,
+        center_y: f32,
+        radius: f32,
+        start_color: Rgb565,
+        start_alpha: u8,
+        end_color: Rgb565,
+        end_alpha: u8,
+    ) -> Self {
+        Self {
+            center_x,
+            center_y,
+            radius: if radius <= 0.0 { 1.0 } else { radius },
+            start_color,
+            start_alpha,
+            end_color,
+            end_alpha,
+        }
+    }
+
+    pub fn sample_at_dist(&self, dist: f32) -> (Rgb565, u8) {
+        let t = (dist / self.radius).clamp(0.0, 1.0);
+        let t_u8 = (t * 255.0) as u8;
+        let color = lerp_rgb565_public(self.start_color, self.end_color, t_u8);
+        let alpha = lerp_u8(self.start_alpha, self.end_alpha, t_u8);
+        (color, alpha)
+    }
+}
+
+#[inline]
+pub fn lerp_u8(a: u8, b: u8, t: u8) -> u8 {
+    let t = t as u32;
+    let inv = 255u32 - t;
+    (((a as u32 * inv) + (b as u32 * t)) / 255) as u8
+}
+
+#[inline]
+pub fn lerp_rgb565_public(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
+    let t = t as u16;
+    let inv = 255u16.saturating_sub(t);
+    let r = ((a.r() as u16 * inv) + (b.r() as u16 * t)) / 255;
+    let g = ((a.g() as u16 * inv) + (b.g() as u16 * t)) / 255;
+    let bb = ((a.b() as u16 * inv) + (b.b() as u16 * t)) / 255;
+    Rgb565::new(r as u8, g as u8, bb as u8)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Style {
     pub background: Option<Rgb565>,
     pub gradient: Option<LinearGradient>,

@@ -110,6 +110,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-dsp"
+version = "0.1.0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "embedded-graphics"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -160,6 +167,7 @@ name = "embedded-gui"
 version = "0.1.2"
 dependencies = [
  "embedded-3dgfx",
+ "embedded-dsp",
  "embedded-graphics",
  "embedded-graphics-core",
  "embedded-graphics-framebuf",

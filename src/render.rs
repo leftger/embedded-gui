@@ -12,8 +12,8 @@ use crate::math::F32Ext as _;
 use crate::{
     font::{FontId, glyph_rows},
     geometry::Rect,
-    image::{ImageFit, ImageRef},
-    style::{Border, GradientDirection, LinearGradient},
+    image::{ImageFit, ImageRef, TileMode, TileRef},
+    style::{AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient},
     text,
 };
 
@@ -287,6 +287,40 @@ impl Transform2D {
             )
         }
     }
+
+    #[inline(always)]
+    pub fn apply_f32(self, x: f32, y: f32) -> (f32, f32) {
+        if self.is_identity() {
+            (x, y)
+        } else {
+            (
+                self.m11 * x + self.m12 * y + self.tx,
+                self.m21 * x + self.m22 * y + self.ty,
+            )
+        }
+    }
+
+    pub fn inverse(self) -> Option<Self> {
+        let det = self.m11 * self.m22 - self.m12 * self.m21;
+        if det.abs() < 1e-7 {
+            return None;
+        }
+        let inv_det = 1.0 / det;
+        let m11 = self.m22 * inv_det;
+        let m12 = -self.m12 * inv_det;
+        let m21 = -self.m21 * inv_det;
+        let m22 = self.m11 * inv_det;
+        let tx = (self.m12 * self.ty - self.m22 * self.tx) * inv_det;
+        let ty = (self.m21 * self.tx - self.m11 * self.ty) * inv_det;
+        Some(Self {
+            m11,
+            m12,
+            m21,
+            m22,
+            tx,
+            ty,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -546,6 +580,145 @@ where
             layer_len: 1,
             _compositor: PhantomData,
         }
+    }
+
+    /// Apply Arm-2D Fast IIR Blur to a sub-region `rect` on the destination target.
+    pub fn blur_rect(&mut self, rect: Rect, blur_degree: u8) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || blur_degree == 0 {
+            return Ok(());
+        }
+        let x0 = draw.x;
+        let y0 = draw.y;
+        let x1 = draw.right();
+        let y1 = draw.bottom();
+        let alpha = 256 - (blur_degree as i32);
+
+        let mut row_buf = [Rgb565::BLACK; 1024];
+        let w_buf = ((x1 - x0) as usize).min(1024);
+
+        // Horizontal forward & reverse passes (row by row)
+        for y in y0..y1 {
+            let r_len = ((x1 - x0) as usize).min(w_buf);
+            if r_len == 0 {
+                continue;
+            }
+            for (i, x) in (x0..x1).take(r_len).enumerate() {
+                row_buf[i] = self.target.get_pixel(Point::new(x, y));
+            }
+
+            // Forward H pass
+            let p0 = row_buf[0];
+            let (r5, g6, b5) = (p0.r(), p0.g(), p0.b());
+            let mut acc_r = (((r5 << 3) | (r5 >> 2)) as i32) << 8;
+            let mut acc_g = (((g6 << 2) | (g6 >> 4)) as i32) << 8;
+            let mut acc_b = (((b5 << 3) | (b5 >> 2)) as i32) << 8;
+
+            for p in row_buf[..r_len].iter_mut() {
+                let (r5, g6, b5) = (p.r(), p.g(), p.b());
+                let r8 = ((r5 << 3) | (r5 >> 2)) as i32;
+                let g8 = ((g6 << 2) | (g6 >> 4)) as i32;
+                let b8 = ((b5 << 3) | (b5 >> 2)) as i32;
+                acc_r += (((r8 << 8) - acc_r) * alpha) >> 8;
+                acc_g += (((g8 << 8) - acc_g) * alpha) >> 8;
+                acc_b += (((b8 << 8) - acc_b) * alpha) >> 8;
+                *p = Rgb565::new(
+                    ((acc_r >> 8).clamp(0, 255) as u8) >> 3,
+                    ((acc_g >> 8).clamp(0, 255) as u8) >> 2,
+                    ((acc_b >> 8).clamp(0, 255) as u8) >> 3,
+                );
+            }
+
+            // Reverse H pass
+            let p_last = row_buf[r_len - 1];
+            let (r5, g6, b5) = (p_last.r(), p_last.g(), p_last.b());
+            let mut acc_r = (((r5 << 3) | (r5 >> 2)) as i32) << 8;
+            let mut acc_g = (((g6 << 2) | (g6 >> 4)) as i32) << 8;
+            let mut acc_b = (((b5 << 3) | (b5 >> 2)) as i32) << 8;
+
+            for p in row_buf[..r_len].iter_mut().rev() {
+                let (r5, g6, b5) = (p.r(), p.g(), p.b());
+                let r8 = ((r5 << 3) | (r5 >> 2)) as i32;
+                let g8 = ((g6 << 2) | (g6 >> 4)) as i32;
+                let b8 = ((b5 << 3) | (b5 >> 2)) as i32;
+                acc_r += (((r8 << 8) - acc_r) * alpha) >> 8;
+                acc_g += (((g8 << 8) - acc_g) * alpha) >> 8;
+                acc_b += (((b8 << 8) - acc_b) * alpha) >> 8;
+                *p = Rgb565::new(
+                    ((acc_r >> 8).clamp(0, 255) as u8) >> 3,
+                    ((acc_g >> 8).clamp(0, 255) as u8) >> 2,
+                    ((acc_b >> 8).clamp(0, 255) as u8) >> 3,
+                );
+            }
+
+            for (i, x) in (x0..x1).take(r_len).enumerate() {
+                self.target.draw_iter([Pixel(Point::new(x, y), row_buf[i])])?;
+            }
+        }
+
+        // Vertical forward & reverse passes (column by column)
+        let mut col_buf = [Rgb565::BLACK; 1024];
+        let h_buf = ((y1 - y0) as usize).min(1024);
+
+        for x in x0..x1 {
+            let c_len = ((y1 - y0) as usize).min(h_buf);
+            if c_len == 0 {
+                continue;
+            }
+            for (i, y) in (y0..y1).take(c_len).enumerate() {
+                col_buf[i] = self.target.get_pixel(Point::new(x, y));
+            }
+
+            // Forward V pass
+            let p0 = col_buf[0];
+            let (r5, g6, b5) = (p0.r(), p0.g(), p0.b());
+            let mut acc_r = (((r5 << 3) | (r5 >> 2)) as i32) << 8;
+            let mut acc_g = (((g6 << 2) | (g6 >> 4)) as i32) << 8;
+            let mut acc_b = (((b5 << 3) | (b5 >> 2)) as i32) << 8;
+
+            for p in col_buf[..c_len].iter_mut() {
+                let (r5, g6, b5) = (p.r(), p.g(), p.b());
+                let r8 = ((r5 << 3) | (r5 >> 2)) as i32;
+                let g8 = ((g6 << 2) | (g6 >> 4)) as i32;
+                let b8 = ((b5 << 3) | (b5 >> 2)) as i32;
+                acc_r += (((r8 << 8) - acc_r) * alpha) >> 8;
+                acc_g += (((g8 << 8) - acc_g) * alpha) >> 8;
+                acc_b += (((b8 << 8) - acc_b) * alpha) >> 8;
+                *p = Rgb565::new(
+                    ((acc_r >> 8).clamp(0, 255) as u8) >> 3,
+                    ((acc_g >> 8).clamp(0, 255) as u8) >> 2,
+                    ((acc_b >> 8).clamp(0, 255) as u8) >> 3,
+                );
+            }
+
+            // Reverse V pass
+            let p_last = col_buf[c_len - 1];
+            let (r5, g6, b5) = (p_last.r(), p_last.g(), p_last.b());
+            let mut acc_r = (((r5 << 3) | (r5 >> 2)) as i32) << 8;
+            let mut acc_g = (((g6 << 2) | (g6 >> 4)) as i32) << 8;
+            let mut acc_b = (((b5 << 3) | (b5 >> 2)) as i32) << 8;
+
+            for p in col_buf[..c_len].iter_mut().rev() {
+                let (r5, g6, b5) = (p.r(), p.g(), p.b());
+                let r8 = ((r5 << 3) | (r5 >> 2)) as i32;
+                let g8 = ((g6 << 2) | (g6 >> 4)) as i32;
+                let b8 = ((b5 << 3) | (b5 >> 2)) as i32;
+                acc_r += (((r8 << 8) - acc_r) * alpha) >> 8;
+                acc_g += (((g8 << 8) - acc_g) * alpha) >> 8;
+                acc_b += (((b8 << 8) - acc_b) * alpha) >> 8;
+                *p = Rgb565::new(
+                    ((acc_r >> 8).clamp(0, 255) as u8) >> 3,
+                    ((acc_g >> 8).clamp(0, 255) as u8) >> 2,
+                    ((acc_b >> 8).clamp(0, 255) as u8) >> 3,
+                );
+            }
+
+            for (i, y) in (y0..y1).take(c_len).enumerate() {
+                self.target.draw_iter([Pixel(Point::new(x, y), col_buf[i])])?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1804,6 +1977,287 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Fill a rectangle with an 8-bit alpha mask and solid color.
+    pub fn fill_rect_alpha_mask(
+        &mut self,
+        rect: Rect,
+        mask: &[u8],
+        mask_stride: usize,
+        color: Rgb565,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || opacity == 0 || mask_stride == 0 {
+            return Ok(());
+        }
+        for y in draw.y..draw.bottom() {
+            let my = (y - rect.y) as usize;
+            for x in draw.x..draw.right() {
+                let mx = (x - rect.x) as usize;
+                let idx = my * mask_stride + mx;
+                if let Some(&m_val) = mask.get(idx) {
+                    if m_val > 0 {
+                        let pix_opacity = ((m_val as u16 * opacity as u16) / 255) as u8;
+                        self.pixel(x, y, color, pix_opacity)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Fill a rounded rectangle with an [`AlphaLinearGradient`].
+    pub fn fill_rounded_rect_alpha_gradient(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        gradient: &AlphaLinearGradient,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || opacity == 0 {
+            return Ok(());
+        }
+        let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
+        let denom = match gradient.direction {
+            GradientDirection::Horizontal => rect.w.saturating_sub(1).max(1),
+            GradientDirection::Vertical => rect.h.saturating_sub(1).max(1),
+        };
+
+        for y in draw.y..draw.bottom() {
+            for x in draw.x..draw.right() {
+                if !in_rounded_rect(x, y, rect, radius) {
+                    continue;
+                }
+                let numer = match gradient.direction {
+                    GradientDirection::Horizontal => (x - rect.x).max(0) as u32,
+                    GradientDirection::Vertical => (y - rect.y).max(0) as u32,
+                }
+                .min(denom);
+                let t = ((numer * 255) / denom) as u8;
+                let (color, grad_alpha) = gradient.sample(t);
+                let combined_alpha = ((grad_alpha as u16 * opacity as u16) / 255) as u8;
+                self.pixel(x, y, color, combined_alpha)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Fill a rounded rectangle with an [`AlphaRadialGradient`].
+    pub fn fill_rounded_rect_radial_gradient(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        gradient: &AlphaRadialGradient,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || opacity == 0 {
+            return Ok(());
+        }
+        let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
+        let cx = rect.x as f32 + rect.w as f32 * gradient.center_x;
+        let cy = rect.y as f32 + rect.h as f32 * gradient.center_y;
+
+        for y in draw.y..draw.bottom() {
+            let dy = y as f32 - cy;
+            for x in draw.x..draw.right() {
+                if !in_rounded_rect(x, y, rect, radius) {
+                    continue;
+                }
+                let dx = x as f32 - cx;
+                let dist = (dx * dx + dy * dy).sqrt();
+                let (color, grad_alpha) = gradient.sample_at_dist(dist);
+                let combined_alpha = ((grad_alpha as u16 * opacity as u16) / 255) as u8;
+                self.pixel(x, y, color, combined_alpha)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Render a soft drop shadow around a rounded rectangle.
+    pub fn draw_drop_shadow(
+        &mut self,
+        rect: Rect,
+        _radius: u8,
+        shadow_color: Rgb565,
+        shadow_opacity: u8,
+        shadow_spread: u8,
+        blur_radius: u8,
+    ) -> Result<(), D::Error> {
+        if shadow_opacity == 0 {
+            return Ok(());
+        }
+        let margin = (shadow_spread as i32) + (blur_radius as i32);
+        let shadow_rect = Rect::new(
+            rect.x - margin,
+            rect.y - margin,
+            rect.w + (margin as u32 * 2),
+            rect.h + (margin as u32 * 2),
+        );
+        let draw = self.visible_rect(shadow_rect);
+        if draw.is_empty() {
+            return Ok(());
+        }
+
+        for y in draw.y..draw.bottom() {
+            for x in draw.x..draw.right() {
+                let dx = if x < rect.x {
+                    rect.x - x
+                } else if x >= rect.right() {
+                    x - rect.right() + 1
+                } else {
+                    0
+                };
+                let dy = if y < rect.y {
+                    rect.y - y
+                } else if y >= rect.bottom() {
+                    y - rect.bottom() + 1
+                } else {
+                    0
+                };
+
+                let dist = ((dx * dx + dy * dy) as f32).sqrt();
+                if dist > margin as f32 {
+                    continue;
+                }
+
+                let factor = (1.0 - (dist / (margin as f32 + 1.0))).clamp(0.0, 1.0);
+                let alpha = (shadow_opacity as f32 * factor) as u8;
+                if alpha > 0 {
+                    self.pixel(x, y, shadow_color, alpha)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Draw a UI card fill with an alpha gradient background and soft drop shadow.
+    pub fn draw_card_fill(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        bg_gradient: &AlphaLinearGradient,
+        shadow_color: Rgb565,
+        shadow_opacity: u8,
+        blur_radius: u8,
+    ) -> Result<(), D::Error> {
+        if shadow_opacity > 0 && blur_radius > 0 {
+            self.draw_drop_shadow(rect, radius, shadow_color, shadow_opacity, 2, blur_radius)?;
+        }
+        self.fill_rounded_rect_alpha_gradient(rect, radius, bg_gradient, 255)
+    }
+
+    /// Render a tile with optional wrapping mode.
+    pub fn draw_tile(
+        &mut self,
+        rect: Rect,
+        tile: TileRef<'_>,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        self.draw_tile_transformed_ssaa(rect, tile, Transform2D::IDENTITY, opacity, false)
+    }
+
+    /// Render a transformed tile with optional wrapping mode.
+    pub fn draw_tile_transformed(
+        &mut self,
+        rect: Rect,
+        tile: TileRef<'_>,
+        transform: Transform2D,
+        opacity: u8,
+    ) -> Result<(), D::Error> {
+        self.draw_tile_transformed_ssaa(rect, tile, transform, opacity, false)
+    }
+
+    /// Render a transformed tile with 2xSSAA (2x Super-Sampling Anti-Aliasing).
+    pub fn draw_tile_transformed_ssaa(
+        &mut self,
+        rect: Rect,
+        tile: TileRef<'_>,
+        transform: Transform2D,
+        opacity: u8,
+        enable_ssaa: bool,
+    ) -> Result<(), D::Error> {
+        let draw = self.visible_rect(rect);
+        if draw.is_empty() || opacity == 0 || tile.width == 0 || tile.height == 0 {
+            return Ok(());
+        }
+
+        let inv_transform = match transform.inverse() {
+            Some(inv) => inv,
+            None => return Ok(()),
+        };
+
+        let cx = rect.x as f32 + rect.w as f32 * 0.5;
+        let cy = rect.y as f32 + rect.h as f32 * 0.5;
+
+        let offsets = [
+            (0.25f32, 0.25f32),
+            (0.75f32, 0.25f32),
+            (0.25f32, 0.75f32),
+            (0.75f32, 0.75f32),
+        ];
+
+        for y in draw.y..draw.bottom() {
+            for x in draw.x..draw.right() {
+                if !enable_ssaa {
+                    let px = (x as f32 + 0.5) - cx;
+                    let py = (y as f32 + 0.5) - cy;
+                    let (tx, ty) = inv_transform.apply_f32(px, py);
+                    let u = (tx + tile.width as f32 * 0.5).floor() as i32;
+                    let v = (ty + tile.height as f32 * 0.5).floor() as i32;
+                    if let Some(col) = tile.get_pixel(u, v) {
+                        self.pixel(x, y, col, opacity)?;
+                    }
+                } else {
+                    let mut r_sum = 0u32;
+                    let mut g_sum = 0u32;
+                    let mut b_sum = 0u32;
+                    let mut weight = 0u32;
+
+                    for &(ox, oy) in &offsets {
+                        let px = (x as f32 + ox) - cx;
+                        let py = (y as f32 + oy) - cy;
+                        let (tx, ty) = inv_transform.apply_f32(px, py);
+                        let u = (tx + tile.width as f32 * 0.5).floor() as i32;
+                        let v = (ty + tile.height as f32 * 0.5).floor() as i32;
+                        if let Some(col) = tile.get_pixel(u, v) {
+                            r_sum += col.r() as u32;
+                            g_sum += col.g() as u32;
+                            b_sum += col.b() as u32;
+                            weight += 1;
+                        }
+                    }
+
+                    if weight > 0 {
+                        let r_avg = (r_sum / weight) as u8;
+                        let g_avg = (g_sum / weight) as u8;
+                        let b_avg = (b_sum / weight) as u8;
+                        let color = Rgb565::new(r_avg, g_avg, b_avg);
+                        let pix_opacity = ((weight * opacity as u32 + 2) / 4) as u8;
+                        self.pixel(x, y, color, pix_opacity)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Render a transformed image/tile with optional 2xSSAA.
+    pub fn draw_image_transformed_ssaa(
+        &mut self,
+        rect: Rect,
+        image: ImageRef<'_>,
+        scale: f32,
+        rotation_deg: f32,
+        opacity: u8,
+        enable_ssaa: bool,
+    ) -> Result<(), D::Error> {
+        let transform = Transform2D::rotation(rotation_deg).then(Transform2D::scale(scale, scale));
+        let tile = TileRef::from_image(image, TileMode::None);
+        self.draw_tile_transformed_ssaa(rect, tile, transform, opacity, enable_ssaa)
     }
 }
 

@@ -59,7 +59,7 @@ pub use context::{
     GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetKeyBindings, WidgetKeyInputPolicy,
 };
 pub use font::FontId;
-pub use framebuffer::Framebuffer;
+pub use framebuffer::{Framebuffer, FramebufferGray8, FramebufferRgba8888, Rgba8888};
 pub use geometry::{DirtyTracker, EdgeInsets, Rect};
 #[cfg(all(feature = "std", feature = "image-decode"))]
 pub use image::{
@@ -67,7 +67,8 @@ pub use image::{
     decode_image_with, decode_ppm_ascii,
 };
 pub use image::{
-    ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, ReelFrame, ReelPlayer, SpriteSheet,
+    ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, ReelFrame, ReelPlayer, SpriteSheet, TileMode,
+    TileRef,
 };
 pub use input::{
     EventPhaseMask, InputEvent, PointerButton, PointerState, UiEvent, UiEventFilter,
@@ -91,8 +92,8 @@ pub use screen_transition::{
 };
 pub use state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState};
 pub use style::{
-    Border, GradientDirection, LinearGradient, Shadow, StateStyle, Style, StyleTransition, Theme,
-    VisualState, WidgetStyle, lerp_style,
+    AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient, Shadow,
+    StateStyle, Style, StyleTransition, Theme, VisualState, WidgetStyle, lerp_style,
 };
 #[cfg(feature = "std")]
 pub use test_buffer::{LayerCanvas, TestBuffer};
@@ -115,37 +116,38 @@ pub use widgets::{
 
 pub mod prelude {
     pub use crate::{
-        ActiveScreenTransition, Align, AnimatedProperty, Animation, AnimationConflictPolicy,
-        AnimationError, AnimationGroup, AnimationHandlers, AnimationId, AnimationManager,
-        AnimationManagerCallbacks, AnimationSequence, AnimationState, AntiAliasMode, Axis,
-        BasicTextShaper, BindingSnapshot, Blend, BlendMode, Block, Border, CardDeckDirection,
-        CardDeckState, CardStory, CardStoryTransition, ChartMode, CinematicPreset, ColorFormat,
-        ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
-        ComposedAnimationStatus, CompositionControls, CompositionMode, Compositor, Constraint,
-        DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase,
-        EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId, FontId, Framebuffer,
-        GlanceTileSpec, GradientDirection, GuiContext, GuiError, ImageAtlas, ImageAtlasEntry,
-        ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout,
-        Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line,
-        LinearGradient, LinearLayout, ListState, MenuContract, MotionTokens, NotificationLevel,
-        PathAnimator, PathPoint, PeekRevealSpec, PixelRead, PointerButton, PointerState,
-        PresentRegion, PressTiming, Rect, ReelFrame, ReelPlayer, RenderBackendCaps, RenderCtx,
-        RenderQuality, RepeatMode, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent,
-        ScreenStack, ScreenStackError, ScreenTransition, ScreenTransitionEffect,
-        ScreenTransitionOrigin, ScreenTransitionRunner, ScreenTransitionSample,
-        ScreenTransitionSpec, ScrollState, SequencePlayer, SequencePlayerStatus,
-        SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState, Span, SpringAnimator,
-        SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin, StrokeStyle, Style,
-        StyleClassId, StyleTransition, SurfaceState, TabsState, Text, TextAlign, TextDirection,
-        TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper, TextStyle, TextWrap, Theme,
-        TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset,
-        Tween, UiEvent, UiEventFilter, VerticalAlign, VisualState, WidgetAnimationCallbacks,
-        WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter,
-        WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy,
-        WidgetKeyframeState, WidgetKind, WidgetPropertyKeyframe, WidgetStyle, animate_glance_focus,
-        animate_peek_reveal, apply_carddeck_visibility, apply_easing, lerp_style, presets,
-        render_transition_pair, setup_card_story, setup_launcher_glance,
-        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
+        ActiveScreenTransition, Align, AlphaLinearGradient, AlphaRadialGradient, AnimatedProperty,
+        Animation, AnimationConflictPolicy, AnimationError, AnimationGroup, AnimationHandlers,
+        AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
+        AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, Blend, BlendMode,
+        Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition,
+        ChartMode, CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
+        ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
+        Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
+        EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
+        FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
+        GradientDirection, GuiContext, GuiError, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef,
+        InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
+        KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout,
+        ListState, MenuContract, MotionTokens, NotificationLevel, PathAnimator, PathPoint,
+        PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming, Rect,
+        ReelFrame, ReelPlayer, RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, Rgba8888,
+        Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError,
+        ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
+        ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SequencePlayer,
+        SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState,
+        Span, SpringAnimator, SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin,
+        StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TabsState, Text,
+        TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
+        TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError, TimelineMotionPreset,
+        TimelineStep, Timer, Transform2D, TransitionPreset, Tween, UiEvent, UiEventFilter,
+        VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
+        WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
+        WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
+        WidgetNode, WidgetPropertyKeyframe, WidgetStyle, animate_glance_focus, animate_peek_reveal,
+        apply_carddeck_visibility, apply_easing, lerp_style, presets, render_transition_pair,
+        setup_card_story, setup_launcher_glance, setup_launcher_glance_with_tokens,
+        setup_peek_timeline, setup_peek_timeline_with_tokens,
     };
 
     #[cfg(all(feature = "std", feature = "image-decode"))]
