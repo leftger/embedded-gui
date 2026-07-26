@@ -20,9 +20,9 @@ exclude = [
 
 [features]
 default = ["std"]
-std = []
+std = ["embedded-dsp?/std"]
 image-decode = ["std"]
-libm = ["dep:libm"]
+libm = ["dep:libm", "embedded-dsp?/libm"]
 micromath = ["dep:micromath"]
 # Optional interop adapters. These sit alongside the crate's own no_std
 # layout.rs/text.rs/font.rs (which remain the default, dependency-light path)
@@ -30,7 +30,10 @@ micromath = ["dep:micromath"]
 embedded-text = ["dep:embedded-text", "dep:embedded-graphics"]
 embedded-layout = ["dep:embedded-layout", "dep:embedded-graphics"]
 embedded-graphics = ["dep:embedded-graphics"]
-embedded-dsp = ["dep:embedded-dsp"]
+# Only pulls in the embedded-dsp modules visual_widgets.rs actually calls
+# (biquad filtering + RMS/max statistics) instead of the whole crate
+# (FFT, SVM, Bayes, quaternion, ...) — see embedded-dsp's per-module features.
+embedded-dsp = ["dep:embedded-dsp", "embedded-dsp/filtering", "embedded-dsp/statistics"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
@@ -40,7 +43,7 @@ micromath = {version = "2.1", optional = true}
 embedded-graphics = { version = "0.8", optional = true }
 embedded-text = { version = "0.7.3", optional = true }
 embedded-layout = { version = "0.4.2", optional = true }
-embedded-dsp = { version = "0.1.0", optional = true }
+embedded-dsp = { version = "0.2.0", path = "../embedded-dsp", optional = true, default-features = false }
 
 [dev-dependencies]
 embedded-3dgfx = { version = "0.3.2" }
