@@ -76,13 +76,10 @@ run_check_no_std() {
 }
 
 run_msrv() {
-  export CARGO_INCREMENTAL=0
-  export CARGO_BUILD_JOBS=1
   if ! rustup toolchain list | grep -q "${MSRV}"; then
     rustup toolchain install "${MSRV}" --profile minimal
   fi
-  # shellcheck disable=SC2086
-  cargo "+${MSRV}" check ${CHECK_ARGS:---lib --all-features} $(host_target_args)
+  bash .github/scripts/ci_msrv.sh
 }
 
 run_clippy() {
@@ -98,12 +95,9 @@ run_clippy() {
 
 run_docs() {
   if [[ -n "${CI_HOST_TARGET:-}" && "$(basename "$repo_root")" == "lis2de12" ]]; then
-    # shellcheck disable=SC2086
-    cargo doc --lib --no-deps --features std $(host_target_args)
-  else
-    # shellcheck disable=SC2086
-    cargo doc ${DOCS_ARGS:---lib --no-deps --all-features} $(host_target_args)
+    export CI_DOCS_FEATURES="--features std"
   fi
+  bash .github/scripts/ci_docs.sh
 }
 
 run_check() {
