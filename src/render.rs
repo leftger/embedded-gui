@@ -1516,8 +1516,10 @@ where
         } else {
             (start - max_sweep, start)
         };
-        let (lo_c, lo_s) = (lo_deg.to_radians().cos(), lo_deg.to_radians().sin());
-        let (hi_c, hi_s) = (hi_deg.to_radians().cos(), hi_deg.to_radians().sin());
+        let (lo_c, lo_s) = cardinal_unit(lo_deg)
+            .unwrap_or_else(|| (lo_deg.to_radians().cos(), lo_deg.to_radians().sin()));
+        let (hi_c, hi_s) = cardinal_unit(hi_deg)
+            .unwrap_or_else(|| (hi_deg.to_radians().cos(), hi_deg.to_radians().sin()));
         // A sweep over half a circle or less is a convex wedge, testable
         // directly with two half-plane (cross-product) checks. A sweep
         // past 180 degrees is non-convex, but its complement (the
@@ -2420,6 +2422,31 @@ fn normalize_angle_deg(mut deg: f32) -> f32 {
     deg
 }
 
+/// Exact (cos, sin) for a boundary angle that lands on a cardinal direction,
+/// or `None` to fall back to a real trig call. Widgets built around a fixed
+/// "12 o'clock" (or 3/6/9 o'clock) start angle -- the common case, e.g. a
+/// sweeping-arc or gauge starting at -90 degrees -- hit this on every call
+/// for that boundary, since only the other (animated) boundary ever lands on
+/// a non-cardinal angle. Skips the `sin`/`cos` pair entirely for that
+/// boundary instead of computing (and rounding) values that are always
+/// exactly 0, 1, or -1.
+#[inline]
+fn cardinal_unit(deg: f32) -> Option<(f32, f32)> {
+    const EPS: f32 = 1e-4;
+    let normalized = normalize_angle_deg(deg);
+    if (normalized - 0.0).abs() < EPS {
+        Some((1.0, 0.0))
+    } else if (normalized - 90.0).abs() < EPS {
+        Some((0.0, 1.0))
+    } else if (normalized - 180.0).abs() < EPS {
+        Some((-1.0, 0.0))
+    } else if (normalized - 270.0).abs() < EPS {
+        Some((0.0, -1.0))
+    } else {
+        None
+    }
+}
+
 #[inline]
 fn cross(ux: f32, uy: f32, vx: f32, vy: f32) -> f32 {
     ux * vy - uy * vx
@@ -2590,5 +2617,60 @@ mod tests {
         // Points outside radius 10 must remain black (e.g. 25 + 11, 25)
         assert_eq!(buf.pixel_at(37, 25), Some(Rgb565::BLACK));
         assert_eq!(buf.pixel_at(25, 37), Some(Rgb565::BLACK));
+    }
+
+    #[test]
+    fn test_cardinal_unit_exact_values_and_fallback() {
+        assert_eq!(cardinal_unit(0.0), Some((1.0, 0.0)));
+        assert_eq!(cardinal_unit(90.0), Some((0.0, 1.0)));
+        assert_eq!(cardinal_unit(180.0), Some((-1.0, 0.0)));
+        assert_eq!(cardinal_unit(270.0), Some((0.0, -1.0)));
+        // -90 degrees normalizes to 270 -- the common "12 o'clock start"
+        // sweeping-arc/gauge convention.
+        assert_eq!(cardinal_unit(-90.0), Some((0.0, -1.0)));
+        // A non-cardinal angle (or one more than EPS off a cardinal one)
+        // must fall through to a real trig call.
+        assert_eq!(cardinal_unit(45.0), None);
+        assert_eq!(cardinal_unit(89.99), None);
+    }
+
+    #[test]
+    fn test_cardinal_unit_agrees_with_real_trig_at_cardinal_angles() {
+        // The fast path's exact 0/1/-1 constants must be numerically
+        // consistent with what a real sin/cos call would produce for the
+        // same angle (up to float rounding) -- this is the actual property
+        // that makes skipping the trig call safe, independent of any
+        // downstream rasterization sensitivity near sector boundaries.
+        for deg in [0.0_f32, 90.0, 180.0, 270.0, -90.0, 450.0] {
+            let (fast_c, fast_s) = cardinal_unit(deg).expect("cardinal angle");
+            let (real_c, real_s) = (deg.to_radians().cos(), deg.to_radians().sin());
+            assert!(
+                (fast_c - real_c).abs() < 1e-6,
+                "cos mismatch at {deg}: fast={fast_c} real={real_c}"
+            );
+            assert!(
+                (fast_s - real_s).abs() < 1e-6,
+                "sin mismatch at {deg}: fast={fast_s} real={real_s}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fill_sector_sweep_cardinal_fast_path_renders() {
+        // Smoke-test the fast path end-to-end: a start angle that hits
+        // cardinal_unit must still paint a plausible, growing sector (the
+        // per-pixel geometry test is unchanged either way -- only how the
+        // boundary direction vectors are obtained differs).
+        let mut buf = crate::test_buffer::TestBuffer::new(50, 50);
+        let mut ctx = RenderCtx::new(&mut buf, Rect::new(0, 0, 50, 50));
+        ctx.fill_sector_sweep(25, 25, 20, -90.0, 90.0, Rgb565::RED)
+            .unwrap();
+        assert!(buf.count_color(Rgb565::RED) > 0);
+        // A quarter sweep from 12 o'clock (clockwise, since sweep is
+        // positive/ccw in this atan2-angle convention going toward 3
+        // o'clock) should light up the pixel directly right of center but
+        // not the one directly below it.
+        assert_eq!(buf.pixel_at(40, 25), Some(Rgb565::RED));
+        assert_eq!(buf.pixel_at(25, 40), Some(Rgb565::BLACK));
     }
 }
