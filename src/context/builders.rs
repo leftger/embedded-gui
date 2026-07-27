@@ -1,0 +1,963 @@
+use embedded_graphics_core::pixelcolor::Rgb565;
+
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
+use crate::{
+    geometry::Rect,
+    image::{ImageFit, ImageRef, ReelPlayer},
+    render::TextAlign,
+    style::{Style, WidgetStyle},
+    widget::WidgetId,
+    widgets::{ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind},
+};
+
+use super::*;
+
+impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
+    GuiContext<'a, NODES, EVENTS, DIRTY>
+{
+    pub fn add_panel<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Panel, style)
+    }
+
+    pub fn add_themed_panel(&mut self, rect: Rect) -> Result<WidgetId, GuiError> {
+        self.add_panel(rect, self.theme.panel)
+    }
+
+    pub fn add_label<S>(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Label(text), style)
+    }
+
+    pub fn add_themed_label(&mut self, rect: Rect, text: &'a str) -> Result<WidgetId, GuiError> {
+        self.add_label(rect, text, self.theme.label)
+    }
+
+    pub fn add_button<S>(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(rect, WidgetKind::Button(text), style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_button(&mut self, rect: Rect, text: &'a str) -> Result<WidgetId, GuiError> {
+        self.add_button(rect, text, self.theme.button)
+    }
+
+    pub fn add_progress_bar<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::ProgressBar {
+                value: value.clamp(0.0, 1.0),
+            },
+            style,
+        )
+    }
+
+    pub fn add_themed_progress_bar(
+        &mut self,
+        rect: Rect,
+        value: f32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_progress_bar(rect, value, self.theme.progress)
+    }
+
+    pub fn add_toggle<S>(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        on: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(rect, WidgetKind::Toggle { label, on }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_toggle(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        on: bool,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_toggle(rect, label, on, self.theme.toggle)
+    }
+
+    pub fn add_checkbox<S>(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        checked: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(rect, WidgetKind::Checkbox { label, checked }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_checkbox(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        checked: bool,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_checkbox(rect, label, checked, self.theme.checkbox)
+    }
+
+    pub fn add_slider<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let value = value.clamp(min.min(max), min.max(max));
+        let id = self.add_widget(rect, WidgetKind::Slider { value, min, max }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_slider(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_slider(rect, value, min, max, self.theme.slider)
+    }
+
+    pub fn add_value_label<S>(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        value: i32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::ValueLabel { label, value }, style)
+    }
+
+    pub fn add_themed_value_label(
+        &mut self,
+        rect: Rect,
+        label: &'a str,
+        value: i32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_value_label(rect, label, value, self.theme.value_label)
+    }
+
+    pub fn add_icon_button<S>(
+        &mut self,
+        rect: Rect,
+        icon: char,
+        label: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(rect, WidgetKind::IconButton { icon, label }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_icon_button(
+        &mut self,
+        rect: Rect,
+        icon: char,
+        label: &'a str,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_icon_button(rect, icon, label, self.theme.icon_button)
+    }
+
+    pub fn add_list<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::List {
+                items,
+                selected,
+                offset: selected,
+                visible_rows: visible_rows.max(1),
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_feed_timeline<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+        expanded: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::FeedTimeline {
+                items,
+                selected,
+                offset: selected,
+                visible_rows: visible_rows.max(1),
+                expanded,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_list(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_list(rect, items, selected, visible_rows, self.theme.list)
+    }
+
+    pub fn add_scroll_view<S>(
+        &mut self,
+        rect: Rect,
+        offset_y: i32,
+        content_h: u32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::ScrollView {
+                offset_y,
+                content_h,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_scroll_view(
+        &mut self,
+        rect: Rect,
+        offset_y: i32,
+        content_h: u32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_scroll_view(rect, offset_y, content_h, self.theme.list)
+    }
+
+    pub fn add_tabs<S>(
+        &mut self,
+        rect: Rect,
+        labels: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(labels.len().saturating_sub(1));
+        let id = self.add_widget(rect, WidgetKind::Tabs { labels, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_tabs(
+        &mut self,
+        rect: Rect,
+        labels: &'a [&'a str],
+        selected: usize,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_tabs(rect, labels, selected, self.theme.tabs)
+    }
+
+    pub fn add_dialog<S>(
+        &mut self,
+        rect: Rect,
+        title: &'a str,
+        body: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Dialog { title, body }, style)
+    }
+
+    pub fn add_themed_dialog(
+        &mut self,
+        rect: Rect,
+        title: &'a str,
+        body: &'a str,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_dialog(rect, title, body, self.theme.dialog)
+    }
+
+    pub fn add_toast<S>(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        ttl_ms: u32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Toast { text, ttl_ms }, style)
+    }
+
+    pub fn add_themed_toast(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        ttl_ms: u32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_toast(rect, text, ttl_ms, self.theme.toast)
+    }
+
+    pub fn add_meter<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Meter { value, min, max }, style)
+    }
+
+    pub fn add_themed_meter(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_meter(rect, value, min, max, self.theme.meter)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_arc_gauge<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+        thickness: u8,
+        antialias: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::ArcGauge {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+                thickness: thickness.max(1),
+                antialias,
+                major_ticks: 6,
+                minor_ticks: 2,
+                show_value: false,
+            },
+            style,
+        )
+    }
+
+    pub fn add_gauge<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Gauge {
+                value,
+                min,
+                max,
+                major_ticks: 6,
+                minor_ticks: 2,
+                show_value: false,
+            },
+            style,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_sweeping_arc<S>(
+        &mut self,
+        rect: Rect,
+        progress: f32,
+        arc_radius: u32,
+        frame_inset: u16,
+        corner_radius: u8,
+        bg_color: Rgb565,
+        arc_color: Rgb565,
+        frame_color: Rgb565,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::SweepingArc {
+                progress: progress.clamp(0.0, 1.0),
+                arc_radius,
+                frame_inset,
+                corner_radius,
+                bg_color,
+                arc_color,
+                frame_color,
+            },
+            style,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_gauge_needle<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        start_deg: i32,
+        end_deg: i32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::GaugeNeedle {
+                value,
+                min,
+                max,
+                start_deg,
+                end_deg,
+            },
+            style,
+        )
+    }
+
+    pub fn add_chart<S>(
+        &mut self,
+        rect: Rect,
+        values: &'a [f32],
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Chart {
+                values,
+                min,
+                max,
+                thickness: 1,
+                fill_under: false,
+                markers: false,
+                mode: ChartMode::Line,
+                show_grid: false,
+                show_axes: false,
+                show_labels: false,
+            },
+            style,
+        )
+    }
+
+    pub fn set_chart_style(
+        &mut self,
+        id: WidgetId,
+        thickness: u8,
+        fill_under: bool,
+        markers: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Chart {
+                thickness: ref mut t,
+                fill_under: ref mut fill,
+                markers: ref mut mark,
+                ..
+            } => {
+                *t = thickness.max(1);
+                *fill = fill_under;
+                *mark = markers;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_chart_decoration(
+        &mut self,
+        id: WidgetId,
+        mode: ChartMode,
+        show_grid: bool,
+        show_axes: bool,
+        show_labels: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Chart {
+                mode: ref mut chart_mode,
+                show_grid: ref mut grid,
+                show_axes: ref mut axes,
+                show_labels: ref mut labels,
+                ..
+            } => {
+                *chart_mode = mode;
+                *grid = show_grid;
+                *axes = show_axes;
+                *labels = show_labels;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn add_spinner<S>(&mut self, rect: Rect, phase: f32, style: S) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Spinner { phase }, style)
+    }
+
+    pub fn add_dropdown<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::Dropdown {
+                items,
+                selected,
+                open: false,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_roller<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(rect, WidgetKind::Roller { items, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_table<S>(
+        &mut self,
+        rect: Rect,
+        rows: &'a [&'a [&'a str]],
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Table {
+                rows,
+                separators: true,
+                cell_padding: 1,
+                align: TextAlign::Left,
+            },
+            style,
+        )
+    }
+
+    pub fn set_table_style(
+        &mut self,
+        id: WidgetId,
+        separators: bool,
+        cell_padding: u8,
+        align: TextAlign,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Table {
+                separators: ref mut cell_sep,
+                cell_padding: ref mut pad,
+                align: ref mut table_align,
+                ..
+            } => {
+                *cell_sep = separators;
+                *pad = cell_padding.min(6);
+                *table_align = align;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn add_textarea<S>(
+        &mut self,
+        rect: Rect,
+        text: &'a str,
+        placeholder: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let cursor = text.chars().count();
+        let (text_buf, text_len) = textarea_storage_from_str(text);
+        let id = self.add_widget(
+            rect,
+            WidgetKind::TextArea {
+                text_buf,
+                text_len,
+                cursor,
+                placeholder,
+                selection: None,
+                cursor_visible: true,
+                read_only: false,
+                single_line: false,
+                accept_newline: true,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_keyboard<S>(
+        &mut self,
+        rect: Rect,
+        keys: &'a [char],
+        cols: u8,
+        target: Option<WidgetId>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_keyboard_with_alt(rect, keys, None, cols, target, style)
+    }
+
+    pub fn add_keyboard_with_alt<S>(
+        &mut self,
+        rect: Rect,
+        keys: &'a [char],
+        alt_keys: Option<&'a [char]>,
+        cols: u8,
+        target: Option<WidgetId>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::Keyboard {
+                keys,
+                selected: 0,
+                cols: cols.max(1),
+                alt_keys,
+                layout: KeyboardLayout::Normal,
+                target,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_image<S>(
+        &mut self,
+        rect: Rect,
+        image: ImageRef<'a>,
+        fit: ImageFit,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Image { image, fit }, style)
+    }
+
+    pub fn add_peek_reveal<S>(
+        &mut self,
+        rect: Rect,
+        icon: ImageRef<'a>,
+        title: &'a str,
+        subtitle: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::PeekReveal {
+                icon,
+                title,
+                subtitle,
+                progress: 0.0,
+            },
+            style,
+        )
+    }
+
+    pub fn add_glance_tile<S>(
+        &mut self,
+        rect: Rect,
+        icon: char,
+        title: &'a str,
+        subtitle: &'a str,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::GlanceTile {
+                icon,
+                title,
+                subtitle,
+                highlighted: false,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_card_deck<S>(
+        &mut self,
+        rect: Rect,
+        titles: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::CardDeck {
+                titles,
+                selected: selected.min(titles.len().saturating_sub(1)),
+            },
+            style,
+        )
+    }
+
+    pub fn add_reel<S>(
+        &mut self,
+        rect: Rect,
+        player: ReelPlayer<'a>,
+        fit: ImageFit,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Reel { player, fit }, style)
+    }
+
+    pub fn add_state_surface<S>(
+        &mut self,
+        rect: Rect,
+        state: SurfaceState,
+        title: &'a str,
+        message: &'a str,
+        action: Option<&'a str>,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::StateSurface {
+                state,
+                title,
+                message,
+                action,
+                busy_phase: 0.0,
+            },
+            style,
+        )
+    }
+
+    pub fn add_heads_up_banner<S>(
+        &mut self,
+        rect: Rect,
+        level: NotificationLevel,
+        text: &'a str,
+        ttl_ms: u32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::HeadsUpBanner {
+                level,
+                text,
+                ttl_ms,
+            },
+            style,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_notification_action_sheet<S>(
+        &mut self,
+        rect: Rect,
+        level: NotificationLevel,
+        title: &'a str,
+        body: &'a str,
+        actions: &'a [&'a str],
+        selected: usize,
+        open: bool,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::NotificationActionSheet {
+                level,
+                title,
+                body,
+                actions,
+                selected: selected.min(actions.len().saturating_sub(1)),
+                open,
+            },
+            style,
+        )
+    }
+
+    pub fn add_border<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::Border, style)
+    }
+
+    pub fn add_spacer(&mut self, rect: Rect) -> Result<WidgetId, GuiError> {
+        self.add_widget(rect, WidgetKind::Spacer, Style::default())
+    }
+
+    pub fn add_menu<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(rect, WidgetKind::Menu { items, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+}

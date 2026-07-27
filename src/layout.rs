@@ -491,3 +491,57 @@ impl LinearLayout {
         count
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_linear_layout_column_presets() {
+        let col = LinearLayout::column();
+        assert_eq!(col.axis, Axis::Vertical);
+        assert_eq!(col.gap, 2);
+        assert_eq!(col.cross_align, Align::Stretch);
+
+        let row = LinearLayout::row();
+        assert_eq!(row.axis, Axis::Horizontal);
+        assert_eq!(row.gap, 2);
+        assert_eq!(row.cross_align, Align::Stretch);
+    }
+
+    #[test]
+    fn test_layout_arrange_row() {
+        let layout = LinearLayout {
+            axis: Axis::Horizontal,
+            gap: 5,
+            padding: EdgeInsets::all(10),
+            cross_align: Align::Stretch,
+        };
+
+        let container = Rect::new(0, 0, 100, 50);
+        let items = [
+            LayoutItem::fixed(20),
+            LayoutItem::fill(),
+            LayoutItem::fixed(30),
+        ];
+        let mut out = [Rect::empty(); 3];
+
+        let arranged = layout.arrange_items(container, &items, &mut out);
+        assert_eq!(arranged, 3);
+
+        // Container width 100 - padding 20 = 80 main total.
+        // Item 0: w=20, x=10
+        assert_eq!(out[0].x, 10);
+        assert_eq!(out[0].w, 20);
+
+        // Item 2: w=30, x=10 + 20 + 5 (gap) + fill_w + 5 (gap)...
+        // Main space for fill: 80 - 20 (item 0) - 30 (item 2) - 10 (2 gaps) = 20
+        // So Item 1: x = 10 + 20 + 5 = 35, w = 20
+        assert_eq!(out[1].x, 35);
+        assert_eq!(out[1].w, 20);
+
+        // Item 2: x = 35 + 20 + 5 = 60, w = 30
+        assert_eq!(out[2].x, 60);
+        assert_eq!(out[2].w, 30);
+    }
+}

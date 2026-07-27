@@ -108,17 +108,15 @@ fn main() {
                             .unwrap();
                         }
                     }
-                    Keycode::Right => {
-                        if hold_active {
-                            pointer_x = (pointer_x + 8).min(118);
-                            gui.handle_input(InputEvent::Pointer {
-                                x: pointer_x,
-                                y: pointer_y,
-                                state: PointerState::Moved,
-                                button: PointerButton::Primary,
-                            })
-                            .unwrap();
-                        }
+                    Keycode::Right if hold_active => {
+                        pointer_x = (pointer_x + 8).min(118);
+                        gui.handle_input(InputEvent::Pointer {
+                            x: pointer_x,
+                            y: pointer_y,
+                            state: PointerState::Moved,
+                            button: PointerButton::Primary,
+                        })
+                        .unwrap();
                     }
                     _ => {}
                 },
