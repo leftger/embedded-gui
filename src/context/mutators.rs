@@ -20,7 +20,6 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
-            #[cfg(feature = "rich-widgets")]
             WidgetKind::ProgressBar { value: ref mut v } => {
                 *v = value.clamp(0.0, 1.0);
                 self.dirty.add(rect)?;

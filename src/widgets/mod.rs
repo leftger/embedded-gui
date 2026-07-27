@@ -38,7 +38,6 @@ pub enum WidgetKind<'a> {
     Panel,
     Label(&'a str),
     Button(&'a str),
-    #[cfg(feature = "rich-widgets")]
     ProgressBar {
         value: f32,
     },
@@ -392,7 +391,6 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Panel => render_panel(ctx, rect, self.style, state),
             WidgetKind::Label(text) => render_label(ctx, rect, text, self.style),
             WidgetKind::Button(text) => render_button(ctx, rect, text, self.style, state),
-            #[cfg(feature = "rich-widgets")]
             WidgetKind::ProgressBar { value } => {
                 render_progress(ctx, rect, value, self.style, state)
             }
@@ -791,7 +789,6 @@ where
     )
 }
 
-#[cfg(feature = "rich-widgets")]
 fn render_progress<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
