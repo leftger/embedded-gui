@@ -577,3 +577,104 @@ pub enum VisualState {
     Pressed,
     Disabled,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_graphics_core::pixelcolor::WebColors;
+
+    #[test]
+    fn test_border_and_shadow_presets() {
+        let none_border = Border::none();
+        assert_eq!(none_border.width, 0);
+
+        let one_border = Border::one(Rgb565::CSS_RED);
+        assert_eq!(one_border.width, 1);
+        assert_eq!(one_border.color, Rgb565::CSS_RED);
+
+        assert_eq!(Shadow::none(), None);
+        let soft_shadow = Shadow::soft();
+        assert_eq!(soft_shadow.opacity, 96);
+        assert_eq!(soft_shadow.offset_x, 1);
+    }
+
+    #[test]
+    fn test_style_resolution_and_state_overrides() {
+        let base_style = Style {
+            background: Some(Rgb565::CSS_BLUE),
+            gradient: None,
+            font: FontId::Tiny3x5,
+            foreground: Rgb565::CSS_WHITE,
+            text: Rgb565::CSS_WHITE,
+            accent: Rgb565::CSS_RED,
+            opacity: 255,
+            corner_radius: 0,
+            shadow: Shadow::none(),
+            border: Border::none(),
+            padding: EdgeInsets::all(4),
+        };
+
+        let focused_style = Style {
+            background: Some(Rgb565::CSS_YELLOW),
+            ..base_style
+        };
+
+        let widget_style =
+            WidgetStyle::new(base_style).with_state_override(VisualState::Focused, focused_style);
+
+        assert_eq!(widget_style.resolve(VisualState::Normal), base_style);
+        assert_eq!(widget_style.resolve(VisualState::Focused), focused_style);
+        assert_eq!(
+            widget_style.resolve(VisualState::Pressed),
+            base_style.selected(true)
+        );
+    }
+
+    #[test]
+    fn test_style_lerp_and_transition() {
+        let s1 = Style {
+            background: Some(Rgb565::new(0, 0, 0)),
+            gradient: None,
+            font: FontId::Tiny3x5,
+            foreground: Rgb565::new(0, 0, 0),
+            text: Rgb565::new(0, 0, 0),
+            accent: Rgb565::new(0, 0, 0),
+            opacity: 0,
+            corner_radius: 0,
+            shadow: Shadow::none(),
+            border: Border::none(),
+            padding: EdgeInsets::all(0),
+        };
+
+        let s2 = Style {
+            background: Some(Rgb565::new(31, 63, 31)),
+            gradient: None,
+            font: FontId::Tiny3x5,
+            foreground: Rgb565::new(31, 63, 31),
+            text: Rgb565::new(31, 63, 31),
+            accent: Rgb565::new(31, 63, 31),
+            opacity: 255,
+            corner_radius: 8,
+            shadow: Shadow::none(),
+            border: Border::one(Rgb565::new(31, 63, 31)),
+            padding: EdgeInsets::all(10),
+        };
+
+        let mid = lerp_style(s1, s2, 0.5);
+        assert!((mid.background.unwrap().r() as i32 - 15).abs() <= 1);
+        assert_eq!(mid.corner_radius, 4);
+
+        let widget_style = WidgetStyle::new(s1).with_state_override(VisualState::Focused, s2);
+
+        let mut transition = StyleTransition::new(
+            VisualState::Normal,
+            VisualState::Focused,
+            100,
+            crate::Easing::Linear,
+        );
+
+        transition.tick(50);
+        let current_style = transition.style(widget_style);
+        assert_eq!(current_style.corner_radius, 4);
+    }
+}

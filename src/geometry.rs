@@ -176,3 +176,75 @@ impl<const N: usize> Default for DirtyTracker<N> {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rect_empty_and_contains() {
+        let r = Rect::new(10, 20, 30, 40);
+        assert!(!r.is_empty());
+        assert_eq!(r.right(), 40);
+        assert_eq!(r.bottom(), 60);
+
+        assert!(r.contains(10, 20));
+        assert!(r.contains(39, 59));
+        assert!(!r.contains(40, 60));
+        assert!(!r.contains(9, 20));
+
+        let empty = Rect::empty();
+        assert!(empty.is_empty());
+        assert!(!empty.contains(0, 0));
+    }
+
+    #[test]
+    fn test_rect_intersection_and_union() {
+        let r1 = Rect::new(0, 0, 20, 20);
+        let r2 = Rect::new(10, 10, 20, 20);
+
+        assert!(r1.intersects(r2));
+        assert_eq!(r1.intersection(r2), Rect::new(10, 10, 10, 10));
+        assert_eq!(r1.union(r2), Rect::new(0, 0, 30, 30));
+
+        let r3 = Rect::new(50, 50, 10, 10);
+        assert!(!r1.intersects(r3));
+        assert!(r1.intersection(r3).is_empty());
+    }
+
+    #[test]
+    fn test_rect_inset() {
+        let r = Rect::new(10, 10, 40, 40);
+        let inset = r.inset(EdgeInsets::all(5));
+        assert_eq!(inset, Rect::new(15, 15, 30, 30));
+
+        // Excess inset saturates width and height to 0
+        let over_inset = r.inset(EdgeInsets::all(30));
+        assert_eq!(over_inset.w, 0);
+        assert_eq!(over_inset.h, 0);
+    }
+
+    #[test]
+    fn test_dirty_tracker() {
+        let mut dt: DirtyTracker<4> = DirtyTracker::new();
+        assert!(dt.is_empty());
+
+        dt.add(Rect::new(0, 0, 10, 10)).unwrap();
+        assert_eq!(dt.as_slice().len(), 1);
+
+        // Add non-overlapping rect
+        dt.add(Rect::new(20, 20, 10, 10)).unwrap();
+        assert_eq!(dt.as_slice().len(), 2);
+
+        // Add overlapping rect to trigger merge
+        dt.add(Rect::new(5, 5, 10, 10)).unwrap();
+        // The overlapping rects merge into one larger region
+        assert_eq!(dt.as_slice().len(), 2);
+
+        assert_eq!(dt.bounding_rect(), Some(Rect::new(0, 0, 30, 30)));
+
+        dt.clear();
+        assert!(dt.is_empty());
+        assert_eq!(dt.bounding_rect(), None);
+    }
+}

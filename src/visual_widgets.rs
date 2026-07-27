@@ -8,7 +8,6 @@
 
 #[cfg(not(feature = "std"))]
 use crate::math::F32Ext as _;
-
 use crate::{
     geometry::Rect,
     render::{PixelRead, RenderCtx},

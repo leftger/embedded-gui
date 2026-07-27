@@ -2326,10 +2326,11 @@ where
                         }
                     }
 
-                    if let Some(w) = (weight > 0).then_some(weight) {
-                        let r_avg = (r_sum / w) as u8;
-                        let g_avg = (g_sum / w) as u8;
-                        let b_avg = (b_sum / w) as u8;
+                    if let Some(w) = core::num::NonZeroU32::new(weight) {
+                        let weight_val = w.get();
+                        let r_avg = (r_sum / weight_val) as u8;
+                        let g_avg = (g_sum / weight_val) as u8;
+                        let b_avg = (b_sum / weight_val) as u8;
                         let color = Rgb565::new(r_avg, g_avg, b_avg);
                         let pix_opacity = ((weight * opacity as u32 + 2) / 4) as u8;
                         self.pixel(x, y, color, pix_opacity)?;

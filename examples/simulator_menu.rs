@@ -80,12 +80,10 @@ fn main() {
                         // The context toggles this automatically on activation.
                     }
                 }
-                UiEvent::Back => {
-                    if screens.len() > 1 {
-                        screens
-                            .apply_lifecycle(ScreenCommand::Pop, &mut lifecycle)
-                            .unwrap();
-                    }
+                UiEvent::Back if screens.len() > 1 => {
+                    screens
+                        .apply_lifecycle(ScreenCommand::Pop, &mut lifecycle)
+                        .unwrap();
                 }
                 _ => {}
             }

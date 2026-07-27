@@ -49,7 +49,7 @@ fn main() {
         elapsed_ms = elapsed_ms.wrapping_add(16);
         gui.tick_state_surface(surface, 16, 0.8).unwrap();
 
-        if elapsed_ms % 1500 == 0 {
+        if elapsed_ms.is_multiple_of(1500) {
             state_idx = (state_idx + 1) % states.len();
             gui.set_state_surface_state(surface, states[state_idx])
                 .unwrap();

@@ -629,7 +629,7 @@ fn nested_layout_respects_parent_clip_children_for_overflowing_child() {
     let leaked_pixels = target
         .pixels
         .iter()
-        .any(|&(x, y, _)| x > 26 && y >= 6 && y <= 18);
+        .any(|&(x, y, _)| x > 26 && (6..=18).contains(&y));
     assert!(!leaked_pixels);
 }
 
@@ -1104,7 +1104,7 @@ fn animation_manager_seek_stepped_advances_to_target_elapsed() {
         .unwrap();
     assert!(manager.seek_stepped(id, 75, 7));
     let value = manager.value(id).unwrap();
-    assert!(value >= 74.0 && value <= 76.0);
+    assert!((74.0..=76.0).contains(&value));
 }
 
 #[test]
@@ -2302,7 +2302,7 @@ fn clipping_respects_clip_children_flag_and_scroll_marks_subtree_dirty() {
     let clipped_outside = clipped
         .pixels
         .iter()
-        .any(|&(x, y, _)| x > 20 && y >= 4 && y <= 16);
+        .any(|&(x, y, _)| x > 20 && (4..=16).contains(&y));
 
     gui.remove_flag(parent, WidgetFlags::CLIP_CHILDREN).unwrap();
     let mut unclipped = MockTarget::new(64, 32);
@@ -2310,7 +2310,7 @@ fn clipping_respects_clip_children_flag_and_scroll_marks_subtree_dirty() {
     let unclipped_outside = unclipped
         .pixels
         .iter()
-        .any(|&(x, y, _)| x > 20 && y >= 4 && y <= 16);
+        .any(|&(x, y, _)| x > 20 && (4..=16).contains(&y));
 
     assert!(!clipped_outside);
     assert!(unclipped_outside);
@@ -4465,11 +4465,10 @@ fn framebuffer_true_alpha_composites_not_dithers() {
     // Expected 50%-ish lerp of black→white: mid grey, not black and not white.
     let expected = {
         let t = 128u16;
-        let inv = 255 - t;
         Rgb565::new(
-            ((0 * inv + 31 * t) / 255) as u8,
-            ((0 * inv + 63 * t) / 255) as u8,
-            ((0 * inv + 31 * t) / 255) as u8,
+            ((31 * t) / 255) as u8,
+            ((63 * t) / 255) as u8,
+            ((31 * t) / 255) as u8,
         )
     };
     for y in 0..8 {

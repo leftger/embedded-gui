@@ -243,7 +243,7 @@ fn main() {
         }
 
         // Save every other tick (~32ms cadence → ~31fps source material).
-        if frame_idx % 2 == 0 {
+        if frame_idx.is_multiple_of(2) {
             let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(W, H));
             display.clear(Rgb565::BLACK).unwrap();
             gui.render(&mut display).unwrap();
