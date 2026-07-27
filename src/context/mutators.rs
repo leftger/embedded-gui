@@ -20,11 +20,13 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::ProgressBar { value: ref mut v } => {
                 *v = value.clamp(0.0, 1.0);
                 self.dirty.add(rect)?;
                 Ok(())
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::PeekReveal {
                 progress: ref mut v,
                 ..
@@ -45,6 +47,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_glance_highlighted(
         &mut self,
         id: WidgetId,
@@ -65,6 +68,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_card_deck_selected(
         &mut self,
         id: WidgetId,
@@ -85,6 +89,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tick_reel(&mut self, id: WidgetId, dt_ms: u32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -101,6 +106,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_state_surface_state(
         &mut self,
         id: WidgetId,
@@ -121,6 +127,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_state_surface_message(
         &mut self,
         id: WidgetId,
@@ -141,6 +148,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_state_surface_action(
         &mut self,
         id: WidgetId,
@@ -161,6 +169,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_state_surface_busy_phase(
         &mut self,
         id: WidgetId,
@@ -181,6 +190,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tick_state_surface(
         &mut self,
         id: WidgetId,
@@ -196,6 +206,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_state_surface_busy_phase(id, phase)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_heads_up_ttl(&mut self, id: WidgetId, ttl_ms: u32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -212,6 +223,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tick_heads_up(&mut self, id: WidgetId, dt_ms: u32) -> Result<(), GuiError> {
         let ttl = match self.node(id).ok_or(GuiError::NotFound)?.kind {
             WidgetKind::HeadsUpBanner { ttl_ms, .. } => ttl_ms.saturating_sub(dt_ms),
@@ -220,6 +232,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_heads_up_ttl(id, ttl)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_notification_sheet_open(
         &mut self,
         id: WidgetId,
@@ -240,6 +253,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_notification_sheet_selected(
         &mut self,
         id: WidgetId,
@@ -261,6 +275,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_menu_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -277,6 +292,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn menu_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::Menu { selected, .. } => Some(selected),
@@ -284,6 +300,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn list_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::List { selected, .. } => Some(selected),
@@ -291,6 +308,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_list_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -312,6 +330,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn feed_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::FeedTimeline { selected, .. } => Some(selected),
@@ -319,6 +338,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_feed_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -341,6 +361,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_feed_expanded(&mut self, id: WidgetId, expanded: bool) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -357,6 +378,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_toggle(&mut self, id: WidgetId, on: bool) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -370,6 +392,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn toggle_value(&self, id: WidgetId) -> Option<bool> {
         match self.node(id)?.kind {
             WidgetKind::Toggle { on, .. } => Some(on),
@@ -377,6 +400,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_checked(&mut self, id: WidgetId, checked: bool) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -392,6 +416,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn checked_value(&self, id: WidgetId) -> Option<bool> {
         match self.node(id)?.kind {
             WidgetKind::Checkbox { checked, .. } => Some(checked),
@@ -399,6 +424,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_slider_value(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -418,6 +444,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn slider_value(&self, id: WidgetId) -> Option<f32> {
         match self.node(id)?.kind {
             WidgetKind::Slider { value, .. } => Some(value),
@@ -425,6 +452,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_value_label(&mut self, id: WidgetId, value: i32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -440,6 +468,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_scroll_offset(&mut self, id: WidgetId, offset_y: i32) -> Result<(), GuiError> {
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
@@ -457,6 +486,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn scroll_offset(&self, id: WidgetId) -> Option<i32> {
         match self.node(id)?.kind {
             WidgetKind::ScrollView { offset_y, .. } => Some(offset_y),
@@ -464,6 +494,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_tab_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -482,6 +513,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tab_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::Tabs { selected, .. } => Some(selected),
@@ -489,6 +521,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_toast_ttl(&mut self, id: WidgetId, ttl_ms: u32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -504,6 +537,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tick_toast(&mut self, id: WidgetId, dt_ms: u32) -> Result<(), GuiError> {
         let ttl = match self.node(id).ok_or(GuiError::NotFound)?.kind {
             WidgetKind::Toast { ttl_ms, .. } => ttl_ms.saturating_sub(dt_ms),
@@ -512,6 +546,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_toast_ttl(id, ttl)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_meter_value(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -529,6 +564,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_spinner_phase(&mut self, id: WidgetId, phase: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -542,6 +578,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn tick_spinner(
         &mut self,
         id: WidgetId,
@@ -555,6 +592,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_spinner_phase(id, phase)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_dropdown_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -572,6 +610,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn dropdown_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::Dropdown { selected, .. } => Some(selected),
@@ -579,6 +618,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_dropdown_open(&mut self, id: WidgetId, open: bool) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -602,6 +642,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn dropdown_open(&self, id: WidgetId) -> Option<bool> {
         match self.node(id)?.kind {
             WidgetKind::Dropdown { open, .. } => Some(open),
@@ -609,6 +650,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_roller_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -625,6 +667,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn roller_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::Roller { selected, .. } => Some(selected),
@@ -632,6 +675,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_text(&mut self, id: WidgetId, text: &'a str) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -653,6 +697,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_text(&self, id: WidgetId) -> Option<&str> {
         match &self.node(id)?.kind {
             WidgetKind::TextArea {
@@ -662,6 +707,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor(&mut self, id: WidgetId, cursor: usize) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -681,16 +727,19 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn move_textarea_cursor(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
         let next = self.textarea_cursor(id).ok_or(GuiError::NotFound)? as i32 + delta as i32;
         self.set_textarea_cursor_with_extend(id, next.max(0) as usize, false)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn move_textarea_cursor_select(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
         let next = self.textarea_cursor(id).ok_or(GuiError::NotFound)? as i32 + delta as i32;
         self.set_textarea_cursor_with_extend(id, next.max(0) as usize, true)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn move_textarea_cursor_word(&mut self, id: WidgetId, delta: i8) -> Result<(), GuiError> {
         let (text, cursor) = match &self.node(id).ok_or(GuiError::NotFound)?.kind {
             WidgetKind::TextArea {
@@ -709,6 +758,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, false)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn move_textarea_cursor_word_select(
         &mut self,
         id: WidgetId,
@@ -731,10 +781,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, true)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_home(&mut self, id: WidgetId) -> Result<(), GuiError> {
         self.set_textarea_cursor(id, 0)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_end(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let len = self
             .textarea_text(id)
@@ -743,6 +795,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor(id, len)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_line_home(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
         let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
@@ -750,6 +803,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, false)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_line_home_select(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
         let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
@@ -757,6 +811,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, true)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_line_end(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
         let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
@@ -765,6 +820,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, false)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_cursor_line_end_select(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let (text, cursor, wrap_cols) = self.textarea_line_context(id)?;
         let (row, _) = textarea_row_col_at_cursor(text, cursor, wrap_cols);
@@ -773,6 +829,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_textarea_cursor_with_extend(id, next, true)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_cursor(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::TextArea { cursor, .. } => Some(cursor),
@@ -780,6 +837,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_selection(
         &mut self,
         id: WidgetId,
@@ -807,6 +865,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn clear_textarea_selection(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -823,6 +882,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_selection(&self, id: WidgetId) -> Option<(usize, usize)> {
         match self.node(id)?.kind {
             WidgetKind::TextArea { selection, .. } => selection,
@@ -830,6 +890,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_cursor_visible(&self, id: WidgetId) -> Option<bool> {
         match self.node(id)?.kind {
             WidgetKind::TextArea { cursor_visible, .. } => Some(cursor_visible),
@@ -837,6 +898,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_textarea_capabilities(
         &mut self,
         id: WidgetId,
@@ -863,6 +925,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_insert_char(&mut self, id: WidgetId, ch: char) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let before = self.capture_textarea_snapshot(id)?;
@@ -948,6 +1011,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn textarea_line_context(
         &self,
         id: WidgetId,
@@ -969,6 +1033,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn set_textarea_cursor_with_extend(
         &mut self,
         id: WidgetId,
@@ -1014,6 +1079,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn capture_textarea_snapshot(
         &self,
         id: WidgetId,
@@ -1035,6 +1101,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn apply_textarea_snapshot(
         &mut self,
         id: WidgetId,
@@ -1061,6 +1128,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn push_textarea_undo(&mut self, id: WidgetId, snapshot: TextareaSnapshot) {
         if self.textarea_undo.len() == self.textarea_undo.capacity() {
             self.textarea_undo.remove(0);
@@ -1070,6 +1138,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .push(TextareaHistoryEntry { id, snapshot });
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn push_textarea_redo(&mut self, id: WidgetId, snapshot: TextareaSnapshot) {
         if self.textarea_redo.len() == self.textarea_redo.capacity() {
             self.textarea_redo.remove(0);
@@ -1079,6 +1148,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .push(TextareaHistoryEntry { id, snapshot });
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn clear_textarea_redo_for(&mut self, id: WidgetId) {
         let mut i = 0usize;
         while i < self.textarea_redo.len() {
@@ -1090,6 +1160,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn textarea_undo(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let Some(pos) = self.textarea_undo.iter().rposition(|entry| entry.id == id) else {
             return Ok(());
@@ -1100,6 +1171,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.apply_textarea_snapshot(id, prior)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn textarea_redo(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let Some(pos) = self.textarea_redo.iter().rposition(|entry| entry.id == id) else {
             return Ok(());
@@ -1110,14 +1182,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.apply_textarea_snapshot(id, next)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_backspace(&mut self, id: WidgetId) -> Result<(), GuiError> {
         self.textarea_insert_char(id, '\u{8}')
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn textarea_delete_forward(&mut self, id: WidgetId) -> Result<(), GuiError> {
         self.textarea_insert_char(id, '\u{7f}')
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn keyboard_selected_key(&self, id: WidgetId) -> Option<char> {
         match self.node(id)?.kind {
             WidgetKind::Keyboard {
@@ -1131,6 +1206,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn keyboard_layout(&self, id: WidgetId) -> Option<KeyboardLayout> {
         match self.node(id)?.kind {
             WidgetKind::Keyboard { layout, .. } => Some(layout),
@@ -1138,6 +1214,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_keyboard_layout(
         &mut self,
         id: WidgetId,
@@ -1158,6 +1235,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_keyboard_target(
         &mut self,
         id: WidgetId,
@@ -1176,6 +1254,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_gauge_value(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -1206,6 +1285,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_gauge_ticks(
         &mut self,
         id: WidgetId,

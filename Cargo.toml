@@ -19,8 +19,16 @@ exclude = [
 ]
 
 [features]
-default = ["std"]
+default = ["std", "rich-widgets"]
 std = ["embedded-dsp?/std"]
+# The full widget-kind catalog (buttons, toggles, sliders, lists, tabs,
+# dialogs, gauges, charts, keyboards, text areas, ...) beyond the small
+# always-on set (Panel, Label, Button, Image, Border, Spacer, SweepingArc).
+# Disabling this on a target that only builds a handful of widget kinds
+# shrinks WidgetNode::render_at and friends considerably, since an unused
+# match arm still gets compiled into that function even if its variant is
+# never constructed at runtime -- only removing the variant does.
+rich-widgets = []
 image-decode = ["std"]
 libm = ["dep:libm", "embedded-dsp?/libm"]
 micromath = ["dep:micromath"]
