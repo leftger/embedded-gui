@@ -1502,6 +1502,30 @@ where
         let start = normalize_angle_deg(start_deg);
         let ccw = sweep_deg >= 0.0;
 
+        // The sector is the arc of length `max_sweep`, in degrees, that
+        // starts at `lo_deg` and ends at `hi_deg` (both expressed in the
+        // same increasing-angle direction `atan2` would report). Reduce
+        // this to two boundary direction vectors so the per-pixel test is
+        // a couple of multiply-subtracts instead of an `atan2` + degrees
+        // conversion for every pixel in the circle -- `atan2` is a
+        // software-emulated call on MCUs without a hardware FPU trig unit,
+        // and this loop used to run it for every pixel inside the radius,
+        // every frame.
+        let (lo_deg, hi_deg) = if ccw {
+            (start, start + max_sweep)
+        } else {
+            (start - max_sweep, start)
+        };
+        let (lo_c, lo_s) = (lo_deg.to_radians().cos(), lo_deg.to_radians().sin());
+        let (hi_c, hi_s) = (hi_deg.to_radians().cos(), hi_deg.to_radians().sin());
+        // A sweep over half a circle or less is a convex wedge, testable
+        // directly with two half-plane (cross-product) checks. A sweep
+        // past 180 degrees is non-convex, but its complement (the
+        // untouched slice) is convex and always < 180 degrees, so test
+        // for exclusion from that instead.
+        let full_circle = max_sweep >= 360.0;
+        let reflex = max_sweep > 180.0;
+
         for y in draw.y..draw.bottom() {
             for x in draw.x..draw.right() {
                 let dx = x - center_x;
@@ -1511,14 +1535,15 @@ where
                     continue;
                 }
 
-                let mut angle = (dy as f32).atan2(dx as f32).to_degrees();
-                if angle < 0.0 {
-                    angle += 360.0;
-                }
-                let in_sweep = if ccw {
-                    ccw_distance_deg(start, angle) <= max_sweep
+                let in_sweep = if full_circle {
+                    true
                 } else {
-                    ccw_distance_deg(angle, start) <= max_sweep
+                    let (fx, fy) = (dx as f32, dy as f32);
+                    if !reflex {
+                        cross(lo_c, lo_s, fx, fy) >= 0.0 && cross(fx, fy, hi_c, hi_s) >= 0.0
+                    } else {
+                        !(cross(hi_c, hi_s, fx, fy) >= 0.0 && cross(fx, fy, lo_c, lo_s) >= 0.0)
+                    }
                 };
                 if in_sweep {
                     self.pixel(x, y, color, 255)?;
@@ -2395,12 +2420,8 @@ fn normalize_angle_deg(mut deg: f32) -> f32 {
 }
 
 #[inline]
-fn ccw_distance_deg(from: f32, to: f32) -> f32 {
-    let mut d = normalize_angle_deg(to) - normalize_angle_deg(from);
-    if d < 0.0 {
-        d += 360.0;
-    }
-    d
+fn cross(ux: f32, uy: f32, vx: f32, vy: f32) -> f32 {
+    ux * vy - uy * vx
 }
 
 fn apply_blend_mode(src: Rgb565, mode: BlendMode, backdrop: Rgb565) -> Rgb565 {
