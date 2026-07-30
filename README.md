@@ -199,6 +199,36 @@ Static motion frame preview:
 
 ![Motion frame screenshot](docs/screenshots/motion.png)
 
+## Async present and DMA double-buffering
+
+Both `embedded-gui` and `embedded-3dgfx` share a runtime-agnostic present stack:
+
+- **Sync (fastest poll path):** `swap.try_present()` / `gui.try_present_dirty()` — ideal for RTIC tasks and bare-metal superloops.
+- **Blocking:** `swap.present()` — simple bring-up.
+- **Async:** `swap.present_async().await` — yields while DMA runs; works with Embassy or any `core::future` executor.
+
+Core types (always available, no Embassy dependency):
+
+- [`CompletionSlot`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.CompletionSlot.html) — ISR-safe DMA done flag + waker.
+- [`WaitTransfer`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.WaitTransfer.html) — reference `AsyncDmaTransfer` token wired to a `CompletionSlot`.
+
+Optional Cargo features:
+
+| Feature | Purpose |
+|---------|---------|
+| `embassy-time` | Monotonic `dt_ms` via `embassy_time::Instant` |
+| `embassy` | [`EmbassyWaitTransfer`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.EmbassyWaitTransfer.html) + [`FrameClock`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.FrameClock.html) |
+| `triple-buffering` | Triple-buffer swap chain for bursty frame times |
+
+Examples:
+
+```bash
+cargo run --example completion_swapchain_sim --features std
+cargo run --example embassy_gui_frame --features embassy,std
+```
+
+**Performance note:** triangle and widget rasterization stay synchronous. Async is for **present/wait** only — overlapping CPU render with DMA scan-out. Making inner pixel loops async would add executor overhead without speeding up single-core MCUs.
+
 ## License
 
 The contents of this repository are dual-licensed under the _MIT OR Apache 2.0_

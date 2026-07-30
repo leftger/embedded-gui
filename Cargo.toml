@@ -42,10 +42,20 @@ embedded-graphics = ["dep:embedded-graphics"]
 # (biquad filtering + RMS/max statistics) instead of the whole crate
 # (FFT, SVM, Bayes, quaternion, ...) — see embedded-dsp's per-module features.
 embedded-dsp = ["dep:embedded-dsp", "embedded-dsp/filtering", "embedded-dsp/statistics"]
+# Enable triple-buffered swapchain APIs.
+triple-buffering = []
+# Monotonic timing via embassy-time (no executor required).
+embassy-time = ["dep:embassy-time"]
+# Embassy-native DMA wake helpers and frame clock.
+embassy = ["embassy-time", "dep:embassy-sync"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
+embedded-graphics-framebuf = "0.3"
+critical-section = "1.1"
 heapless = "0.9"
+embassy-time = { version = "0.5", default-features = false, optional = true }
+embassy-sync = { version = "0.8", default-features = false, optional = true }
 libm = {version = "0.2", optional = true}
 micromath = {version = "2.1", optional = true}
 embedded-graphics = { version = "0.8", optional = true }
@@ -54,6 +64,9 @@ embedded-layout = { version = "0.4.2", optional = true }
 embedded-dsp = { version = "0.2.0", optional = true, default-features = false }
 
 [dev-dependencies]
+critical-section = { version = "1.1", features = ["std"] }
+embassy-time = { version = "0.5", features = ["std"] }
+embassy-sync = { version = "0.8" }
 embedded-3dgfx = { version = "0.3.2" }
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
@@ -63,3 +76,11 @@ nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 [[example]]
 name = "interop_showcase"
 required-features = ["embedded-text", "embedded-layout"]
+
+[[example]]
+name = "completion_swapchain_sim"
+required-features = ["std"]
+
+[[example]]
+name = "embassy_gui_frame"
+required-features = ["embassy", "std"]
