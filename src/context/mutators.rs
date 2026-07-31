@@ -349,6 +349,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_plotter_values(&mut self, id: WidgetId, values: &'a [f32]) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
@@ -362,6 +363,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn feed_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::FeedTimeline { selected, .. } => Some(selected),
@@ -1902,6 +1904,20 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 }
 
+fn contains_ignore_ascii_case(s: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let s_bytes = s.as_bytes();
+    let n_bytes = needle.as_bytes();
+    if n_bytes.len() > s_bytes.len() {
+        return false;
+    }
+    s_bytes.windows(n_bytes.len()).any(|window| {
+        window.iter().zip(n_bytes.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
 fn filter_suggestions<'a>(
     text: &str,
     suggestions: &'a [&'a str],
@@ -1916,7 +1932,7 @@ fn filter_suggestions<'a>(
         return;
     }
     for &s in suggestions {
-        if s.to_ascii_lowercase().contains(&text.to_ascii_lowercase()) {
+        if contains_ignore_ascii_case(s, text) {
             filtered[*filter_count as usize] = Some(s);
             *filter_count += 1;
             if *filter_count == 8 {

@@ -324,6 +324,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_circular_list(rect, items, selected, visible_rows, self.theme.list)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_scroll_view<S>(
         &mut self,
         rect: Rect,
@@ -649,6 +650,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_plotter(rect, values, head, min, max, self.theme.panel)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_plotter_style(
         &mut self,
         id: WidgetId,
@@ -669,6 +671,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_plotter_decoration(
         &mut self,
         id: WidgetId,
@@ -692,6 +695,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_chart_style(
         &mut self,
         id: WidgetId,

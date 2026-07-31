@@ -488,6 +488,7 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::ScrollView {
                 offset_y,
                 content_h,
@@ -1273,6 +1274,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_value_label<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1479,6 +1481,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_scroll_view<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,

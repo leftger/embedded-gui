@@ -310,6 +310,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.tick_theme_transition(dt_ms)?;
         self.haptic_sequencer.tick(dt_ms);
         self.tick_rle_animations(dt_ms)?;
+        #[cfg(feature = "rich-widgets")]
         if let Some(mut inertia) = self.inertia_scroll {
             if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
                 self.inertia_scroll = None;
@@ -333,6 +334,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 self.inertia_scroll = Some(inertia);
             }
         }
+        #[cfg(feature = "rich-widgets")]
         self.tick_textarea_cursor_blink(dt_ms)?;
         let Some(mut pressed) = self.pressed else {
             return Ok(());
@@ -1464,6 +1466,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn tick_textarea_cursor_blink(&mut self, dt_ms: u32) -> Result<(), GuiError> {
         let Some(id) = self.focus else {
             return Ok(());
