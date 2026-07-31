@@ -1,0 +1,38 @@
+# pre-commit configuration for local CI checks
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-check
+        name: cargo check (all-features)
+        entry: cargo check --lib --all-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-check-no-std
+        name: cargo check (no_std)
+        entry: cargo check --lib --no-default-features --features libm --target thumbv7em-none-eabihf
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --lib --all-features -- -W clippy::all
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test
+        language: system
+        types: [rust]
+        pass_filenames: false
