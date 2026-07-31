@@ -341,6 +341,12 @@ impl WidgetKind<'_> {
                 | Self::FeedTimeline { .. }
                 | Self::Dial { .. }
                 | Self::AutoComplete { .. }
+        ) {
+            return true;
+        }
+        matches!(
+            self,
+            Self::Button { .. } | Self::RlePlayer { .. }
         )
     }
 }
