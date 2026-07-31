@@ -9,6 +9,7 @@ use crate::{
     style::{Style, WidgetStyle},
     widget::WidgetId,
     widgets::{ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind},
+    haptics::HapticPattern,
 };
 
 use super::*;
@@ -272,6 +273,42 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_list(rect, items, selected, visible_rows, self.theme.list)
     }
 
+    pub fn add_circular_list<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(items.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::CircularList {
+                items,
+                selected,
+                offset: selected,
+                visible_rows: visible_rows.max(1),
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_circular_list(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        visible_rows: usize,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_circular_list(rect, items, selected, visible_rows, self.theme.list)
+    }
+
     pub fn add_scroll_view<S>(
         &mut self,
         rect: Rect,
@@ -338,7 +375,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         S: Into<WidgetStyle>,
     {
-        self.add_widget(rect, WidgetKind::Dialog { title, body }, style)
+        let id = self.add_widget(rect, WidgetKind::Dialog { title, body }, style)?;
+        self.play_haptic(HapticPattern::Alert);
+        Ok(id)
     }
 
     pub fn add_themed_dialog(
@@ -360,7 +399,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     where
         S: Into<WidgetStyle>,
     {
-        self.add_widget(rect, WidgetKind::Toast { text, ttl_ms }, style)
+        let id = self.add_widget(rect, WidgetKind::Toast { text, ttl_ms }, style)?;
+        self.play_haptic(HapticPattern::Success);
+        Ok(id)
     }
 
     pub fn add_themed_toast(
@@ -540,6 +581,87 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             },
             style,
         )
+    }
+
+    pub fn add_plotter<S>(
+        &mut self,
+        rect: Rect,
+        values: &'a [f32],
+        head: usize,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Plotter {
+                values,
+                head,
+                min,
+                max,
+                thickness: 1,
+                show_grid: false,
+                show_axes: false,
+            },
+            style,
+        )
+    }
+
+    pub fn add_themed_plotter(
+        &mut self,
+        rect: Rect,
+        values: &'a [f32],
+        head: usize,
+        min: f32,
+        max: f32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_plotter(rect, values, head, min, max, self.theme.panel)
+    }
+
+    pub fn set_plotter_style(
+        &mut self,
+        id: WidgetId,
+        thickness: u8,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Plotter {
+                thickness: ref mut t,
+                ..
+            } => {
+                *t = thickness.max(1);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_plotter_decoration(
+        &mut self,
+        id: WidgetId,
+        show_grid: bool,
+        show_axes: bool,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Plotter {
+                show_grid: ref mut grid,
+                show_axes: ref mut axes,
+                ..
+            } => {
+                *grid = show_grid;
+                *axes = show_axes;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
     }
 
     pub fn set_chart_style(
@@ -959,5 +1081,114 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let id = self.add_widget(rect, WidgetKind::Menu { items, selected }, style)?;
         self.ensure_focus();
         Ok(id)
+    }
+
+    pub fn add_dial<S>(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let value = value.clamp(min, max);
+        let id = self.add_widget(rect, WidgetKind::Dial { value, min, max }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_dial(
+        &mut self,
+        rect: Rect,
+        value: f32,
+        min: f32,
+        max: f32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_dial(rect, value, min, max, self.theme.button)
+    }
+
+    pub fn add_rle_player<S>(
+        &mut self,
+        rect: Rect,
+        rle_data: &'static [u8],
+        frame_width: u16,
+        frame_height: u16,
+        total_frames: usize,
+        frame_duration_ms: u32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::RlePlayer {
+                rle_data,
+                frame_width,
+                frame_height,
+                total_frames,
+                current_frame: 0,
+                elapsed_ms: 0,
+                frame_duration_ms,
+            },
+            style,
+        )
+    }
+
+    pub fn add_themed_rle_player(
+        &mut self,
+        rect: Rect,
+        rle_data: &'static [u8],
+        frame_width: u16,
+        frame_height: u16,
+        total_frames: usize,
+        frame_duration_ms: u32,
+    ) -> Result<WidgetId, GuiError> {
+        self.add_rle_player(
+            rect,
+            rle_data,
+            frame_width,
+            frame_height,
+            total_frames,
+            frame_duration_ms,
+            self.theme.panel,
+        )
+    }
+
+    pub fn add_autocomplete_widget<S>(
+        &mut self,
+        rect: Rect,
+        suggestions: &'a [&'a str],
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::AutoComplete {
+                text_buf: [0; 32],
+                text_len: 0,
+                suggestions,
+                filtered: [None; 8],
+                filter_count: 0,
+                selected: None,
+                expanded: false,
+            },
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    pub fn add_themed_autocomplete(
+        &mut self,
+        rect: Rect,
+        suggestions: &'a [&'a str],
+    ) -> Result<WidgetId, GuiError> {
+        self.add_autocomplete_widget(rect, suggestions, self.theme.panel)
     }
 }

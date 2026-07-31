@@ -12,6 +12,7 @@ pub mod context;
 pub mod font;
 pub mod framebuffer;
 pub mod geometry;
+pub mod haptics;
 pub mod image;
 pub mod input;
 #[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
@@ -32,6 +33,8 @@ pub mod visual_widgets;
 pub mod widget;
 pub mod widget_animation;
 pub mod widgets;
+
+pub use haptics::{HapticPattern, HapticSequencer};
 
 pub use visual_widgets::{BusyWheel, GaugeWidget};
 #[cfg(feature = "embedded-dsp")]
@@ -132,7 +135,8 @@ pub mod prelude {
         EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
         FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
         GradientDirection, GuiContext, GuiError, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef,
-        InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
+        InertiaAnimator, InputEvent, HapticPattern, HapticSequencer,
+        KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
         KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout,
         ListState, MenuContract, MotionTokens, NotificationLevel, PathAnimator, PathPoint,
         PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming, Rect,

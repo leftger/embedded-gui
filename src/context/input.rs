@@ -10,6 +10,7 @@ use crate::{
     style::{VisualState, WidgetStyle},
     widget::{EventPhase, EventPolicy, WidgetId},
     widgets::{KeyboardLayout, TEXTAREA_CAPACITY, WidgetKind, WidgetNode},
+    haptics::HapticPattern,
 };
 
 use super::*;
@@ -294,6 +295,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
         }
         self.tick_state_transitions(dt_ms)?;
+        self.tick_theme_transition(dt_ms)?;
+        self.haptic_sequencer.tick(dt_ms);
+        self.tick_rle_animations(dt_ms)?;
         if let Some(mut inertia) = self.inertia_scroll {
             if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
                 self.inertia_scroll = None;
@@ -337,6 +341,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 |_| EventPolicy::Continue,
             )?;
             self.push_event(UiEvent::LongPressed(pressed.id))?;
+            self.play_haptic(HapticPattern::LongPress);
             pressed.long_emitted = true;
         }
         if pressed.repeat_elapsed_ms >= timing.repeat_delay_ms
@@ -530,6 +535,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 )
             }
             WidgetKind::List {
+                items,
+                visible_rows,
+                ..
+            }
+            | WidgetKind::CircularList {
                 items,
                 visible_rows,
                 ..
@@ -769,6 +779,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     selected: ref mut current,
                     ref mut offset,
                     visible_rows,
+                }
+                | WidgetKind::CircularList {
+                    items,
+                    selected: ref mut current,
+                    ref mut offset,
+                    visible_rows,
                 } => {
                     if items.is_empty() {
                         return Ok(true);
@@ -811,6 +827,22 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     let mut state = ScrollState::new(*offset, content_h);
                     changed = state.scroll_by(delta as i32 * 8);
                     *offset = state.offset_y;
+                    changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::AutoComplete {
+                    filtered: _,
+                    filter_count,
+                    selected: ref mut current,
+                    expanded,
+                    ..
+                } => {
+                    if !expanded || filter_count == 0 {
+                        return Ok(false);
+                    }
+                    let idx = current.unwrap_or(0);
+                    let mut next = idx;
+                    changed = bump_index_with_wrap(&mut next, filter_count as usize, delta, wrap_navigation);
+                    *current = Some(next);
                     changed_rect = changed.then_some(node.rect);
                 }
                 _ => return Ok(false),
@@ -875,6 +907,16 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         changed = next != *current;
                         *current = next;
                     }
+                    changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::Dial {
+                    value: ref mut current,
+                    min,
+                    max,
+                } => {
+                    let mut state = SliderState::new(*current, min, max);
+                    changed = state.step_by(direction);
+                    *current = state.value;
                     changed_rect = changed.then_some(node.rect);
                 }
                 _ => return Ok(false),
@@ -978,6 +1020,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
         if let Some(id) = hit {
             self.dispatch_activation(id, true)?;
+            self.update_dial_value_at_pointer(id, x, y)?;
             self.pressed = Some(PressTracker {
                 id,
                 start_x: x,
@@ -1042,6 +1085,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let Some(mut pressed) = self.pressed else {
             return Ok(());
         };
+        self.update_dial_value_at_pointer(pressed.id, x, y)?;
         let dy = y - pressed.last_y;
         pressed.last_x = x;
         pressed.last_y = y;
@@ -1088,6 +1132,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         id: WidgetId,
         is_pointer: bool,
     ) -> Result<(), GuiError> {
+        let is_autocomplete = matches!(
+            self.node(id).map(|n| &n.kind),
+            Some(WidgetKind::AutoComplete { .. })
+        );
+        if is_autocomplete {
+            self.autocomplete_confirm_selection(id)?;
+            return Ok(());
+        }
+
         let mut events = heapless::Vec::<WidgetEvent, NODES>::new();
         self.dispatch_widget_event(id, WidgetEventKind::Pressed, &mut events, |_| {
             EventPolicy::Continue
@@ -1111,6 +1164,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             EventPolicy::Continue
         })?;
         self.push_event(UiEvent::Clicked(id))?;
+        self.play_haptic(HapticPattern::Click);
         self.push_event(UiEvent::Activate(id))?;
         Ok(())
     }
@@ -1121,6 +1175,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             EventPolicy::Continue
         })?;
         self.push_event(UiEvent::Clicked(id))?;
+        self.play_haptic(HapticPattern::Click);
         self.push_event(UiEvent::Activate(id))
     }
 
@@ -1129,7 +1184,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.dispatch_widget_event(id, WidgetEventKind::DoubleClicked, &mut events, |_| {
             EventPolicy::Continue
         })?;
-        self.push_event(UiEvent::DoubleClicked(id))
+        self.push_event(UiEvent::DoubleClicked(id))?;
+        self.play_haptic(HapticPattern::DoubleClick);
+        Ok(())
     }
 
     pub(crate) fn dispatch_key_pressed(&mut self, id: WidgetId) -> Result<(), GuiError> {
@@ -1328,6 +1385,23 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    pub(crate) fn tick_theme_transition(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        if let (Some(from), Some(to)) = (self.theme_transition_from, self.theme_transition_to) {
+            let elapsed = self.theme_transition_elapsed_ms.saturating_add(dt_ms);
+            self.theme_transition_elapsed_ms = elapsed;
+            if elapsed >= self.theme_transition_duration_ms {
+                self.theme = to;
+                self.theme_transition_from = None;
+                self.theme_transition_to = None;
+            } else {
+                let t = elapsed as f32 / self.theme_transition_duration_ms as f32;
+                self.theme = crate::style::lerp_theme(from, to, t);
+            }
+            self.dirty.mark_all(self.viewport)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn tick_textarea_cursor_blink(&mut self, dt_ms: u32) -> Result<(), GuiError> {
         let Some(id) = self.focus else {
             return Ok(());
@@ -1479,6 +1553,34 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             if matches!(
                 self.node(id).map(|n| n.kind),
+                Some(WidgetKind::AutoComplete { .. })
+            ) {
+                let expanded = if let Some(WidgetKind::AutoComplete { expanded, .. }) = self.node(id).map(|n| n.kind) {
+                    expanded
+                } else {
+                    false
+                };
+                if expanded {
+                    let has_chars = if let Some(WidgetKind::AutoComplete { text_len, .. }) = self.node(id).map(|n| n.kind) {
+                        text_len > 0
+                    } else {
+                        false
+                    };
+                    if has_chars {
+                        self.delete_autocomplete_char(id)?;
+                    } else {
+                        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+                        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+                        if let WidgetKind::AutoComplete { expanded, .. } = &mut node.kind {
+                            *expanded = false;
+                        }
+                        self.dirty.add(rect)?;
+                    }
+                    return Ok(());
+                }
+            }
+            if matches!(
+                self.node(id).map(|n| n.kind),
                 Some(WidgetKind::Dropdown { open: true, .. })
             ) && self.menu_contract.back_closes_dropdown
             {
@@ -1495,6 +1597,62 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
         }
         self.push_event(UiEvent::Back)
+    }
+
+    pub(crate) fn update_dial_value_at_pointer(&mut self, id: WidgetId, x: i32, y: i32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::Dial { value, min, max } = &mut node.kind {
+            let cx = rect.x + rect.w as i32 / 2;
+            let cy = rect.y + rect.h as i32 / 2;
+            let dx = (x - cx) as f32;
+            let dy = (y - cy) as f32;
+            if dx != 0.0 || dy != 0.0 {
+                #[cfg(not(feature = "std"))]
+                use crate::math::F32Ext as _;
+                
+                let angle_rad = dy.atan2(dx);
+                let mut angle_norm = angle_rad + core::f32::consts::PI;
+                if angle_norm < 0.0 {
+                    angle_norm += 2.0 * core::f32::consts::PI;
+                }
+                let progress = (angle_norm / (2.0 * core::f32::consts::PI)).clamp(0.0, 1.0);
+                let next_val = *min + progress * (*max - *min);
+                if (*value - next_val).abs() > 0.001 {
+                    *value = next_val;
+                    self.dirty.add(rect)?;
+                    self.push_event(UiEvent::ValueChanged(id))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn tick_rle_animations(&mut self, dt_ms: u32) -> Result<(), GuiError> {
+        let mut dirty_rects = heapless::Vec::<Rect, NODES>::new();
+        for node in self.widgets.iter_mut() {
+            if let WidgetKind::RlePlayer {
+                total_frames,
+                ref mut current_frame,
+                ref mut elapsed_ms,
+                frame_duration_ms,
+                ..
+            } = node.kind {
+                if total_frames > 1 && frame_duration_ms > 0 {
+                    *elapsed_ms = elapsed_ms.saturating_add(dt_ms);
+                    if *elapsed_ms >= frame_duration_ms {
+                        let frames_to_advance = *elapsed_ms / frame_duration_ms;
+                        *elapsed_ms %= frame_duration_ms;
+                        *current_frame = (*current_frame + frames_to_advance as usize) % total_frames;
+                        let _ = dirty_rects.push(node.rect);
+                    }
+                }
+            }
+        }
+        for rect in dirty_rects {
+            self.dirty.add(rect)?;
+        }
+        Ok(())
     }
 }
 

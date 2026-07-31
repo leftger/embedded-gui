@@ -143,6 +143,21 @@ pub enum WidgetKind<'a> {
         show_axes: bool,
         show_labels: bool,
     },
+    Plotter {
+        values: &'a [f32],
+        head: usize,
+        min: f32,
+        max: f32,
+        thickness: u8,
+        show_grid: bool,
+        show_axes: bool,
+    },
+    CircularList {
+        items: &'a [&'a str],
+        selected: usize,
+        offset: usize,
+        visible_rows: usize,
+    },
     Spinner {
         phase: f32,
     },
@@ -238,6 +253,29 @@ pub enum WidgetKind<'a> {
         visible_rows: usize,
         expanded: bool,
     },
+    Dial {
+        value: f32,
+        min: f32,
+        max: f32,
+    },
+    RlePlayer {
+        rle_data: &'static [u8],
+        frame_width: u16,
+        frame_height: u16,
+        total_frames: usize,
+        current_frame: usize,
+        elapsed_ms: u32,
+        frame_duration_ms: u32,
+    },
+    AutoComplete {
+        text_buf: [u8; 32],
+        text_len: u8,
+        suggestions: &'a [&'a str],
+        filtered: [Option<&'a str>; 8],
+        filter_count: u8,
+        selected: Option<usize>,
+        expanded: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -263,6 +301,7 @@ impl WidgetKind<'_> {
                 | Self::Slider { .. }
                 | Self::IconButton { .. }
                 | Self::List { .. }
+                | Self::CircularList { .. }
                 | Self::ScrollView { .. }
                 | Self::Tabs { .. }
                 | Self::Dropdown { .. }
@@ -271,6 +310,8 @@ impl WidgetKind<'_> {
                 | Self::Keyboard { .. }
                 | Self::Menu { .. }
                 | Self::FeedTimeline { .. }
+                | Self::Dial { .. }
+                | Self::AutoComplete { .. }
         )
     }
 }
@@ -382,6 +423,21 @@ impl<'a> WidgetNode<'a> {
                 offset,
                 visible_rows,
             } => render_list(
+                ctx,
+                rect,
+                items,
+                selected,
+                offset,
+                visible_rows,
+                self.style,
+                state,
+            ),
+            WidgetKind::CircularList {
+                items,
+                selected,
+                offset,
+                visible_rows,
+            } => render_circular_list(
                 ctx,
                 rect,
                 items,
@@ -505,6 +561,27 @@ impl<'a> WidgetNode<'a> {
                 show_grid,
                 show_axes,
                 show_labels,
+                self.style,
+                state,
+            ),
+            WidgetKind::Plotter {
+                values,
+                head,
+                min,
+                max,
+                thickness,
+                show_grid,
+                show_axes,
+            } => render_plotter(
+                ctx,
+                rect,
+                values,
+                head,
+                min,
+                max,
+                thickness,
+                show_grid,
+                show_axes,
                 self.style,
                 state,
             ),
@@ -643,6 +720,45 @@ impl<'a> WidgetNode<'a> {
                 selected,
                 offset,
                 visible_rows,
+                expanded,
+                self.style,
+                state,
+            ),
+            WidgetKind::Dial { value, min, max } => {
+                render_dial(ctx, rect, value, min, max, self.style, state)
+            }
+            WidgetKind::RlePlayer {
+                rle_data,
+                frame_width,
+                frame_height,
+                current_frame,
+                ..
+            } => render_rle_player(
+                ctx,
+                rect,
+                rle_data,
+                current_frame,
+                frame_width,
+                frame_height,
+                self.style,
+                state,
+            ),
+            WidgetKind::AutoComplete {
+                text_buf,
+                text_len,
+                filtered,
+                filter_count,
+                selected,
+                expanded,
+                ..
+            } => render_autocomplete(
+                ctx,
+                rect,
+                &text_buf,
+                text_len,
+                &filtered,
+                filter_count,
+                selected,
                 expanded,
                 self.style,
                 state,
@@ -862,6 +978,234 @@ where
     ctx.fill_rect(Rect::new(knob_x, track_y - 2, 3, 5), style.accent)
 }
 
+fn render_dial<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    value: f32,
+    min: f32,
+    max: f32,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    
+    let cx = inner.x + inner.w as i32 / 2;
+    let cy = inner.y + inner.h as i32 / 2;
+    let radius = (inner.w.min(inner.h) as i32 / 2).saturating_sub(2);
+    
+    if radius > 0 {
+        ctx.stroke_circle(cx, cy, radius as u32, style.text)?;
+        
+        let range = (max - min).max(f32::EPSILON);
+        let t = ((value - min) / range).clamp(0.0, 1.0);
+        
+        #[cfg(not(feature = "std"))]
+        use crate::math::F32Ext as _;
+        
+        let angle = t * 2.0 * core::f32::consts::PI - (core::f32::consts::PI / 2.0);
+        let cos_val = angle.cos();
+        let sin_val = angle.sin();
+        
+        let px = cx + (radius as f32 * cos_val).round() as i32;
+        let py = cy + (radius as f32 * sin_val).round() as i32;
+        
+        ctx.draw_line(cx, cy, px, py, style.accent)?;
+        ctx.fill_circle(cx, cy, 2, style.accent)?;
+    }
+    
+    Ok(())
+}
+
+fn render_rle_player<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    rle_data: &[u8],
+    current_frame: usize,
+    frame_w: u16,
+    frame_h: u16,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    
+    if rle_data.len() < 3 {
+        return Ok(());
+    }
+    let total_frames = u16::from_le_bytes([rle_data[0], rle_data[1]]) as usize;
+    if current_frame >= total_frames {
+        return Ok(());
+    }
+    let offset_start = 2 + current_frame * 4;
+    if offset_start + 4 > rle_data.len() {
+        return Ok(());
+    }
+    let frame_offset = u32::from_le_bytes([
+        rle_data[offset_start],
+        rle_data[offset_start + 1],
+        rle_data[offset_start + 2],
+        rle_data[offset_start + 3],
+    ]) as usize;
+
+    if frame_offset >= rle_data.len() {
+        return Ok(());
+    }
+    let pal_size = rle_data[frame_offset] as usize;
+    let mut pal_colors = [Rgb565::BLACK; 256];
+    let pal_colors_start = frame_offset + 1;
+    for i in 0..pal_size {
+        let idx = pal_colors_start + i * 2;
+        if idx + 2 <= rle_data.len() {
+            let color_u16 = u16::from_le_bytes([rle_data[idx], rle_data[idx + 1]]);
+            let r = ((color_u16 >> 11) & 0x1F) as u8;
+            let g = ((color_u16 >> 5) & 0x3F) as u8;
+            let b = (color_u16 & 0x1F) as u8;
+            pal_colors[i] = Rgb565::new(r, g, b);
+        }
+    }
+
+    let runs_start = pal_colors_start + pal_size * 2;
+    let mut cur_x = 0i32;
+    let mut cur_y = 0i32;
+    let mut idx = runs_start;
+
+    while idx + 2 <= rle_data.len() {
+        let run_len = rle_data[idx] as i32;
+        let pal_idx = rle_data[idx + 1] as usize;
+        idx += 2;
+
+        if run_len == 0 {
+            break;
+        }
+
+        let color = if pal_idx < pal_size {
+            pal_colors[pal_idx]
+        } else {
+            Rgb565::BLACK
+        };
+
+        for _ in 0..run_len {
+            if cur_y >= frame_h as i32 {
+                break;
+            }
+            let px = inner.x + cur_x;
+            let py = inner.y + cur_y;
+            if inner.contains(px, py) {
+                ctx.fill_rect(Rect::new(px, py, 1, 1), color)?;
+            }
+
+            cur_x += 1;
+            if cur_x >= frame_w as i32 {
+                cur_x = 0;
+                cur_y += 1;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_autocomplete<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    text_buf: &[u8; 32],
+    text_len: u8,
+    filtered: &[Option<&str>; 8],
+    filter_count: u8,
+    selected: Option<usize>,
+    expanded: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    
+    let row_h = style.font.line_height();
+    let input_h = row_h.saturating_add(4);
+    let input_rect = Rect::new(rect.x, rect.y, rect.w, input_h);
+    
+    block.render(input_rect, ctx)?;
+    let inner = block.inner(input_rect);
+    
+    let current_text = core::str::from_utf8(&text_buf[..text_len as usize]).unwrap_or("");
+    if text_len == 0 {
+        ctx.draw_text_in(
+            inner,
+            "Search...",
+            TextStyle::new(Rgb565::new(16, 32, 16)).with_font(style.font),
+        )?;
+    } else {
+        ctx.draw_text_in(
+            inner,
+            current_text,
+            TextStyle::new(style.text).with_font(style.font),
+        )?;
+        
+        if state == VisualState::Focused {
+            let cursor_x = inner.x + current_text.chars().count() as i32 * style.font.advance() as i32;
+            if cursor_x < inner.right() {
+                ctx.fill_rect(Rect::new(cursor_x, inner.y, 1, inner.h), style.accent)?;
+            }
+        }
+    }
+    
+    ctx.draw_text_in(
+        Rect::new(inner.right() - 7, inner.y, 7, inner.h),
+        if expanded { "^" } else { "v" },
+        TextStyle::new(style.accent)
+            .with_font(style.font)
+            .centered(),
+    )?;
+
+    if expanded && filter_count > 0 {
+        let popup_h = (row_h.saturating_add(2)).saturating_mul(filter_count as u32).min(100);
+        let popup = Rect::new(rect.x, input_rect.bottom() + 1, rect.w, popup_h);
+        ctx.fill_rect(popup, style.background.unwrap_or(Rgb565::new(4, 6, 8)))?;
+        ctx.stroke_rect(popup, Border::one(style.border.color))?;
+        
+        for i in 0..filter_count as usize {
+            if let Some(s) = filtered[i] {
+                let row_y = popup.y + i as i32 * (row_h as i32 + 2);
+                let row_rect = Rect::new(popup.x + 1, row_y + 1, popup.w.saturating_sub(2), row_h);
+                
+                if selected == Some(i) {
+                    ctx.fill_rect(row_rect, style.accent)?;
+                    ctx.draw_text_in(
+                        Rect::new(row_rect.x + 2, row_rect.y, row_rect.w - 2, row_rect.h),
+                        s,
+                        TextStyle::new(style.foreground).with_font(style.font),
+                    )?;
+                } else {
+                    ctx.draw_text_in(
+                        Rect::new(row_rect.x + 2, row_rect.y, row_rect.w - 2, row_rect.h),
+                        s,
+                        TextStyle::new(style.text).with_font(style.font),
+                    )?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn render_value_label<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -971,6 +1315,82 @@ where
             items[item_idx],
             TextStyle {
                 color: style.text,
+                font: style.font,
+                opacity: style.opacity,
+                align: TextAlign::Left,
+                vertical_align: VerticalAlign::Middle,
+                wrap: TextWrap::None,
+                overflow: crate::render::TextOverflow::Clip,
+                overflow_policy: crate::render::TextOverflowPolicy::Global(
+                    crate::render::TextOverflow::Clip,
+                ),
+                kerning: false,
+                max_lines: None,
+                ellipsis: crate::render::EllipsisMode::ThreeDots,
+                line_spacing: 0,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_circular_list<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    offset: usize,
+    visible_rows: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if items.is_empty() {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    let rows = visible_rows.max(1).min(items.len());
+    let row_h = (inner.h / rows as u32).max(1);
+
+    let center_y = inner.y + (inner.h as i32) / 2;
+    let half_h = (inner.h as f32 / 2.0).max(1.0);
+    let max_shift = (inner.w as f32 * 0.25).max(8.0);
+
+    for row_idx in 0..rows {
+        let item_idx = offset.saturating_add(row_idx);
+        if item_idx >= items.len() {
+            break;
+        }
+
+        let item_center_y = inner.y + (row_idx as u32 * row_h + row_h / 2) as i32;
+        let dy = (item_center_y - center_y) as f32;
+
+        let normalized_dist = dy / half_h;
+        let x_shift = (normalized_dist * normalized_dist * max_shift) as i32;
+
+        let row = Rect::new(
+            inner.x + x_shift,
+            inner.y + (row_idx as u32 * row_h) as i32,
+            inner.w.saturating_sub(x_shift as u32),
+            row_h,
+        );
+
+        if item_idx == selected {
+            ctx.fill_rect(row, style.accent)?;
+        }
+
+        ctx.draw_text_in(
+            row.inset(crate::geometry::EdgeInsets::symmetric(2, 4)),
+            items[item_idx],
+            TextStyle {
+                color: if item_idx == selected { style.background.unwrap_or(style.text) } else { style.text },
                 font: style.font,
                 opacity: style.opacity,
                 align: TextAlign::Left,
@@ -1511,6 +1931,90 @@ where
             }
         }
     }
+    Ok(())
+}
+
+fn render_plotter<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    values: &[f32],
+    head: usize,
+    min: f32,
+    max: f32,
+    thickness: u8,
+    show_grid: bool,
+    show_axes: bool,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    if values.len() < 2 {
+        return Ok(());
+    }
+    let inner = block.inner(rect);
+    if show_grid {
+        for row in [1u32, 2, 3] {
+            let y = inner.y + ((inner.h.saturating_sub(1) * row) / 4) as i32;
+            ctx.draw_line_styled(
+                inner.x,
+                y,
+                inner.right().saturating_sub(1),
+                y,
+                StrokeStyle::new(Rgb565::new(6, 10, 10)).with_width(1),
+            )?;
+        }
+    }
+    if show_axes {
+        let axis = Rgb565::new(12, 18, 18);
+        ctx.draw_line_styled(
+            inner.x,
+            inner.y,
+            inner.x,
+            inner.bottom().saturating_sub(1),
+            StrokeStyle::new(axis).with_width(1),
+        )?;
+        ctx.draw_line_styled(
+            inner.x,
+            inner.bottom().saturating_sub(1),
+            inner.right().saturating_sub(1),
+            inner.bottom().saturating_sub(1),
+            StrokeStyle::new(axis).with_width(1),
+        )?;
+    }
+
+    let range = (max - min).max(f32::EPSILON);
+    let dx = (inner.w.saturating_sub(1) as f32) / (values.len().saturating_sub(1) as f32);
+
+    for i in 1..values.len() {
+        let idx0 = (head + i - 1) % values.len();
+        let idx1 = (head + i) % values.len();
+
+        let v0 = ((values[idx0] - min) / range).clamp(0.0, 1.0);
+        let v1 = ((values[idx1] - min) / range).clamp(0.0, 1.0);
+
+        let x0 = inner.x + ((i - 1) as f32 * dx) as i32;
+        let x1 = inner.x + (i as f32 * dx) as i32;
+
+        let y0 = inner.bottom() - 1 - (v0 * (inner.h.saturating_sub(1)) as f32) as i32;
+        let y1 = inner.bottom() - 1 - (v1 * (inner.h.saturating_sub(1)) as f32) as i32;
+
+        ctx.draw_line_styled(
+            x0,
+            y0,
+            x1,
+            y1,
+            StrokeStyle::new(style.accent)
+                .with_width(thickness.max(1))
+                .with_antialias(true),
+        )?;
+    }
+
     Ok(())
 }
 

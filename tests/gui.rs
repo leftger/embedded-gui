@@ -4634,3 +4634,121 @@ fn sweeping_arc_renders_and_grows_with_progress() {
         "90% sweep should paint more than 25%"
     );
 }
+
+#[test]
+fn test_plotter_and_circular_list_widgets() {
+    static SERIES: [f32; 5] = [0.0, 0.5, 0.2, 0.8, 0.6];
+    static ITEMS: [&str; 4] = ["ALPHA", "BETA", "GAMMA", "DELTA"];
+    let mut gui = GuiContext::<16, 32, 16>::new(Rect::new(0, 0, 96, 48));
+
+    // Plotter widget
+    let plotter = gui
+        .add_plotter(Rect::new(0, 0, 32, 16), &SERIES, 0, 0.0, 1.0, Style::panel())
+        .unwrap();
+    gui.set_plotter_style(plotter, 2).unwrap();
+    gui.set_plotter_decoration(plotter, true, true).unwrap();
+    gui.set_plotter_head(plotter, 2).unwrap();
+    static NEW_SERIES: [f32; 5] = [1.0, 0.9, 0.8, 0.7, 0.6];
+    gui.set_plotter_values(plotter, &NEW_SERIES).unwrap();
+
+    // CircularList widget
+    let circ_list = gui
+        .add_circular_list(Rect::new(34, 0, 40, 24), &ITEMS, 0, 3, Style::button())
+        .unwrap();
+    gui.set_focus(Some(circ_list)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.list_selected(circ_list), Some(1));
+    gui.set_list_selected(circ_list, 2).unwrap();
+    assert_eq!(gui.list_selected(circ_list), Some(2));
+
+    let mut buf = TestBuffer::new(96, 48);
+    gui.render(&mut buf).unwrap();
+}
+
+#[test]
+fn test_vector_font_metrics_and_rendering() {
+    let vec_font = FontId::Vector(2);
+    let metrics = RenderCtx::<MockTarget>::text_metrics_with_font("AB", vec_font);
+    assert_eq!(metrics.width, 32);
+    assert_eq!(metrics.height, 24);
+
+    let mut target = TestBuffer::new(32, 24);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 32, 24));
+    ctx.draw_text_in_with_font(
+        Rect::new(0, 0, 32, 24),
+        "1",
+        TextStyle::new(Rgb565::WHITE),
+        vec_font,
+    )
+    .unwrap();
+
+    assert!(target.count_color(Rgb565::WHITE) > 0);
+}
+
+#[test]
+fn test_dynamic_theme_transitions() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    
+    let mut theme_a = Theme::dark();
+    theme_a.focus_ring = Rgb565::new(0, 0, 0); // Black
+    
+    let mut theme_b = Theme::dark();
+    theme_b.focus_ring = Rgb565::new(31, 63, 31); // White / Bright
+    
+    gui.set_theme(theme_a).unwrap();
+    assert_eq!(gui.theme().focus_ring, Rgb565::new(0, 0, 0));
+    
+    gui.start_theme_transition(theme_b, 100).unwrap();
+    
+    // Intermediate tick 50ms (halfway)
+    gui.tick_input(50).unwrap();
+    // Blended focus ring should be around midway
+    let halfway_ring = gui.theme().focus_ring;
+    assert!(halfway_ring.r() > 0 && halfway_ring.r() < 31);
+    
+    // Complete transition
+    gui.tick_input(50).unwrap();
+    assert_eq!(gui.theme().focus_ring, Rgb565::new(31, 63, 31));
+}
+
+#[test]
+fn test_haptics_sequencer_and_widget_triggers() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
+    
+    // Manually play double click haptic
+    gui.play_haptic(HapticPattern::DoubleClick);
+    assert!(gui.haptic_intensity() > 0);
+    
+    // Step forward 20ms
+    gui.tick_input(20).unwrap();
+    assert!(gui.haptic_intensity() > 0);
+    
+    // Step forward past first pulse into quiet period (40ms steps)
+    gui.tick_input(30).unwrap(); // total 50ms elapsed
+    assert_eq!(gui.haptic_intensity(), 0);
+    
+    // Step forward to end of pattern
+    gui.tick_input(100).unwrap();
+    assert_eq!(gui.haptic_intensity(), 0);
+    
+    // Auto-triggering haptics on button click
+    let btn = gui.add_themed_button(Rect::new(0, 0, 20, 10), "Btn").unwrap();
+    
+    // Simulate pointer click/activation
+    gui.handle_input(InputEvent::Pointer {
+        x: 5,
+        y: 5,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    }).unwrap();
+    gui.handle_input(InputEvent::Pointer {
+        x: 5,
+        y: 5,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    }).unwrap();
+    
+    // Haptics should have been triggered automatically
+    assert!(gui.haptic_intensity() > 0);
+}
+

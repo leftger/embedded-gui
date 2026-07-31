@@ -286,7 +286,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn list_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
-            WidgetKind::List { selected, .. } => Some(selected),
+            WidgetKind::List { selected, .. }
+            | WidgetKind::CircularList { selected, .. } => Some(selected),
             _ => None,
         }
     }
@@ -300,11 +301,43 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 selected: ref mut current,
                 ref mut offset,
                 visible_rows,
+            }
+            | WidgetKind::CircularList {
+                items,
+                selected: ref mut current,
+                ref mut offset,
+                visible_rows,
             } => {
                 let mut state = ListState::new(*current, *offset, visible_rows);
                 state.set_selected(selected, items.len());
                 *current = state.selected;
                 *offset = state.offset;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_plotter_head(&mut self, id: WidgetId, head: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Plotter { head: ref mut h, .. } => {
+                *h = head;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn set_plotter_values(&mut self, id: WidgetId, values: &'a [f32]) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Plotter { values: ref mut v, .. } => {
+                *v = values;
                 self.dirty.add(rect)?;
                 Ok(())
             }
@@ -1645,5 +1678,172 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             self.set_widget_rect(id, rect)?;
         }
         Ok(laid_out)
+    }
+
+    pub fn set_dial_value(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Dial {
+                value: ref mut v,
+                min,
+                max,
+            } => {
+                *v = value.clamp(min, max);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn dial_value(&self, id: WidgetId) -> Option<f32> {
+        match self.node(id)?.kind {
+            WidgetKind::Dial { value, .. } => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn autocomplete_text(&self, id: WidgetId) -> Option<&str> {
+        match &self.node(id)?.kind {
+            WidgetKind::AutoComplete {
+                text_buf,
+                text_len,
+                ..
+            } => core::str::from_utf8(&text_buf[..*text_len as usize]).ok(),
+            _ => None,
+        }
+    }
+
+    pub fn set_autocomplete_text(&mut self, id: WidgetId, text: &str) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::AutoComplete {
+            text_buf,
+            text_len,
+            suggestions,
+            filtered,
+            filter_count,
+            selected,
+            expanded,
+        } = &mut node.kind {
+            let len = text.len().min(text_buf.len());
+            text_buf[..len].copy_from_slice(&text.as_bytes()[..len]);
+            *text_len = len as u8;
+            *selected = None;
+            *expanded = false;
+            filter_suggestions(text, suggestions, filtered, filter_count);
+            self.dirty.add(rect)?;
+            self.push_event(UiEvent::ValueChanged(id))?;
+        }
+        Ok(())
+    }
+
+    pub fn insert_autocomplete_char(&mut self, id: WidgetId, ch: char) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::AutoComplete {
+            text_buf,
+            text_len,
+            suggestions,
+            filtered,
+            filter_count,
+            selected,
+            expanded,
+        } = &mut node.kind {
+            if (*text_len as usize) < text_buf.len() {
+                text_buf[*text_len as usize] = ch as u8;
+                *text_len += 1;
+                *expanded = true;
+                *selected = None;
+                if let Ok(current_text) = core::str::from_utf8(&text_buf[..*text_len as usize]) {
+                    filter_suggestions(current_text, suggestions, filtered, filter_count);
+                }
+                self.dirty.add(rect)?;
+                self.push_event(UiEvent::ValueChanged(id))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn delete_autocomplete_char(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::AutoComplete {
+            text_buf,
+            text_len,
+            suggestions,
+            filtered,
+            filter_count,
+            selected,
+            expanded,
+        } = &mut node.kind {
+            if *text_len > 0 {
+                *text_len -= 1;
+                *expanded = true;
+                *selected = None;
+                if let Ok(current_text) = core::str::from_utf8(&text_buf[..*text_len as usize]) {
+                    filter_suggestions(current_text, suggestions, filtered, filter_count);
+                }
+                self.dirty.add(rect)?;
+                self.push_event(UiEvent::ValueChanged(id))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn autocomplete_confirm_selection(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        if let WidgetKind::AutoComplete {
+            text_buf,
+            text_len,
+            filtered,
+            filter_count,
+            selected,
+            expanded,
+            ..
+        } = &mut node.kind {
+            if *expanded {
+                if let Some(sel_idx) = *selected {
+                    if sel_idx < *filter_count as usize {
+                        if let Some(selected_text) = filtered[sel_idx] {
+                            let len = selected_text.len().min(text_buf.len());
+                            text_buf[..len].copy_from_slice(&selected_text.as_bytes()[..len]);
+                            *text_len = len as u8;
+                            *expanded = false;
+                            *selected = None;
+                            self.dirty.add(rect)?;
+                            self.push_event(UiEvent::ValueChanged(id))?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn filter_suggestions<'a>(
+    text: &str,
+    suggestions: &'a [&'a str],
+    filtered: &mut [Option<&'a str>; 8],
+    filter_count: &mut u8,
+) {
+    *filter_count = 0;
+    for slot in filtered.iter_mut() {
+        *slot = None;
+    }
+    if text.is_empty() {
+        return;
+    }
+    for &s in suggestions {
+        if s.to_ascii_lowercase().contains(&text.to_ascii_lowercase()) {
+            filtered[*filter_count as usize] = Some(s);
+            *filter_count += 1;
+            if *filter_count == 8 {
+                break;
+            }
+        }
     }
 }

@@ -540,6 +540,35 @@ pub fn lerp_style(a: Style, b: Style, t: f32) -> Style {
     }
 }
 
+pub fn lerp_theme(a: Theme, b: Theme, t: f32) -> Theme {
+    let t = t.clamp(0.0, 1.0);
+    let blend_color = |c1: Rgb565, c2: Rgb565| {
+        let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t) as u8;
+        Rgb565::new(
+            lerp(c1.r(), c2.r()),
+            lerp(c1.g(), c2.g()),
+            lerp(c1.b(), c2.b()),
+        )
+    };
+    Theme {
+        panel: lerp_style(a.panel, b.panel, t),
+        label: lerp_style(a.label, b.label, t),
+        button: lerp_style(a.button, b.button, t),
+        progress: lerp_style(a.progress, b.progress, t),
+        toggle: lerp_style(a.toggle, b.toggle, t),
+        checkbox: lerp_style(a.checkbox, b.checkbox, t),
+        slider: lerp_style(a.slider, b.slider, t),
+        value_label: lerp_style(a.value_label, b.value_label, t),
+        icon_button: lerp_style(a.icon_button, b.icon_button, t),
+        list: lerp_style(a.list, b.list, t),
+        dialog: lerp_style(a.dialog, b.dialog, t),
+        toast: lerp_style(a.toast, b.toast, t),
+        tabs: lerp_style(a.tabs, b.tabs, t),
+        meter: lerp_style(a.meter, b.meter, t),
+        focus_ring: blend_color(a.focus_ring, b.focus_ring),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StyleTransition {
     pub from: VisualState,

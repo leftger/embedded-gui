@@ -10,6 +10,7 @@ use crate::{
     style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
     widget::{MenuContract, StyleClassId, WidgetId},
     widgets::WidgetNode,
+    haptics::{HapticPattern, HapticSequencer},
 };
 
 use super::*;
@@ -54,6 +55,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             menu_contract: MenuContract::default(),
             textarea_undo: Vec::new(),
             textarea_redo: Vec::new(),
+            theme_transition_from: None,
+            theme_transition_to: None,
+            theme_transition_duration_ms: 0,
+            theme_transition_elapsed_ms: 0,
+            haptic_sequencer: HapticSequencer::new(),
             next_id: 1,
         }
     }
@@ -305,6 +311,30 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.theme = theme;
         self.dirty.mark_all(self.viewport)?;
         Ok(())
+    }
+
+    pub fn start_theme_transition(&mut self, target: Theme, duration_ms: u32) -> Result<(), GuiError> {
+        if duration_ms == 0 {
+            self.set_theme(target)?;
+        } else {
+            self.theme_transition_from = Some(self.theme);
+            self.theme_transition_to = Some(target);
+            self.theme_transition_duration_ms = duration_ms;
+            self.theme_transition_elapsed_ms = 0;
+        }
+        Ok(())
+    }
+
+    pub fn play_haptic(&mut self, pattern: HapticPattern) {
+        self.haptic_sequencer.play(pattern);
+    }
+
+    pub fn stop_haptic(&mut self) {
+        self.haptic_sequencer.stop();
+    }
+
+    pub fn haptic_intensity(&self) -> u8 {
+        self.haptic_sequencer.current_intensity()
     }
 
     pub fn set_style_class<S>(&mut self, class: StyleClassId, style: S) -> Result<(), GuiError>

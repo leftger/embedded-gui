@@ -9,6 +9,7 @@ use crate::{
     style::{Theme, VisualState, WidgetStyle},
     widget::{FocusGroupId, MenuContract, StyleClassId, WidgetId},
     widgets::{TEXTAREA_CAPACITY, WidgetNode},
+    haptics::HapticSequencer,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -164,5 +165,10 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     pub(crate) menu_contract: MenuContract,
     pub(crate) textarea_undo: Vec<TextareaHistoryEntry, NODES>,
     pub(crate) textarea_redo: Vec<TextareaHistoryEntry, NODES>,
+    pub(crate) theme_transition_from: Option<Theme>,
+    pub(crate) theme_transition_to: Option<Theme>,
+    pub(crate) theme_transition_duration_ms: u32,
+    pub(crate) theme_transition_elapsed_ms: u32,
+    pub(crate) haptic_sequencer: HapticSequencer,
     pub(crate) next_id: u16,
 }

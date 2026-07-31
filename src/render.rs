@@ -1932,6 +1932,31 @@ where
                     }
                 }
             }
+            FontId::Vector(scale) => {
+                let glyph = crate::font::get_vector_glyph(ch);
+                let mut last_point: Option<(i32, i32)> = None;
+                let scale_f = scale as f32;
+                for &(px, py) in glyph {
+                    if px == 0xFF && py == 0xFF {
+                        last_point = None;
+                        continue;
+                    }
+                    let draw_x = x + (px as f32 * scale_f) as i32;
+                    let draw_y = y + (py as f32 * scale_f) as i32;
+                    if let Some((lx, ly)) = last_point {
+                        self.draw_line_styled(
+                            lx,
+                            ly,
+                            draw_x,
+                            draw_y,
+                            StrokeStyle::new(color)
+                                .with_width(1)
+                                .with_antialias(true),
+                        )?;
+                    }
+                    last_point = Some((draw_x, draw_y));
+                }
+            }
         }
         Ok(())
     }
