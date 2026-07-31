@@ -75,13 +75,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.MSRV }}
-      - uses: Swatinem/rust-cache@v2
-      - run: |
-          if [ -n "${{ env.CI_HOST_TARGET }}" ]; then
-            cargo check ${{ env.CHECK_ARGS }} --target ${{ env.CI_HOST_TARGET }}
-          else
-            cargo check ${{ env.CHECK_ARGS }}
-          fi
+      - run: bash .github/scripts/ci_msrv.sh
 
   clippy:
     name: Clippy
@@ -115,7 +109,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc ${{ env.DOCS_ARGS }}
+      - run: bash .github/scripts/ci_docs.sh
 
   publish-dry-run:
     name: Publish dry-run

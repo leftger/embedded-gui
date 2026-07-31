@@ -8,7 +8,11 @@ pub mod animation_timeline;
 pub mod animation_timing;
 pub mod block;
 pub mod cinematic;
+pub mod completion;
 pub mod context;
+pub mod display_backend;
+#[cfg(feature = "embassy")]
+pub mod embassy;
 pub mod font;
 pub mod framebuffer;
 pub mod geometry;
@@ -25,6 +29,7 @@ pub mod screen;
 pub mod screen_transition;
 pub mod state;
 pub mod style;
+pub mod swapchain;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
@@ -63,8 +68,19 @@ pub use cinematic::{
     animate_peek_reveal, apply_carddeck_visibility, setup_card_story, setup_launcher_glance,
     setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
 };
+pub use completion::{CompletionSlot, WaitTransfer, WaitTransferFuture};
 pub use context::{
     GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetKeyBindings, WidgetKeyInputPolicy,
+};
+pub use display_backend::{
+    AsyncDmaTransfer, DisplayBackend, DisplayError, DisplayRegion, DmaTransfer, SimulatorBackend,
+    TransferError,
+};
+#[cfg(feature = "embassy")]
+pub use embassy::{EmbassyWaitTransfer, EmbassyWaitTransferFuture, FrameClock};
+pub use embedded_graphics_framebuf::{
+    FrameBuf,
+    backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
 };
 pub use font::FontId;
 pub use framebuffer::{Framebuffer, FramebufferGray8, FramebufferRgba8888, Rgba8888};
@@ -103,6 +119,9 @@ pub use style::{
     AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient, Shadow,
     StateStyle, Style, StyleTransition, Theme, VisualState, WidgetStyle, lerp_style,
 };
+pub use swapchain::{StandardSwapChain, SwapChain};
+#[cfg(feature = "triple-buffering")]
+pub use swapchain::{StandardTripleSwapChain, TripleSwapChain};
 #[cfg(feature = "std")]
 pub use test_buffer::{LayerCanvas, TestBuffer};
 pub use text::{

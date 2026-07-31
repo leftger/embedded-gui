@@ -1101,21 +1101,29 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
 
             match binding.property {
                 AnimatedProperty::Progress => gui.set_progress(binding.widget_id, value)?,
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::Meter => gui.set_meter_value(binding.widget_id, value)?,
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::SliderValue => gui.set_slider_value(binding.widget_id, value)?,
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::ScrollOffsetY => {
                     gui.set_scroll_offset(binding.widget_id, value.round() as i32)?
                 }
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::TabSelected => {
                     gui.set_tab_selected(binding.widget_id, value.max(0.0).round() as usize)?
                 }
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::DropdownSelected => {
                     gui.set_dropdown_selected(binding.widget_id, value.max(0.0).round() as usize)?
                 }
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::RollerSelected => {
                     gui.set_roller_selected(binding.widget_id, value.max(0.0).round() as usize)?
                 }
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::GaugeValue => gui.set_gauge_value(binding.widget_id, value)?,
+                #[cfg(feature = "rich-widgets")]
                 AnimatedProperty::SpinnerPhase => {
                     gui.set_spinner_phase(binding.widget_id, value)?
                 }
@@ -1173,6 +1181,11 @@ impl<const TRACKS: usize, const BINDINGS: usize> WidgetAnimator<TRACKS, BINDINGS
                 AnimatedProperty::Opacity => {
                     gui.set_widget_opacity(binding.widget_id, value.clamp(0.0, 255.0) as u8)?
                 }
+                // Reached only when `rich-widgets` is disabled and this
+                // binding targets a gated property (Meter/SliderValue/...);
+                // there's no setter to call, so just leave the value as-is.
+                #[cfg(not(feature = "rich-widgets"))]
+                _ => {}
             }
             if done {
                 let _ = self.animations.stop(binding.animation_id);

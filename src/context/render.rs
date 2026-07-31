@@ -71,7 +71,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
-    /// Renders dirty regions to a hardware display controller implementing [`WindowedDrawTarget`].
+    /// Renders dirty regions to a hardware display controller implementing [`crate::render::WindowedDrawTarget`].
     /// Sets the physical controller's column/row window bounds (`set_window`) before rendering,
     /// enabling hardware SPI/DMA transfers exclusively to the dirty sub-window.
     pub fn render_dirty_windowed<D>(&self, target: &mut D) -> Result<(), D::Error>

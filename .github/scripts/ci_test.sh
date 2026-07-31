@@ -12,10 +12,18 @@ cargo_test() {
 
 UNIT_ARGS="${CI_UNIT_TEST_ARGS:---lib --all-features}"
 INTEGRATION_ARGS="${CI_INTEGRATION_TEST_ARGS:---all-features}"
+DOC_ARGS="${CI_DOC_TEST_ARGS:---all-features}"
 
 echo "::group::Unit tests"
 # shellcheck disable=SC2086
 cargo_test ${UNIT_ARGS}
+
+if [ "${CI_RUN_DOCTESTS:-true}" = "true" ]; then
+  echo "::endgroup::"
+  echo "::group::Documentation tests"
+  # shellcheck disable=SC2086
+  cargo_test --doc ${DOC_ARGS}
+fi
 
 if [ -d tests ] && compgen -G "tests/*.rs" >/dev/null; then
   echo "::endgroup::"

@@ -41,54 +41,66 @@ pub enum WidgetKind<'a> {
     ProgressBar {
         value: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     Toggle {
         label: &'a str,
         on: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     Checkbox {
         label: &'a str,
         checked: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     Slider {
         value: f32,
         min: f32,
         max: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     ValueLabel {
         label: &'a str,
         value: i32,
     },
+    #[cfg(feature = "rich-widgets")]
     IconButton {
         icon: char,
         label: &'a str,
     },
+    #[cfg(feature = "rich-widgets")]
     List {
         items: &'a [&'a str],
         selected: usize,
         offset: usize,
         visible_rows: usize,
     },
+    #[cfg(feature = "rich-widgets")]
     ScrollView {
         offset_y: i32,
         content_h: u32,
     },
+    #[cfg(feature = "rich-widgets")]
     Tabs {
         labels: &'a [&'a str],
         selected: usize,
     },
+    #[cfg(feature = "rich-widgets")]
     Dialog {
         title: &'a str,
         body: &'a str,
     },
+    #[cfg(feature = "rich-widgets")]
     Toast {
         text: &'a str,
         ttl_ms: u32,
     },
+    #[cfg(feature = "rich-widgets")]
     Meter {
         value: f32,
         min: f32,
         max: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     ArcGauge {
         value: f32,
         min: f32,
@@ -101,6 +113,7 @@ pub enum WidgetKind<'a> {
         minor_ticks: u8,
         show_value: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     Gauge {
         value: f32,
         min: f32,
@@ -109,6 +122,7 @@ pub enum WidgetKind<'a> {
         minor_ticks: u8,
         show_value: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     GaugeNeedle {
         value: f32,
         min: f32,
@@ -131,6 +145,7 @@ pub enum WidgetKind<'a> {
         arc_color: Rgb565,
         frame_color: Rgb565,
     },
+    #[cfg(feature = "rich-widgets")]
     Chart {
         values: &'a [f32],
         min: f32,
@@ -161,21 +176,25 @@ pub enum WidgetKind<'a> {
     Spinner {
         phase: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     Dropdown {
         items: &'a [&'a str],
         selected: usize,
         open: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     Roller {
         items: &'a [&'a str],
         selected: usize,
     },
+    #[cfg(feature = "rich-widgets")]
     Table {
         rows: &'a [&'a [&'a str]],
         separators: bool,
         cell_padding: u8,
         align: TextAlign,
     },
+    #[cfg(feature = "rich-widgets")]
     TextArea {
         text_buf: [u8; TEXTAREA_CAPACITY],
         text_len: u8,
@@ -187,6 +206,7 @@ pub enum WidgetKind<'a> {
         single_line: bool,
         accept_newline: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     Keyboard {
         keys: &'a [char],
         selected: usize,
@@ -202,30 +222,36 @@ pub enum WidgetKind<'a> {
     Border,
     #[default]
     Spacer,
+    #[cfg(feature = "rich-widgets")]
     Menu {
         items: &'a [&'a str],
         selected: usize,
     },
+    #[cfg(feature = "rich-widgets")]
     PeekReveal {
         icon: ImageRef<'a>,
         title: &'a str,
         subtitle: &'a str,
         progress: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     GlanceTile {
         icon: char,
         title: &'a str,
         subtitle: &'a str,
         highlighted: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     CardDeck {
         titles: &'a [&'a str],
         selected: usize,
     },
+    #[cfg(feature = "rich-widgets")]
     Reel {
         player: ReelPlayer<'a>,
         fit: ImageFit,
     },
+    #[cfg(feature = "rich-widgets")]
     StateSurface {
         state: SurfaceState,
         title: &'a str,
@@ -233,11 +259,13 @@ pub enum WidgetKind<'a> {
         action: Option<&'a str>,
         busy_phase: f32,
     },
+    #[cfg(feature = "rich-widgets")]
     HeadsUpBanner {
         level: NotificationLevel,
         text: &'a str,
         ttl_ms: u32,
     },
+    #[cfg(feature = "rich-widgets")]
     NotificationActionSheet {
         level: NotificationLevel,
         title: &'a str,
@@ -246,6 +274,7 @@ pub enum WidgetKind<'a> {
         selected: usize,
         open: bool,
     },
+    #[cfg(feature = "rich-widgets")]
     FeedTimeline {
         items: &'a [&'a str],
         selected: usize,
@@ -293,10 +322,10 @@ pub enum KeyboardLayout {
 
 impl WidgetKind<'_> {
     pub const fn focusable(self) -> bool {
-        matches!(
+        #[cfg(feature = "rich-widgets")]
+        if matches!(
             self,
-            Self::Button(_)
-                | Self::Toggle { .. }
+            Self::Toggle { .. }
                 | Self::Checkbox { .. }
                 | Self::Slider { .. }
                 | Self::IconButton { .. }
@@ -402,21 +431,27 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::ProgressBar { value } => {
                 render_progress(ctx, rect, value, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Toggle { label, on } => {
                 render_toggle(ctx, rect, label, on, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Checkbox { label, checked } => {
                 render_checkbox(ctx, rect, label, checked, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Slider { value, min, max } => {
                 render_slider(ctx, rect, value, min, max, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::ValueLabel { label, value } => {
                 render_value_label(ctx, rect, label, value, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::IconButton { icon, label } => {
                 render_icon_button(ctx, rect, icon, label, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::List {
                 items,
                 selected,
@@ -451,18 +486,23 @@ impl<'a> WidgetNode<'a> {
                 offset_y,
                 content_h,
             } => render_scroll_view(ctx, rect, offset_y, content_h, self.style, state),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Tabs { labels, selected } => {
                 render_tabs(ctx, rect, labels, selected, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Dialog { title, body } => {
                 render_dialog(ctx, rect, title, body, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Toast { text, ttl_ms } => {
                 render_toast(ctx, rect, text, ttl_ms, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Meter { value, min, max } => {
                 render_meter(ctx, rect, value, min, max, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::ArcGauge {
                 value,
                 min,
@@ -490,6 +530,7 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Gauge {
                 value,
                 min,
@@ -509,6 +550,7 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::GaugeNeedle {
                 value,
                 min,
@@ -537,6 +579,7 @@ impl<'a> WidgetNode<'a> {
                 arc_color,
                 frame_color,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Chart {
                 values,
                 min,
@@ -586,14 +629,17 @@ impl<'a> WidgetNode<'a> {
                 state,
             ),
             WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Dropdown {
                 items,
                 selected,
                 open,
             } => render_dropdown(ctx, rect, items, selected, open, self.style, state),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Roller { items, selected } => {
                 render_roller(ctx, rect, items, selected, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Table {
                 rows,
                 separators,
@@ -609,6 +655,7 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::TextArea {
                 text_buf,
                 text_len,
@@ -628,6 +675,7 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Keyboard {
                 keys,
                 selected,
@@ -643,9 +691,11 @@ impl<'a> WidgetNode<'a> {
             }
             WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
             WidgetKind::Spacer => Ok(()),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Menu { items, selected } => {
                 render_menu(ctx, rect, items, selected, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::PeekReveal {
                 icon,
                 title,
@@ -654,6 +704,7 @@ impl<'a> WidgetNode<'a> {
             } => render_peek_reveal(
                 ctx, rect, icon, title, subtitle, progress, self.style, state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::GlanceTile {
                 icon,
                 title,
@@ -669,12 +720,15 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::CardDeck { titles, selected } => {
                 render_card_deck(ctx, rect, titles, selected, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Reel { player, fit } => {
                 render_reel(ctx, rect, player, fit, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::StateSurface {
                 state: surface_state,
                 title,
@@ -692,11 +746,13 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::HeadsUpBanner {
                 level,
                 text,
                 ttl_ms,
             } => render_heads_up_banner(ctx, rect, level, text, ttl_ms, self.style, state),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::NotificationActionSheet {
                 level,
                 title,
@@ -707,6 +763,7 @@ impl<'a> WidgetNode<'a> {
             } => render_notification_action_sheet(
                 ctx, rect, level, title, body, actions, selected, open, self.style, state,
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::FeedTimeline {
                 items,
                 selected,
@@ -776,6 +833,7 @@ const fn default_flags(kind: WidgetKind<'_>) -> WidgetFlags {
             flags.bits() | WidgetFlags::FOCUSABLE.bits() | WidgetFlags::CLICKABLE.bits(),
         );
     }
+    #[cfg(feature = "rich-widgets")]
     if matches!(kind, WidgetKind::ScrollView { .. }) {
         flags = WidgetFlags::from_bits(flags.bits() | WidgetFlags::SCROLLABLE.bits());
     }
@@ -868,6 +926,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_toggle<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -911,6 +970,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_checkbox<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -953,6 +1013,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_slider<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1240,6 +1301,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_icon_button<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1273,6 +1335,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_list<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1439,6 +1502,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_tabs<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1478,6 +1542,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_dialog<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1518,6 +1583,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_toast<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1558,6 +1624,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_meter<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1602,6 +1669,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_arc_gauge<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1704,6 +1772,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_gauge<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1739,6 +1808,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_gauge_needle<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1788,6 +1858,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_chart<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2049,6 +2120,7 @@ where
     )
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_dropdown<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2111,6 +2183,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_roller<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2155,6 +2228,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_table<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2204,6 +2278,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn draw_arc_ticks<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     cx: i32,
@@ -2246,6 +2321,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn draw_gauge_value_label<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     inner: Rect,
@@ -2277,6 +2353,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_textarea<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2342,6 +2419,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn textarea_grid_position(text: &str, cursor: usize, max_chars: usize) -> (usize, usize) {
     let mut row = 0usize;
     let mut col = 0usize;
@@ -2360,12 +2438,14 @@ fn textarea_grid_position(text: &str, cursor: usize, max_chars: usize) -> (usize
     (col, row)
 }
 
+#[cfg(feature = "rich-widgets")]
 fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
     let used = (len as usize).min(TEXTAREA_CAPACITY);
     core::str::from_utf8(&buf[..used]).unwrap_or("")
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_keyboard<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2416,6 +2496,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn keyboard_key_for_layout(
     base: char,
     idx: usize,
@@ -2442,6 +2523,7 @@ fn keyboard_key_for_layout(
     }
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_menu<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2513,6 +2595,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_peek_reveal<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2565,6 +2648,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_glance_tile<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2618,6 +2702,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_card_deck<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2646,6 +2731,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_reel<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2689,6 +2775,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_state_surface<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2772,6 +2859,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn render_heads_up_banner<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2807,6 +2895,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_notification_action_sheet<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2876,6 +2965,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "rich-widgets")]
 fn render_feed_timeline<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2939,6 +3029,7 @@ where
     Ok(())
 }
 
+#[cfg(feature = "rich-widgets")]
 fn draw_i32_right<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,

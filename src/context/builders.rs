@@ -62,6 +62,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_button(rect, text, self.theme.button)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_progress_bar<S>(
         &mut self,
         rect: Rect,
@@ -80,6 +81,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_progress_bar(
         &mut self,
         rect: Rect,
@@ -88,6 +90,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_progress_bar(rect, value, self.theme.progress)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_toggle<S>(
         &mut self,
         rect: Rect,
@@ -103,6 +106,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_toggle(
         &mut self,
         rect: Rect,
@@ -112,6 +116,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_toggle(rect, label, on, self.theme.toggle)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_checkbox<S>(
         &mut self,
         rect: Rect,
@@ -127,6 +132,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_checkbox(
         &mut self,
         rect: Rect,
@@ -136,6 +142,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_checkbox(rect, label, checked, self.theme.checkbox)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_slider<S>(
         &mut self,
         rect: Rect,
@@ -153,6 +160,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_slider(
         &mut self,
         rect: Rect,
@@ -163,6 +171,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_slider(rect, value, min, max, self.theme.slider)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_value_label<S>(
         &mut self,
         rect: Rect,
@@ -176,6 +185,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::ValueLabel { label, value }, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_value_label(
         &mut self,
         rect: Rect,
@@ -185,6 +195,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_value_label(rect, label, value, self.theme.value_label)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_icon_button<S>(
         &mut self,
         rect: Rect,
@@ -200,6 +211,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_icon_button(
         &mut self,
         rect: Rect,
@@ -209,6 +221,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_icon_button(rect, icon, label, self.theme.icon_button)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_list<S>(
         &mut self,
         rect: Rect,
@@ -235,6 +248,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_feed_timeline<S>(
         &mut self,
         rect: Rect,
@@ -263,6 +277,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_list(
         &mut self,
         rect: Rect,
@@ -331,6 +346,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_scroll_view(
         &mut self,
         rect: Rect,
@@ -340,6 +356,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_scroll_view(rect, offset_y, content_h, self.theme.list)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_tabs<S>(
         &mut self,
         rect: Rect,
@@ -356,6 +373,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_tabs(
         &mut self,
         rect: Rect,
@@ -365,6 +383,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_tabs(rect, labels, selected, self.theme.tabs)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_dialog<S>(
         &mut self,
         rect: Rect,
@@ -380,6 +399,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_dialog(
         &mut self,
         rect: Rect,
@@ -389,6 +409,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_dialog(rect, title, body, self.theme.dialog)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_toast<S>(
         &mut self,
         rect: Rect,
@@ -404,6 +425,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_toast(
         &mut self,
         rect: Rect,
@@ -413,6 +435,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_toast(rect, text, ttl_ms, self.theme.toast)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_meter<S>(
         &mut self,
         rect: Rect,
@@ -427,6 +450,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Meter { value, min, max }, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_themed_meter(
         &mut self,
         rect: Rect,
@@ -438,6 +462,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg(feature = "rich-widgets")]
     pub fn add_arc_gauge<S>(
         &mut self,
         rect: Rect,
@@ -471,6 +496,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_gauge<S>(
         &mut self,
         rect: Rect,
@@ -528,6 +554,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg(feature = "rich-widgets")]
     pub fn add_gauge_needle<S>(
         &mut self,
         rect: Rect,
@@ -554,6 +581,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_chart<S>(
         &mut self,
         rect: Rect,
@@ -690,6 +718,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_chart_decoration(
         &mut self,
         id: WidgetId,
@@ -719,6 +748,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_spinner<S>(&mut self, rect: Rect, phase: f32, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
@@ -726,6 +756,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Spinner { phase }, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_dropdown<S>(
         &mut self,
         rect: Rect,
@@ -750,6 +781,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_roller<S>(
         &mut self,
         rect: Rect,
@@ -766,6 +798,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_table<S>(
         &mut self,
         rect: Rect,
@@ -787,6 +820,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn set_table_style(
         &mut self,
         id: WidgetId,
@@ -813,6 +847,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_textarea<S>(
         &mut self,
         rect: Rect,
@@ -844,6 +879,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_keyboard<S>(
         &mut self,
         rect: Rect,
@@ -858,6 +894,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_keyboard_with_alt(rect, keys, None, cols, target, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_keyboard_with_alt<S>(
         &mut self,
         rect: Rect,
@@ -899,6 +936,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Image { image, fit }, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_peek_reveal<S>(
         &mut self,
         rect: Rect,
@@ -922,6 +960,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_glance_tile<S>(
         &mut self,
         rect: Rect,
@@ -947,6 +986,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_card_deck<S>(
         &mut self,
         rect: Rect,
@@ -967,6 +1007,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_reel<S>(
         &mut self,
         rect: Rect,
@@ -980,6 +1021,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Reel { player, fit }, style)
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_state_surface<S>(
         &mut self,
         rect: Rect,
@@ -1005,6 +1047,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         )
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_heads_up_banner<S>(
         &mut self,
         rect: Rect,
@@ -1028,6 +1071,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg(feature = "rich-widgets")]
     pub fn add_notification_action_sheet<S>(
         &mut self,
         rect: Rect,
@@ -1067,6 +1111,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Spacer, Style::default())
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub fn add_menu<S>(
         &mut self,
         rect: Rect,

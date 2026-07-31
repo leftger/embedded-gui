@@ -1,6 +1,6 @@
 [package]
 name = "embedded-gui"
-version = "0.1.3"
+version = "0.1.5"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Gerzain Mata <leftger@gmail.com>"]
@@ -19,10 +19,18 @@ exclude = [
 ]
 
 [features]
-default = ["std"]
-std = []
+default = ["std", "rich-widgets"]
+std = ["embedded-dsp?/std"]
+# The full widget-kind catalog (buttons, toggles, sliders, lists, tabs,
+# dialogs, gauges, charts, keyboards, text areas, ...) beyond the small
+# always-on set (Panel, Label, Button, Image, Border, Spacer, SweepingArc).
+# Disabling this on a target that only builds a handful of widget kinds
+# shrinks WidgetNode::render_at and friends considerably, since an unused
+# match arm still gets compiled into that function even if its variant is
+# never constructed at runtime -- only removing the variant does.
+rich-widgets = []
 image-decode = ["std"]
-libm = ["dep:libm"]
+libm = ["dep:libm", "embedded-dsp?/libm"]
 micromath = ["dep:micromath"]
 # Optional interop adapters. These sit alongside the crate's own no_std
 # layout.rs/text.rs/font.rs (which remain the default, dependency-light path)
@@ -30,19 +38,35 @@ micromath = ["dep:micromath"]
 embedded-text = ["dep:embedded-text", "dep:embedded-graphics"]
 embedded-layout = ["dep:embedded-layout", "dep:embedded-graphics"]
 embedded-graphics = ["dep:embedded-graphics"]
-embedded-dsp = ["dep:embedded-dsp"]
+# Only pulls in the embedded-dsp modules visual_widgets.rs actually calls
+# (biquad filtering + RMS/max statistics) instead of the whole crate
+# (FFT, SVM, Bayes, quaternion, ...) — see embedded-dsp's per-module features.
+embedded-dsp = ["dep:embedded-dsp", "embedded-dsp/filtering", "embedded-dsp/statistics"]
+# Enable triple-buffered swapchain APIs.
+triple-buffering = []
+# Monotonic timing via embassy-time (no executor required).
+embassy-time = ["dep:embassy-time"]
+# Embassy-native DMA wake helpers and frame clock.
+embassy = ["embassy-time", "dep:embassy-sync"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
+embedded-graphics-framebuf = "0.3"
+critical-section = "1.1"
 heapless = "0.9"
+embassy-time = { version = "0.5", default-features = false, optional = true }
+embassy-sync = { version = "0.8", default-features = false, optional = true }
 libm = {version = "0.2", optional = true}
 micromath = {version = "2.1", optional = true}
 embedded-graphics = { version = "0.8", optional = true }
 embedded-text = { version = "0.7.3", optional = true }
 embedded-layout = { version = "0.4.2", optional = true }
-embedded-dsp = { version = "0.1.0", optional = true }
+embedded-dsp = { version = "0.2.0", optional = true, default-features = false }
 
 [dev-dependencies]
+critical-section = { version = "1.1", features = ["std"] }
+embassy-time = { version = "0.5", features = ["std"] }
+embassy-sync = { version = "0.8" }
 embedded-3dgfx = { version = "0.3.2" }
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
@@ -52,3 +76,11 @@ nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 [[example]]
 name = "interop_showcase"
 required-features = ["embedded-text", "embedded-layout"]
+
+[[example]]
+name = "completion_swapchain_sim"
+required-features = ["std"]
+
+[[example]]
+name = "embassy_gui_frame"
+required-features = ["embassy", "std"]

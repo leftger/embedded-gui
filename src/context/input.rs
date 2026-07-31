@@ -22,6 +22,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         match event {
             InputEvent::Home => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -34,6 +35,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::End => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -46,6 +48,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::WordLeft => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -58,6 +61,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::WordRight => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -70,6 +74,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::Undo => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -81,6 +86,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::Redo => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -92,6 +98,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectLeft => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -104,6 +111,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectRight => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -116,6 +124,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectHome => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -128,6 +137,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectEnd => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -140,6 +150,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectWordLeft => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -152,6 +163,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             InputEvent::SelectWordRight => {
                 if let Some(id) = self.focus {
+                    #[cfg(feature = "rich-widgets")]
                     if matches!(
                         self.node(id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
@@ -481,16 +493,21 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let content = match node.kind {
             WidgetKind::Label(text) => (text_width(text), text_height),
             WidgetKind::Button(text) => (text_width(text).saturating_add(6), text_height),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Toggle { label, .. } => (text_width(label).saturating_add(12), text_height),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Checkbox { label, .. } => {
                 (text_width(label).saturating_add(10), text_height)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::ValueLabel { label, .. } => {
                 (text_width(label).saturating_add(16), text_height)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::IconButton { label, .. } => {
                 (text_width(label).saturating_add(10), text_height)
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Tabs { labels, .. } => {
                 let max = labels.iter().map(|s| text_width(s)).max().unwrap_or(0);
                 (
@@ -498,20 +515,24 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     text_height,
                 )
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Dialog { title, body } => {
                 let w = text_width(title).max(text_width(body)).saturating_add(8);
                 (w, text_height.saturating_mul(3))
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Toast { text, .. } => (
                 text_width(text).saturating_add(8),
                 text_height.saturating_add(2),
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Dropdown {
                 items, selected, ..
             } => (
                 text_width(items.get(selected).copied().unwrap_or("-")).saturating_add(10),
                 text_height.saturating_add(2),
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::TextArea {
                 text_buf,
                 text_len,
@@ -526,6 +547,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 .saturating_add(10),
                 text_height.saturating_add(4),
             ),
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Keyboard { keys, cols, .. } => {
                 let cols = cols.max(1) as u32;
                 let rows = (keys.len() as u32).div_ceil(cols).max(1);
@@ -534,6 +556,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     rows.saturating_mul(style.font.line_height().saturating_add(4)),
                 )
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::List {
                 items,
                 visible_rows,
@@ -552,6 +575,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         .max(text_height),
                 )
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::Menu { items, .. } => {
                 let max = items.iter().map(|s| text_width(s)).max().unwrap_or(0);
                 (
@@ -561,6 +585,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                         .max(text_height),
                 )
             }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::FeedTimeline {
                 items,
                 visible_rows,
@@ -718,6 +743,16 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.set_focus(next)
     }
 
+    /// Stub for the `rich-widgets`-off build: none of the gated kinds this
+    /// handles (List/Menu/Dropdown/Roller/ScrollView/FeedTimeline/Keyboard)
+    /// exist, so there's nothing to adjust -- always fall through to the
+    /// caller's plain focus_prev()/focus_next().
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn adjust_focused_selection(&mut self, _delta: i8) -> Result<bool, GuiError> {
+        Ok(false)
+    }
+
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn adjust_focused_selection(&mut self, delta: i8) -> Result<bool, GuiError> {
         let Some(id) = self.focus else {
             return Ok(false);
@@ -858,6 +893,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(true)
     }
 
+    /// Stub for the `rich-widgets`-off build: none of the gated kinds this
+    /// handles (Slider/Tabs/TextArea) exist, so always fall through to the
+    /// caller's plain focus_prev()/focus_next().
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn adjust_focused_scalar(&mut self, _direction: f32) -> Result<bool, GuiError> {
+        Ok(false)
+    }
+
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn adjust_focused_scalar(&mut self, direction: f32) -> Result<bool, GuiError> {
         let Some(id) = self.focus else {
             return Ok(false);
@@ -932,6 +976,16 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(true)
     }
 
+    /// Stub for the `rich-widgets`-off build: none of the gated kinds this
+    /// handles (Checkbox/Dropdown/Keyboard/Toggle) exist, so activation for
+    /// whatever's focused is just the generic click dispatch already done
+    /// by the caller.
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn activate_focused(&mut self, _id: WidgetId) -> Result<(), GuiError> {
+        Ok(())
+    }
+
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn activate_focused(&mut self, id: WidgetId) -> Result<(), GuiError> {
         let mut changed_rect = None;
         let mut changed = false;
@@ -1101,6 +1155,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             pressed.gesture_emitted = true;
         }
 
+        #[cfg(feature = "rich-widgets")]
         if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
             let current = self.scroll_offset(scroll_id).unwrap_or(0);
             let next = current.saturating_sub(dy);
@@ -1207,10 +1262,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub(crate) fn repeatable_widget(&self, id: WidgetId) -> bool {
         self.node(id).is_some_and(|node| {
-            matches!(
-                node.kind,
-                WidgetKind::Button(_) | WidgetKind::IconButton { .. }
-            )
+            #[cfg(feature = "rich-widgets")]
+            if matches!(node.kind, WidgetKind::IconButton { .. }) {
+                return true;
+            }
+            matches!(node.kind, WidgetKind::Button(_))
         })
     }
 
@@ -1365,6 +1421,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             })
     }
 
+    /// Stub for the `rich-widgets`-off build: TextArea doesn't exist, so
+    /// there's no cursor blink state to update.
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn set_textarea_cursor_visible(&mut self, _id: Option<WidgetId>, _visible: bool) {}
+
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn set_textarea_cursor_visible(&mut self, id: Option<WidgetId>, visible: bool) {
         let Some(id) = id else {
             return;
@@ -1447,6 +1509,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(filter.contains(event.filter()))
     }
 
+    #[cfg(feature = "rich-widgets")]
     pub(crate) fn stop_due_to_builtin_widget_behavior(&self, event: WidgetEvent) -> bool {
         if event.phase != EventPhase::Capture || event.current == event.target {
             return false;
@@ -1459,6 +1522,13 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             && self
                 .node(event.current)
                 .is_some_and(|node| matches!(node.kind, WidgetKind::ScrollView { .. }))
+    }
+
+    /// Stub for the `rich-widgets`-off build: ScrollView doesn't exist, so
+    /// no event ever needs stopping for this reason.
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn stop_due_to_builtin_widget_behavior(&self, _event: WidgetEvent) -> bool {
+        false
     }
 
     pub(crate) fn stop_due_to_registered_policy(&self, event: WidgetEvent) -> bool {
@@ -1515,6 +1585,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     pub(crate) fn handle_select_activation(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        #[cfg(feature = "rich-widgets")]
         if let Some(node) = self.node(id) {
             if self.menu_contract.select_toggles_feed_expanded
                 && matches!(node.kind, WidgetKind::FeedTimeline { .. })
@@ -1543,6 +1614,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     pub(crate) fn handle_back_action(&mut self) -> Result<(), GuiError> {
+        #[cfg(feature = "rich-widgets")]
         if let Some(id) = self.focus {
             if matches!(
                 self.node(id).map(|n| n.kind),
@@ -1656,6 +1728,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn bump_index_with_wrap(current: &mut usize, len: usize, delta: i8, wrap: bool) -> bool {
     if len == 0 {
         return false;
@@ -1679,6 +1752,7 @@ pub(crate) fn bump_index_with_wrap(current: &mut usize, len: usize, delta: i8, w
     }
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn keyboard_char_for_layout(
     keys: &[char],
     alt_keys: Option<&[char]>,
@@ -1701,11 +1775,13 @@ pub(crate) fn keyboard_char_for_layout(
     })
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_text(buf: &[u8; TEXTAREA_CAPACITY], len: u8) -> &str {
     let used = (len as usize).min(TEXTAREA_CAPACITY);
     core::str::from_utf8(&buf[..used]).unwrap_or("")
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_storage_from_str(text: &str) -> ([u8; TEXTAREA_CAPACITY], u8) {
     let mut out = [0u8; TEXTAREA_CAPACITY];
     let mut len = 0usize;
@@ -1721,6 +1797,7 @@ pub(crate) fn textarea_storage_from_str(text: &str) -> ([u8; TEXTAREA_CAPACITY],
     (out, len as u8)
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_storage_from_chars(
     chars: &heapless::Vec<char, TEXTAREA_CAPACITY>,
 ) -> ([u8; TEXTAREA_CAPACITY], u8) {
@@ -1738,10 +1815,12 @@ pub(crate) fn textarea_storage_from_chars(
     (out, len as u8)
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn char_at(text: &str, idx: usize) -> Option<char> {
     text.chars().nth(idx)
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn prev_word_boundary(text: &str, cursor: usize) -> usize {
     let mut pos = cursor.min(text.chars().count());
     while pos > 0 && char_at(text, pos - 1).is_some_and(|ch| ch.is_whitespace()) {
@@ -1753,6 +1832,7 @@ pub(crate) fn prev_word_boundary(text: &str, cursor: usize) -> usize {
     pos
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn next_word_boundary(text: &str, cursor: usize) -> usize {
     let len = text.chars().count();
     let mut pos = cursor.min(len);
@@ -1765,6 +1845,7 @@ pub(crate) fn next_word_boundary(text: &str, cursor: usize) -> usize {
     pos
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn delete_selection_if_any(
     chars: &mut heapless::Vec<char, TEXTAREA_CAPACITY>,
     cursor: &mut usize,
@@ -1788,6 +1869,7 @@ pub(crate) fn delete_selection_if_any(
     true
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_row_col_at_cursor(
     text: &str,
     cursor: usize,
@@ -1810,6 +1892,7 @@ pub(crate) fn textarea_row_col_at_cursor(
     (row, col)
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_cursor_from_row_col(
     text: &str,
     target_row: usize,
@@ -1845,6 +1928,7 @@ pub(crate) fn textarea_cursor_from_row_col(
     idx
 }
 
+#[cfg(feature = "rich-widgets")]
 pub(crate) fn textarea_row_end_col(text: &str, target_row: usize, wrap_cols: usize) -> usize {
     let mut row = 0usize;
     let mut col = 0usize;
