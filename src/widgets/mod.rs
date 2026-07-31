@@ -344,10 +344,7 @@ impl WidgetKind<'_> {
         ) {
             return true;
         }
-        matches!(
-            self,
-            Self::Button { .. } | Self::RlePlayer { .. }
-        )
+        matches!(self, Self::Button { .. } | Self::RlePlayer { .. })
     }
 }
 
@@ -623,16 +620,7 @@ impl<'a> WidgetNode<'a> {
                 show_grid,
                 show_axes,
             } => render_plotter(
-                ctx,
-                rect,
-                values,
-                head,
-                min,
-                max,
-                thickness,
-                show_grid,
-                show_axes,
-                self.style,
+                ctx, rect, values, head, min, max, thickness, show_grid, show_axes, self.style,
                 state,
             ),
             WidgetKind::Spinner { phase } => render_spinner(ctx, rect, phase, self.style, state),
@@ -1063,31 +1051,31 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     let inner = block.inner(rect);
-    
+
     let cx = inner.x + inner.w as i32 / 2;
     let cy = inner.y + inner.h as i32 / 2;
     let radius = (inner.w.min(inner.h) as i32 / 2).saturating_sub(2);
-    
+
     if radius > 0 {
         ctx.stroke_circle(cx, cy, radius as u32, style.text)?;
-        
+
         let range = (max - min).max(f32::EPSILON);
         let t = ((value - min) / range).clamp(0.0, 1.0);
-        
+
         #[cfg(not(feature = "std"))]
         use crate::math::F32Ext as _;
-        
+
         let angle = t * 2.0 * core::f32::consts::PI - (core::f32::consts::PI / 2.0);
         let cos_val = angle.cos();
         let sin_val = angle.sin();
-        
+
         let px = cx + (radius as f32 * cos_val).round() as i32;
         let py = cy + (radius as f32 * sin_val).round() as i32;
-        
+
         ctx.draw_line(cx, cy, px, py, style.accent)?;
         ctx.fill_circle(cx, cy, 2, style.accent)?;
     }
-    
+
     Ok(())
 }
 
@@ -1109,7 +1097,7 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     let inner = block.inner(rect);
-    
+
     if rle_data.len() < 3 {
         return Ok(());
     }
@@ -1204,14 +1192,14 @@ where
 {
     let style = style.resolve(state);
     let block = Block::styled(style);
-    
+
     let row_h = style.font.line_height();
     let input_h = row_h.saturating_add(4);
     let input_rect = Rect::new(rect.x, rect.y, rect.w, input_h);
-    
+
     block.render(input_rect, ctx)?;
     let inner = block.inner(input_rect);
-    
+
     let current_text = core::str::from_utf8(&text_buf[..text_len as usize]).unwrap_or("");
     if text_len == 0 {
         ctx.draw_text_in(
@@ -1225,15 +1213,16 @@ where
             current_text,
             TextStyle::new(style.text).with_font(style.font),
         )?;
-        
+
         if state == VisualState::Focused {
-            let cursor_x = inner.x + current_text.chars().count() as i32 * style.font.advance() as i32;
+            let cursor_x =
+                inner.x + current_text.chars().count() as i32 * style.font.advance() as i32;
             if cursor_x < inner.right() {
                 ctx.fill_rect(Rect::new(cursor_x, inner.y, 1, inner.h), style.accent)?;
             }
         }
     }
-    
+
     ctx.draw_text_in(
         Rect::new(inner.right() - 7, inner.y, 7, inner.h),
         if expanded { "^" } else { "v" },
@@ -1243,16 +1232,18 @@ where
     )?;
 
     if expanded && filter_count > 0 {
-        let popup_h = (row_h.saturating_add(2)).saturating_mul(filter_count as u32).min(100);
+        let popup_h = (row_h.saturating_add(2))
+            .saturating_mul(filter_count as u32)
+            .min(100);
         let popup = Rect::new(rect.x, input_rect.bottom() + 1, rect.w, popup_h);
         ctx.fill_rect(popup, style.background.unwrap_or(Rgb565::new(4, 6, 8)))?;
         ctx.stroke_rect(popup, Border::one(style.border.color))?;
-        
+
         for i in 0..filter_count as usize {
             if let Some(s) = filtered[i] {
                 let row_y = popup.y + i as i32 * (row_h as i32 + 2);
                 let row_rect = Rect::new(popup.x + 1, row_y + 1, popup.w.saturating_sub(2), row_h);
-                
+
                 if selected == Some(i) {
                     ctx.fill_rect(row_rect, style.accent)?;
                     ctx.draw_text_in(
@@ -1461,7 +1452,11 @@ where
             row.inset(crate::geometry::EdgeInsets::symmetric(2, 4)),
             items[item_idx],
             TextStyle {
-                color: if item_idx == selected { style.background.unwrap_or(style.text) } else { style.text },
+                color: if item_idx == selected {
+                    style.background.unwrap_or(style.text)
+                } else {
+                    style.text
+                },
                 font: style.font,
                 opacity: style.opacity,
                 align: TextAlign::Left,

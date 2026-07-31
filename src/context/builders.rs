@@ -4,12 +4,12 @@ use embedded_graphics_core::pixelcolor::Rgb565;
 use crate::math::F32Ext as _;
 use crate::{
     geometry::Rect,
+    haptics::HapticPattern,
     image::{ImageFit, ImageRef, ReelPlayer},
     render::TextAlign,
     style::{Style, WidgetStyle},
     widget::WidgetId,
     widgets::{ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind},
-    haptics::HapticPattern,
 };
 
 use super::*;
@@ -651,11 +651,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[cfg(feature = "rich-widgets")]
-    pub fn set_plotter_style(
-        &mut self,
-        id: WidgetId,
-        thickness: u8,
-    ) -> Result<(), GuiError> {
+    pub fn set_plotter_style(&mut self, id: WidgetId, thickness: u8) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {

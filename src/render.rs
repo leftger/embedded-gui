@@ -1976,9 +1976,7 @@ where
                             ly,
                             draw_x,
                             draw_y,
-                            StrokeStyle::new(color)
-                                .with_width(1)
-                                .with_antialias(true),
+                            StrokeStyle::new(color).with_width(1).with_antialias(true),
                         )?;
                     }
                     last_point = Some((draw_x, draw_y));

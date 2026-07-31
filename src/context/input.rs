@@ -2,6 +2,7 @@
 use crate::math::F32Ext as _;
 use crate::{
     geometry::Rect,
+    haptics::HapticPattern,
     input::{
         InputEvent, PointerState, UiEvent, UiEventFilter, WidgetDispatchPolicy, WidgetEvent,
         WidgetEventKind,
@@ -10,7 +11,6 @@ use crate::{
     style::{VisualState, WidgetStyle},
     widget::{EventPhase, EventPolicy, WidgetId},
     widgets::{KeyboardLayout, TEXTAREA_CAPACITY, WidgetKind, WidgetNode},
-    haptics::HapticPattern,
 };
 
 use super::*;
@@ -878,7 +878,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     }
                     let idx = current.unwrap_or(0);
                     let mut next = idx;
-                    changed = bump_index_with_wrap(&mut next, filter_count as usize, delta, wrap_navigation);
+                    changed = bump_index_with_wrap(
+                        &mut next,
+                        filter_count as usize,
+                        delta,
+                        wrap_navigation,
+                    );
                     *current = Some(next);
                     changed_rect = changed.then_some(node.rect);
                 }
@@ -1630,13 +1635,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 self.node(id).map(|n| n.kind),
                 Some(WidgetKind::AutoComplete { .. })
             ) {
-                let expanded = if let Some(WidgetKind::AutoComplete { expanded, .. }) = self.node(id).map(|n| n.kind) {
+                let expanded = if let Some(WidgetKind::AutoComplete { expanded, .. }) =
+                    self.node(id).map(|n| n.kind)
+                {
                     expanded
                 } else {
                     false
                 };
                 if expanded {
-                    let has_chars = if let Some(WidgetKind::AutoComplete { text_len, .. }) = self.node(id).map(|n| n.kind) {
+                    let has_chars = if let Some(WidgetKind::AutoComplete { text_len, .. }) =
+                        self.node(id).map(|n| n.kind)
+                    {
                         text_len > 0
                     } else {
                         false
@@ -1674,7 +1683,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.push_event(UiEvent::Back)
     }
 
-    pub(crate) fn update_dial_value_at_pointer(&mut self, id: WidgetId, x: i32, y: i32) -> Result<(), GuiError> {
+    pub(crate) fn update_dial_value_at_pointer(
+        &mut self,
+        id: WidgetId,
+        x: i32,
+        y: i32,
+    ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         if let WidgetKind::Dial { value, min, max } = &mut node.kind {
@@ -1685,7 +1699,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             if dx != 0.0 || dy != 0.0 {
                 #[cfg(not(feature = "std"))]
                 use crate::math::F32Ext as _;
-                
+
                 let angle_rad = dy.atan2(dx);
                 let mut angle_norm = angle_rad + core::f32::consts::PI;
                 if angle_norm < 0.0 {
@@ -1712,13 +1726,15 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 ref mut elapsed_ms,
                 frame_duration_ms,
                 ..
-            } = node.kind {
+            } = node.kind
+            {
                 if total_frames > 1 && frame_duration_ms > 0 {
                     *elapsed_ms = elapsed_ms.saturating_add(dt_ms);
                     if *elapsed_ms >= frame_duration_ms {
                         let frames_to_advance = *elapsed_ms / frame_duration_ms;
                         *elapsed_ms %= frame_duration_ms;
-                        *current_frame = (*current_frame + frames_to_advance as usize) % total_frames;
+                        *current_frame =
+                            (*current_frame + frames_to_advance as usize) % total_frames;
                         let _ = dirty_rects.push(node.rect);
                     }
                 }

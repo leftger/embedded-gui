@@ -4643,7 +4643,14 @@ fn test_plotter_and_circular_list_widgets() {
 
     // Plotter widget
     let plotter = gui
-        .add_plotter(Rect::new(0, 0, 32, 16), &SERIES, 0, 0.0, 1.0, Style::panel())
+        .add_plotter(
+            Rect::new(0, 0, 32, 16),
+            &SERIES,
+            0,
+            0.0,
+            1.0,
+            Style::panel(),
+        )
         .unwrap();
     gui.set_plotter_style(plotter, 2).unwrap();
     gui.set_plotter_decoration(plotter, true, true).unwrap();
@@ -4688,24 +4695,24 @@ fn test_vector_font_metrics_and_rendering() {
 #[test]
 fn test_dynamic_theme_transitions() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
-    
+
     let mut theme_a = Theme::dark();
     theme_a.focus_ring = Rgb565::new(0, 0, 0); // Black
-    
+
     let mut theme_b = Theme::dark();
     theme_b.focus_ring = Rgb565::new(31, 63, 31); // White / Bright
-    
+
     gui.set_theme(theme_a).unwrap();
     assert_eq!(gui.theme().focus_ring, Rgb565::new(0, 0, 0));
-    
+
     gui.start_theme_transition(theme_b, 100).unwrap();
-    
+
     // Intermediate tick 50ms (halfway)
     gui.tick_input(50).unwrap();
     // Blended focus ring should be around midway
     let halfway_ring = gui.theme().focus_ring;
     assert!(halfway_ring.r() > 0 && halfway_ring.r() < 31);
-    
+
     // Complete transition
     gui.tick_input(50).unwrap();
     assert_eq!(gui.theme().focus_ring, Rgb565::new(31, 63, 31));
@@ -4714,41 +4721,44 @@ fn test_dynamic_theme_transitions() {
 #[test]
 fn test_haptics_sequencer_and_widget_triggers() {
     let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 64, 32));
-    
+
     // Manually play double click haptic
     gui.play_haptic(HapticPattern::DoubleClick);
     assert!(gui.haptic_intensity() > 0);
-    
+
     // Step forward 20ms
     gui.tick_input(20).unwrap();
     assert!(gui.haptic_intensity() > 0);
-    
+
     // Step forward past first pulse into quiet period (40ms steps)
     gui.tick_input(30).unwrap(); // total 50ms elapsed
     assert_eq!(gui.haptic_intensity(), 0);
-    
+
     // Step forward to end of pattern
     gui.tick_input(100).unwrap();
     assert_eq!(gui.haptic_intensity(), 0);
-    
+
     // Auto-triggering haptics on button click
-    let btn = gui.add_themed_button(Rect::new(0, 0, 20, 10), "Btn").unwrap();
-    
+    let btn = gui
+        .add_themed_button(Rect::new(0, 0, 20, 10), "Btn")
+        .unwrap();
+
     // Simulate pointer click/activation
     gui.handle_input(InputEvent::Pointer {
         x: 5,
         y: 5,
         state: PointerState::Pressed,
         button: PointerButton::Primary,
-    }).unwrap();
+    })
+    .unwrap();
     gui.handle_input(InputEvent::Pointer {
         x: 5,
         y: 5,
         state: PointerState::Released,
         button: PointerButton::Primary,
-    }).unwrap();
-    
+    })
+    .unwrap();
+
     // Haptics should have been triggered automatically
     assert!(gui.haptic_intensity() > 0);
 }
-

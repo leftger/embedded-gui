@@ -80,8 +80,10 @@ impl HapticSequencer {
         }
 
         self.step_elapsed_ms = self.step_elapsed_ms.saturating_add(dt_ms);
-        
-        while self.current_step < self.steps.len() && self.step_elapsed_ms >= self.steps[self.current_step].0 {
+
+        while self.current_step < self.steps.len()
+            && self.step_elapsed_ms >= self.steps[self.current_step].0
+        {
             self.step_elapsed_ms -= self.steps[self.current_step].0;
             self.current_step += 1;
         }

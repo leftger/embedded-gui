@@ -4,13 +4,13 @@ use heapless::Vec;
 use crate::math::F32Ext as _;
 use crate::{
     geometry::{DirtyTracker, Rect},
+    haptics::{HapticPattern, HapticSequencer},
     input::UiEvent,
     present::PresentRegion,
     render::RenderQuality,
     style::{Style, Theme, VisualState, WidgetStyle, lerp_style},
     widget::{MenuContract, StyleClassId, WidgetId},
     widgets::WidgetNode,
-    haptics::{HapticPattern, HapticSequencer},
 };
 
 use super::*;
@@ -313,7 +313,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
-    pub fn start_theme_transition(&mut self, target: Theme, duration_ms: u32) -> Result<(), GuiError> {
+    pub fn start_theme_transition(
+        &mut self,
+        target: Theme,
+        duration_ms: u32,
+    ) -> Result<(), GuiError> {
         if duration_ms == 0 {
             self.set_theme(target)?;
         } else {

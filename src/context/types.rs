@@ -4,12 +4,12 @@ use heapless::Vec;
 use crate::math::F32Ext as _;
 use crate::{
     geometry::{DirtyError, DirtyTracker, Rect},
+    haptics::HapticSequencer,
     input::{UiEvent, UiEventFilter, WidgetDispatchPolicy},
     render::RenderQuality,
     style::{Theme, VisualState, WidgetStyle},
     widget::{FocusGroupId, MenuContract, StyleClassId, WidgetId},
     widgets::{TEXTAREA_CAPACITY, WidgetNode},
-    haptics::HapticSequencer,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

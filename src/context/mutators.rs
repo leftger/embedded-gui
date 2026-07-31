@@ -302,8 +302,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn list_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
-            WidgetKind::List { selected, .. }
-            | WidgetKind::CircularList { selected, .. } => Some(selected),
+            WidgetKind::List { selected, .. } | WidgetKind::CircularList { selected, .. } => {
+                Some(selected)
+            }
             _ => None,
         }
     }
@@ -340,7 +341,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
-            WidgetKind::Plotter { head: ref mut h, .. } => {
+            WidgetKind::Plotter {
+                head: ref mut h, ..
+            } => {
                 *h = head;
                 self.dirty.add(rect)?;
                 Ok(())
@@ -354,7 +357,9 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
         match node.kind {
-            WidgetKind::Plotter { values: ref mut v, .. } => {
+            WidgetKind::Plotter {
+                values: ref mut v, ..
+            } => {
                 *v = values;
                 self.dirty.add(rect)?;
                 Ok(())
@@ -1787,9 +1792,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn autocomplete_text(&self, id: WidgetId) -> Option<&str> {
         match &self.node(id)?.kind {
             WidgetKind::AutoComplete {
-                text_buf,
-                text_len,
-                ..
+                text_buf, text_len, ..
             } => core::str::from_utf8(&text_buf[..*text_len as usize]).ok(),
             _ => None,
         }
@@ -1806,7 +1809,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             filter_count,
             selected,
             expanded,
-        } = &mut node.kind {
+        } = &mut node.kind
+        {
             let len = text.len().min(text_buf.len());
             text_buf[..len].copy_from_slice(&text.as_bytes()[..len]);
             *text_len = len as u8;
@@ -1830,7 +1834,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             filter_count,
             selected,
             expanded,
-        } = &mut node.kind {
+        } = &mut node.kind
+        {
             if (*text_len as usize) < text_buf.len() {
                 text_buf[*text_len as usize] = ch as u8;
                 *text_len += 1;
@@ -1857,7 +1862,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             filter_count,
             selected,
             expanded,
-        } = &mut node.kind {
+        } = &mut node.kind
+        {
             if *text_len > 0 {
                 *text_len -= 1;
                 *expanded = true;
@@ -1883,7 +1889,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             selected,
             expanded,
             ..
-        } = &mut node.kind {
+        } = &mut node.kind
+        {
             if *expanded {
                 if let Some(sel_idx) = *selected {
                     if sel_idx < *filter_count as usize {
@@ -1914,7 +1921,10 @@ fn contains_ignore_ascii_case(s: &str, needle: &str) -> bool {
         return false;
     }
     s_bytes.windows(n_bytes.len()).any(|window| {
-        window.iter().zip(n_bytes.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b))
+        window
+            .iter()
+            .zip(n_bytes.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
     })
 }
 
