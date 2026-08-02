@@ -17,20 +17,20 @@ use super::*;
 impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     GuiContext<'a, NODES, EVENTS, DIRTY>
 {
-    pub fn add_panel<S>(&mut self, rect: Rect, style: S) -> Result<WidgetId, GuiError>
+    pub fn add_panel<S>(&mut self, rect: impl Into<Rect>, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
     {
         self.add_widget(rect, WidgetKind::Panel, style)
     }
 
-    pub fn add_themed_panel(&mut self, rect: Rect) -> Result<WidgetId, GuiError> {
+    pub fn add_themed_panel(&mut self, rect: impl Into<Rect>) -> Result<WidgetId, GuiError> {
         self.add_panel(rect, self.theme.panel)
     }
 
     pub fn add_label<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         text: &'a str,
         style: S,
     ) -> Result<WidgetId, GuiError>
@@ -40,13 +40,17 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_widget(rect, WidgetKind::Label(text), style)
     }
 
-    pub fn add_themed_label(&mut self, rect: Rect, text: &'a str) -> Result<WidgetId, GuiError> {
+    pub fn add_themed_label(
+        &mut self,
+        rect: impl Into<Rect>,
+        text: &'a str,
+    ) -> Result<WidgetId, GuiError> {
         self.add_label(rect, text, self.theme.label)
     }
 
     pub fn add_button<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         text: &'a str,
         style: S,
     ) -> Result<WidgetId, GuiError>
@@ -58,14 +62,18 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(id)
     }
 
-    pub fn add_themed_button(&mut self, rect: Rect, text: &'a str) -> Result<WidgetId, GuiError> {
+    pub fn add_themed_button(
+        &mut self,
+        rect: impl Into<Rect>,
+        text: &'a str,
+    ) -> Result<WidgetId, GuiError> {
         self.add_button(rect, text, self.theme.button)
     }
 
     #[cfg(feature = "rich-widgets")]
     pub fn add_progress_bar<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         value: f32,
         style: S,
     ) -> Result<WidgetId, GuiError>
@@ -84,7 +92,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn add_themed_progress_bar(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         value: f32,
     ) -> Result<WidgetId, GuiError> {
         self.add_progress_bar(rect, value, self.theme.progress)
@@ -93,7 +101,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn add_toggle<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         label: &'a str,
         on: bool,
         style: S,
@@ -109,7 +117,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn add_themed_toggle(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         label: &'a str,
         on: bool,
     ) -> Result<WidgetId, GuiError> {
@@ -119,7 +127,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn add_checkbox<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         label: &'a str,
         checked: bool,
         style: S,
@@ -135,7 +143,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     #[cfg(feature = "rich-widgets")]
     pub fn add_themed_checkbox(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         label: &'a str,
         checked: bool,
     ) -> Result<WidgetId, GuiError> {
@@ -1155,9 +1163,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.add_dial(rect, value, min, max, self.theme.button)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_rle_player<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         rle_data: &'static [u8],
         frame_width: u16,
         frame_height: u16,

@@ -22,14 +22,18 @@ pub static ASCII_4X7_FONT: PackedFont = PackedFont {
     glyphs: &ASCII_4X7_GLYPHS,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FontId {
     Tiny3x5,
     Medium4x7,
     Scaled6x10,
     Vector(u8),
     Custom(&'static PackedFont),
+    #[cfg(feature = "embedded-graphics")]
+    MonoFont(&'static embedded_graphics::mono_font::MonoFont<'static>),
 }
+
+impl Eq for FontId {}
 
 impl FontId {
     pub const fn advance(self) -> u32 {
@@ -39,6 +43,8 @@ impl FontId {
             Self::Scaled6x10 => 7,
             Self::Vector(scale) => (8 * scale) as u32,
             Self::Custom(font) => font.advance as u32,
+            #[cfg(feature = "embedded-graphics")]
+            Self::MonoFont(font) => font.character_size.width + font.character_spacing,
         }
     }
 
@@ -49,6 +55,8 @@ impl FontId {
             Self::Scaled6x10 => 11,
             Self::Vector(scale) => (12 * scale) as u32,
             Self::Custom(font) => font.line_height as u32,
+            #[cfg(feature = "embedded-graphics")]
+            Self::MonoFont(font) => font.character_size.height,
         }
     }
 }
@@ -60,6 +68,21 @@ pub const fn packed_font(font: FontId) -> &'static PackedFont {
         FontId::Scaled6x10 => &ASCII_3X5_FONT,
         FontId::Vector(_) => &ASCII_3X5_FONT,
         FontId::Custom(font) => font,
+        #[cfg(feature = "embedded-graphics")]
+        FontId::MonoFont(_) => &ASCII_3X5_FONT,
+    }
+}
+
+impl From<&'static PackedFont> for FontId {
+    fn from(font: &'static PackedFont) -> Self {
+        FontId::Custom(font)
+    }
+}
+
+#[cfg(feature = "embedded-graphics")]
+impl From<&'static embedded_graphics::mono_font::MonoFont<'static>> for FontId {
+    fn from(font: &'static embedded_graphics::mono_font::MonoFont<'static>) -> Self {
+        FontId::MonoFont(font)
     }
 }
 

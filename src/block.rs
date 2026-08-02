@@ -56,7 +56,8 @@ impl<'a> Block<'a> {
         self
     }
 
-    pub fn inner(self, rect: Rect) -> Rect {
+    pub fn inner(self, rect: impl Into<Rect>) -> Rect {
+        let rect = rect.into();
         let border = self.border.width as i16;
         rect.inset(EdgeInsets {
             left: self.padding.left.saturating_add(border),
@@ -66,7 +67,8 @@ impl<'a> Block<'a> {
         })
     }
 
-    pub fn title_area(self, rect: Rect) -> Option<Rect> {
+    pub fn title_area(self, rect: impl Into<Rect>) -> Option<Rect> {
+        let rect = rect.into();
         self.title.map(|_| {
             Rect::new(
                 rect.x + self.border.width as i32 + self.padding.left.max(0) as i32,
@@ -80,7 +82,8 @@ impl<'a> Block<'a> {
         })
     }
 
-    pub fn content_area(self, rect: Rect) -> Rect {
+    pub fn content_area(self, rect: impl Into<Rect>) -> Rect {
+        let rect = rect.into();
         let inner = self.inner(rect);
         if self.title.is_none() {
             return inner;
@@ -95,11 +98,16 @@ impl<'a> Block<'a> {
         )
     }
 
-    pub fn render<D, C>(self, rect: Rect, ctx: &mut RenderCtx<'_, D, C>) -> Result<(), D::Error>
+    pub fn render<D, C>(
+        self,
+        rect: impl Into<Rect>,
+        ctx: &mut RenderCtx<'_, D, C>,
+    ) -> Result<(), D::Error>
     where
         D: DrawTarget<Color = Rgb565>,
         C: Compositor<D>,
     {
+        let rect = rect.into();
         if let Some(shadow) = self.style.shadow {
             let spread = ctx.shadow_spread_for(shadow.spread);
             let mut i = 0u8;

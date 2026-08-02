@@ -361,7 +361,7 @@ pub struct WidgetNode<'a> {
 }
 
 impl<'a> WidgetNode<'a> {
-    pub fn new<S>(id: WidgetId, rect: Rect, kind: WidgetKind<'a>, style: S) -> Self
+    pub fn new<S>(id: WidgetId, rect: impl Into<Rect>, kind: WidgetKind<'a>, style: S) -> Self
     where
         S: Into<WidgetStyle>,
     {
@@ -370,7 +370,7 @@ impl<'a> WidgetNode<'a> {
             parent: None,
             style_class: None,
             focus_group: FocusGroupId::ROOT,
-            rect,
+            rect: rect.into(),
             style: style.into(),
             kind,
             flags: default_flags(kind),
@@ -1079,6 +1079,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 fn render_rle_player<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -1174,6 +1175,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 fn render_autocomplete<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
@@ -2009,6 +2011,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_plotter<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,

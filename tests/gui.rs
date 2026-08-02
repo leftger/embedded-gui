@@ -307,6 +307,42 @@ fn draw_text_with_large_font_draws_taller_pixels() {
 }
 
 #[test]
+fn test_mono_font_transparent_conversion_and_rendering() {
+    use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_9X15};
+
+    let style = TextStyle::new(Rgb565::WHITE).with_font(&FONT_6X10);
+    assert_eq!(style.font, FontId::MonoFont(&FONT_6X10));
+
+    let metrics_6x10 = RenderCtx::<MockTarget>::text_metrics_with_font("AB", &FONT_6X10);
+    assert_eq!(metrics_6x10.width, 12);
+    assert_eq!(metrics_6x10.height, 10);
+
+    let metrics_9x15 = RenderCtx::<MockTarget>::text_metrics_with_font("AB", &FONT_9X15);
+    assert_eq!(metrics_9x15.width, 18);
+    assert_eq!(metrics_9x15.height, 15);
+
+    let mut target = TestBuffer::new(32, 24);
+    let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 32, 24));
+    ctx.draw_text_in_with_font(
+        Rect::new(0, 0, 32, 24),
+        "A",
+        TextStyle::new(Rgb565::WHITE),
+        &FONT_6X10,
+    )
+    .unwrap();
+
+    let mut white_pixel_count = 0;
+    for y in 0..10 {
+        for x in 0..6 {
+            if target.pixel_at(x, y) == Some(Rgb565::WHITE) {
+                white_pixel_count += 1;
+            }
+        }
+    }
+    assert!(white_pixel_count > 0);
+}
+
+#[test]
 fn rounded_rect_clips_corners() {
     let mut target = TestBuffer::new(16, 16);
     let mut ctx = RenderCtx::new(&mut target, Rect::new(0, 0, 16, 16));

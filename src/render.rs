@@ -150,9 +150,30 @@ impl TextStyle {
         self
     }
 
-    pub const fn with_font(mut self, font: FontId) -> Self {
+    pub const fn with_font_id(mut self, font: FontId) -> Self {
         self.font = font;
         self
+    }
+
+    pub fn with_font(mut self, font: impl Into<FontId>) -> Self {
+        self.font = font.into();
+        self
+    }
+}
+
+#[cfg(feature = "embedded-graphics")]
+impl From<&embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
+    fn from(mono_style: &embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
+        let mut style = TextStyle::new(mono_style.text_color.unwrap_or(Rgb565::WHITE));
+        style.font = FontId::MonoFont(mono_style.font);
+        style
+    }
+}
+
+#[cfg(feature = "embedded-graphics")]
+impl From<embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
+    fn from(mono_style: embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
+        Self::from(&mono_style)
     }
 }
 
@@ -926,13 +947,13 @@ where
         }
     }
 
-    pub fn fill_rect(&mut self, rect: Rect, color: Rgb565) -> Result<(), D::Error> {
+    pub fn fill_rect(&mut self, rect: impl Into<Rect>, color: Rgb565) -> Result<(), D::Error> {
         self.fill_rect_alpha(rect, color, 255)
     }
 
     pub fn fill_rect_alpha(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         color: Rgb565,
         opacity: u8,
     ) -> Result<(), D::Error> {
@@ -941,7 +962,7 @@ where
 
     pub fn fill_rounded_rect(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         radius: u8,
         color: Rgb565,
     ) -> Result<(), D::Error> {
@@ -950,11 +971,12 @@ where
 
     pub fn fill_rounded_rect_alpha(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         radius: u8,
         color: Rgb565,
         opacity: u8,
     ) -> Result<(), D::Error> {
+        let rect = rect.into();
         let draw = self.visible_rect(rect);
         if draw.is_empty() || opacity == 0 {
             return Ok(());
@@ -991,11 +1013,12 @@ where
 
     pub fn fill_rounded_rect_gradient_alpha(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         radius: u8,
         gradient: LinearGradient,
         opacity: u8,
     ) -> Result<(), D::Error> {
+        let rect = rect.into();
         let draw = self.visible_rect(rect);
         if draw.is_empty() || opacity == 0 {
             return Ok(());
@@ -1029,16 +1052,17 @@ where
         Ok(())
     }
 
-    pub fn stroke_rect(&mut self, rect: Rect, border: Border) -> Result<(), D::Error> {
+    pub fn stroke_rect(&mut self, rect: impl Into<Rect>, border: Border) -> Result<(), D::Error> {
         self.stroke_rect_alpha(rect, border, 255)
     }
 
     pub fn stroke_rect_alpha(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         border: Border,
         opacity: u8,
     ) -> Result<(), D::Error> {
+        let rect = rect.into();
         if border.width == 0 || rect.is_empty() {
             return Ok(());
         }
@@ -1074,7 +1098,7 @@ where
 
     pub fn stroke_rounded_rect(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         radius: u8,
         border: Border,
     ) -> Result<(), D::Error> {
@@ -1083,14 +1107,16 @@ where
 
     pub fn stroke_rounded_rect_alpha(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         radius: u8,
         border: Border,
         opacity: u8,
     ) -> Result<(), D::Error> {
+        let rect = rect.into();
         if border.width == 0 || rect.is_empty() || opacity == 0 {
             return Ok(());
         }
+
         let draw = self.visible_rect(rect);
         if draw.is_empty() {
             return Ok(());
@@ -1139,8 +1165,9 @@ where
         y: i32,
         text: &str,
         color: Rgb565,
-        font: FontId,
+        font: impl Into<FontId>,
     ) -> Result<(), D::Error> {
+        let font = font.into();
         let advance = font.advance() as i32;
         let line_h = font.line_height() as i32;
         let mut cursor_x = x;
@@ -1159,7 +1186,7 @@ where
 
     pub fn draw_text_in(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         text: &str,
         style: TextStyle,
     ) -> Result<(), D::Error> {
@@ -1199,11 +1226,13 @@ where
 
     pub fn draw_text_in_with_font(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         text: &str,
         style: TextStyle,
-        font: FontId,
+        font: impl Into<FontId>,
     ) -> Result<(), D::Error> {
+        let rect = rect.into();
+        let font = font.into();
         if rect.is_empty() {
             return Ok(());
         }
@@ -1768,7 +1797,8 @@ where
         Self::text_metrics_with_font(text, FontId::Tiny3x5)
     }
 
-    pub fn text_metrics_with_font(text: &str, font: FontId) -> TextMetrics {
+    pub fn text_metrics_with_font(text: &str, font: impl Into<FontId>) -> TextMetrics {
+        let font = font.into();
         TextMetrics {
             width: text.chars().count() as u32 * font.advance(),
             height: font.line_height(),
@@ -1783,8 +1813,9 @@ where
         text: &str,
         max_width: u32,
         wrap: TextWrap,
-        font: FontId,
+        font: impl Into<FontId>,
     ) -> TextMetrics {
+        let font = font.into();
         let max_chars = (max_width / font.advance()).max(1) as usize;
         let lines = count_lines(text, max_chars, wrap).max(1);
         let widest = widest_line(text, max_chars, wrap) as u32 * font.advance();
@@ -1981,6 +2012,65 @@ where
                     }
                     last_point = Some((draw_x, draw_y));
                 }
+            }
+            #[cfg(feature = "embedded-graphics")]
+            FontId::MonoFont(font) => {
+                use embedded_graphics::Drawable;
+                use embedded_graphics::draw_target::DrawTarget;
+                use embedded_graphics::geometry::{OriginDimensions, Point, Size};
+                use embedded_graphics::mono_font::MonoTextStyle;
+                use embedded_graphics::pixelcolor::BinaryColor;
+                use embedded_graphics::text::Text;
+
+                struct GlyphPixelCollector<'a, F> {
+                    x: i32,
+                    y: i32,
+                    f: &'a mut F,
+                }
+
+                impl<F> OriginDimensions for GlyphPixelCollector<'_, F> {
+                    fn size(&self) -> Size {
+                        Size::new(u32::MAX, u32::MAX)
+                    }
+                }
+
+                impl<F: FnMut(i32, i32)> DrawTarget for GlyphPixelCollector<'_, F> {
+                    type Color = BinaryColor;
+                    type Error = core::convert::Infallible;
+
+                    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+                    where
+                        I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>>,
+                    {
+                        for embedded_graphics::Pixel(pos, color) in pixels {
+                            if color.is_on() {
+                                (self.f)(self.x + pos.x, self.y + pos.y);
+                            }
+                        }
+                        Ok(())
+                    }
+                }
+
+                let mut collector_err = Ok(());
+                let mut pixel_cb = |px: i32, py: i32| {
+                    if collector_err.is_ok() {
+                        if let Err(e) = self.pixel(px, py, color, opacity) {
+                            collector_err = Err(e);
+                        }
+                    }
+                };
+
+                let mut collector = GlyphPixelCollector {
+                    x,
+                    y,
+                    f: &mut pixel_cb,
+                };
+
+                let text_style = MonoTextStyle::new(font, BinaryColor::On);
+                let mut buf = [0u8; 4];
+                let ch_str = ch.encode_utf8(&mut buf);
+                let _ = Text::new(ch_str, Point::zero(), text_style).draw(&mut collector);
+                collector_err?;
             }
         }
         Ok(())

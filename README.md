@@ -216,9 +216,36 @@ Optional Cargo features:
 
 | Feature | Purpose |
 |---------|---------|
+| `embedded-graphics` | Enables transparent `embedded-graphics` `MonoFont` support (`&FONT_6X10`, `&FONT_9X15`, etc.) across `FontId`, `TextStyle`, `Style`, and `RenderCtx`. |
+| `embedded-text` | Enables `embedded-text` `TextBox` interop adapter |
+| `embedded-layout` | Enables `embedded-layout` `View` alignment adapter |
 | `embassy-time` | Monotonic `dt_ms` via `embassy_time::Instant` |
 | `embassy` | [`EmbassyWaitTransfer`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.EmbassyWaitTransfer.html) + [`FrameClock`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.FrameClock.html) |
 | `triple-buffering` | Triple-buffer swap chain for bursty frame times |
+
+### `embedded-graphics` MonoFont Quickstart
+
+To use any `embedded-graphics` `MonoFont` (such as `ascii::FONT_6X10`, `FONT_7X13`, `FONT_9X15`, `FONT_10X20`, `profont`, etc.) transparently in `embedded-gui`, enable the `embedded-graphics` feature in your `Cargo.toml`:
+
+```toml
+[dependencies]
+embedded-gui = { version = "0.1.5", features = ["embedded-graphics"] }
+embedded-graphics = "0.8"
+```
+
+Then pass `&MonoFont` references directly into `TextStyle`, `Style`, or `RenderCtx`:
+
+```rust
+use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_9X15};
+use embedded_gui::prelude::*;
+
+// 1. Direct style construction:
+let title_style = TextStyle::new(Rgb565::CYAN).with_font(&FONT_9X15);
+let body_style = Style::new().with_font(&FONT_6X10);
+
+// 2. RenderCtx calls:
+ctx.draw_text_in_with_font(rect, "DOOM HUD", title_style, &FONT_6X10)?;
+```
 
 Examples:
 

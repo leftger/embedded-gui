@@ -464,13 +464,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub(crate) fn add_widget<S>(
         &mut self,
-        rect: Rect,
+        rect: impl Into<Rect>,
         kind: WidgetKind<'a>,
         style: S,
     ) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,
     {
+        let rect = rect.into();
         let id = WidgetId::new(self.next_id);
         self.next_id = self.next_id.saturating_add(1).max(1);
         let node = WidgetNode::new(id, rect, kind, style);

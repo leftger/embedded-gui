@@ -15,8 +15,15 @@
 //!
 //! Neither adapter changes how existing widgets render by default.
 
-#[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
-mod geometry;
+#[cfg(any(
+    feature = "embedded-graphics",
+    feature = "embedded-text",
+    feature = "embedded-layout"
+))]
+pub mod geometry;
+
+#[cfg(feature = "embedded-graphics")]
+pub mod graphics;
 
 #[cfg(feature = "embedded-layout")]
 pub mod layout;

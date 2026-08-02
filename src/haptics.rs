@@ -39,6 +39,7 @@ pub struct HapticSequencer {
     current_intensity: u8,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for HapticSequencer {
     fn default() -> Self {
         Self {

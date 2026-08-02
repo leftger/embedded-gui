@@ -316,6 +316,16 @@ impl Style {
         }
         self
     }
+
+    pub const fn with_font_id(mut self, font: FontId) -> Self {
+        self.font = font;
+        self
+    }
+
+    pub fn with_font(mut self, font: impl Into<FontId>) -> Self {
+        self.font = font.into();
+        self
+    }
 }
 
 impl Default for Style {
