@@ -13,6 +13,7 @@ use crate::{
     font::{FontId, glyph_rows},
     geometry::Rect,
     image::{ImageFit, ImageRef, TileMode, TileRef},
+    palette::{DisplayPalette, InkRole},
     style::{AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient},
     text,
 };
@@ -545,6 +546,7 @@ where
     transform_len: usize,
     layer_stack: [LayerState; 8],
     layer_len: usize,
+    palette: Option<DisplayPalette>,
     _compositor: PhantomData<C>,
 }
 
@@ -563,8 +565,21 @@ where
             transform_len: 1,
             layer_stack: [LayerState::normal(); 8],
             layer_len: 1,
+            palette: None,
             _compositor: PhantomData,
         }
+    }
+
+    pub fn with_palette(mut self, palette: DisplayPalette) -> Self {
+        self.palette = Some(palette);
+        self
+    }
+
+    /// Resolve a semantic ink role through the active palette, if set.
+    pub fn ink(&self, role: InkRole) -> Rgb565 {
+        self.palette
+            .map(|palette| palette.resolve(role))
+            .unwrap_or(Rgb565::WHITE)
     }
 
     pub fn with_dirty(target: &'a mut D, viewport: Rect, dirty: Rect) -> Self {
@@ -578,6 +593,7 @@ where
             transform_len: 1,
             layer_stack: [LayerState::normal(); 8],
             layer_len: 1,
+            palette: None,
             _compositor: PhantomData,
         }
     }
@@ -602,6 +618,7 @@ where
             transform_len: 1,
             layer_stack: [LayerState::normal(); 8],
             layer_len: 1,
+            palette: None,
             _compositor: PhantomData,
         }
     }
@@ -861,8 +878,13 @@ where
         T: embedded_graphics::Drawable<Color = Rgb565>,
     {
         use embedded_graphics::draw_target::DrawTargetExt;
+        use embedded_graphics::geometry::{Point, Size};
+        use embedded_graphics::primitives::Rectangle;
 
-        let clip_rect: embedded_graphics::primitives::Rectangle = self.clip.into();
+        let clip_rect = Rectangle::new(
+            Point::new(self.clip.x, self.clip.y),
+            Size::new(self.clip.w, self.clip.h),
+        );
         let mut clipped = self.target.clipped(&clip_rect);
         drawable.draw(&mut clipped)
     }

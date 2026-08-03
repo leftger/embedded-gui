@@ -3,11 +3,16 @@ use heapless::Vec;
 #[cfg(not(feature = "std"))]
 use crate::math::F32Ext as _;
 use crate::{
-    animation::{Animation, Easing},
+    Blend, BlendMode, Compositor, PixelRead,
+    animation::{Animation, Easing, apply_easing},
     animation_timing::{self, timing_half_phase, timing_shutter_phase},
     context::GuiContext,
     geometry::Rect,
     screen::{ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError},
+};
+use embedded_graphics_core::{
+    draw_target::DrawTarget,
+    pixelcolor::{Rgb565, RgbColor},
 };
 
 /// Screen transition visual effect.
@@ -877,6 +882,44 @@ where
             sample.incoming_offset_y,
             sample.incoming_opacity,
         )?;
+    }
+    Ok(())
+}
+
+/// Outgoing-frame opacity for a fade transition at `progress` `0.0..=1.0`.
+pub fn fade_outgoing_opacity(progress: f32, easing: Easing) -> u8 {
+    let t = apply_easing(progress.clamp(0.0, 1.0), easing);
+    ((1.0 - t) * 255.0) as u8
+}
+
+/// Cross-fade a frozen outgoing framebuffer over an already-rendered incoming
+/// target using the same opacity curve as [`ScreenTransitionEffect::Fade`].
+pub fn composite_framebuffer_fade<D>(
+    target: &mut D,
+    outgoing: &[Rgb565],
+    width: usize,
+    height: usize,
+    outgoing_opacity: u8,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565> + PixelRead,
+{
+    if outgoing_opacity == 0 || outgoing.len() < width * height {
+        return Ok(());
+    }
+    for y in 0..height {
+        for x in 0..width {
+            let outgoing_px = outgoing[y * width + x];
+            let _ = Blend::plot(
+                target,
+                x as i32,
+                y as i32,
+                outgoing_px,
+                outgoing_opacity,
+                BlendMode::Normal,
+                Rgb565::BLACK,
+            );
+        }
     }
     Ok(())
 }

@@ -23,6 +23,7 @@ pub mod input;
 pub mod interop;
 pub mod layout;
 mod math;
+pub mod palette;
 pub mod present;
 pub mod render;
 pub mod screen;
@@ -99,6 +100,7 @@ pub use input::{
     WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
 };
 pub use layout::{Align, Axis, Constraint, LayoutItem, Length, LinearLayout};
+pub use palette::{DisplayMode, DisplayPalette, InkRole, RoleColors};
 pub use present::PresentRegion;
 pub use render::{
     AntiAliasMode, Blend, BlendMode, CHAR_HEIGHT, CHAR_WIDTH, ColorFormat, Compositor, Dither,
@@ -112,7 +114,8 @@ pub use screen::{
 };
 pub use screen_transition::{
     ActiveScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
-    ScreenTransitionSample, ScreenTransitionSpec, render_transition_pair,
+    ScreenTransitionSample, ScreenTransitionSpec, composite_framebuffer_fade,
+    fade_outgoing_opacity, render_transition_pair,
 };
 pub use state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState};
 pub use style::{

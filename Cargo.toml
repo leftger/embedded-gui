@@ -84,3 +84,7 @@ required-features = ["std"]
 [[example]]
 name = "embassy_gui_frame"
 required-features = ["embassy", "std"]
+
+[[test]]
+name = "gui"
+required-features = ["embedded-graphics"]
