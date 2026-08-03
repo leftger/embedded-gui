@@ -536,6 +536,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         &mut self,
         rect: Rect,
         progress: f32,
+        clockwise: bool,
         arc_radius: u32,
         frame_inset: u16,
         corner_radius: u8,
@@ -551,6 +552,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             rect,
             WidgetKind::SweepingArc {
                 progress: progress.clamp(0.0, 1.0),
+                clockwise,
                 arc_radius,
                 frame_inset,
                 corner_radius,

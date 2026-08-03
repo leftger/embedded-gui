@@ -4641,6 +4641,7 @@ fn sweeping_arc_renders_and_grows_with_progress() {
         .add_sweeping_arc(
             Rect::new(0, 0, 96, 64),
             0.25,
+            true,
             60,
             12,
             4,

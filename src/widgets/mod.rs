@@ -138,6 +138,9 @@ pub enum WidgetKind<'a> {
     /// [`crate::WidgetAnimator`] through `set_progress`.
     SweepingArc {
         progress: f32,
+        /// When `true`, the sector grows clockwise from 12 o'clock (screen
+        /// coordinates, y-down). When `false`, grows counter-clockwise.
+        clockwise: bool,
         arc_radius: u32,
         frame_inset: u16,
         corner_radius: u8,
@@ -566,6 +569,7 @@ impl<'a> WidgetNode<'a> {
             ),
             WidgetKind::SweepingArc {
                 progress,
+                clockwise,
                 arc_radius,
                 frame_inset,
                 corner_radius,
@@ -576,6 +580,7 @@ impl<'a> WidgetNode<'a> {
                 ctx,
                 rect,
                 progress,
+                clockwise,
                 arc_radius,
                 frame_inset,
                 corner_radius,
@@ -1749,6 +1754,7 @@ fn render_sweeping_arc<D, C>(
     ctx: &mut RenderCtx<'_, D, C>,
     rect: Rect,
     progress: f32,
+    clockwise: bool,
     arc_radius: u32,
     frame_inset: u16,
     corner_radius: u8,
@@ -1762,11 +1768,12 @@ where
 {
     // Solid background behind the sweep.
     ctx.fill_rect(rect, bg_color)?;
-    // Sweeping pie-sector, growing clockwise from 12 o'clock.
+    // Sweeping pie-sector from 12 o'clock; sign selects screen-wise direction.
     let cx = rect.x + rect.w as i32 / 2;
     let cy = rect.y + rect.h as i32 / 2;
     let sweep = progress.clamp(0.0, 1.0) * 360.0;
-    ctx.fill_sector_sweep(cx, cy, arc_radius, -90.0, sweep, arc_color)?;
+    let signed_sweep = if clockwise { -sweep } else { sweep };
+    ctx.fill_sector_sweep(cx, cy, arc_radius, -90.0, signed_sweep, arc_color)?;
     // Rounded-rect "window" punched in the middle for the caller's value.
     let inset = frame_inset as i32;
     let fw = (rect.w as i32 - 2 * inset).max(0) as u32;

@@ -30,6 +30,7 @@ fn main() {
         .add_sweeping_arc(
             Rect::new(0, 0, W, H),
             0.0,
+            true,                   // clockwise from 12 o'clock
             60,                     // arc_radius
             12,                     // frame_inset
             4,                      // corner_radius
