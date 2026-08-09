@@ -1,6 +1,6 @@
 [package]
 name = "embedded-gui"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Gerzain Mata <leftger@gmail.com>"]
@@ -51,6 +51,7 @@ embassy = ["embassy-time", "dep:embassy-sync"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
+embedded-draw-target = { version = "0.1", default-features = false }
 embedded-graphics-framebuf = "0.3"
 critical-section = "1.1"
 heapless = "0.9"

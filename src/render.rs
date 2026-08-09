@@ -360,20 +360,19 @@ pub enum BlendMode {
 /// Implementing `PixelRead` additionally unlocks the `*_true_alpha` methods,
 /// which composite against the destination's actual current contents
 /// instead of dithering.
-pub trait PixelRead: DrawTarget {
-    fn get_pixel(&self, point: Point) -> Self::Color;
-}
+///
+/// Re-exported from [`embedded_draw_target`] so that a buffer implementing it
+/// once is accepted by every crate in the ecosystem that needs readback,
+/// rather than by this one alone.
+pub use embedded_draw_target::PixelRead;
 
 /// Capability trait for hardware display controllers (e.g. ST7789, ILI9341, SSD1306)
 /// supporting direct column/row address window setting (`set_address_window`).
 /// Allows rendering dirty regions by transmitting SPI/DMA transfers exclusively to
 /// the target sub-window instead of the full screen.
-pub trait WindowedDrawTarget: DrawTarget {
-    fn set_window(
-        &mut self,
-        area: &embedded_graphics_core::primitives::Rectangle,
-    ) -> Result<(), Self::Error>;
-}
+///
+/// Re-exported from [`embedded_draw_target`].
+pub use embedded_draw_target::WindowedDrawTarget;
 
 /// Pixel-plotting policy for a [`RenderCtx`]. Selected by the ctx's `C` type
 /// parameter so the *same* drawing calls composite differently depending on
