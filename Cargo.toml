@@ -127,3 +127,8 @@ name = "wearable_os_subsystems_showcase"
 path = "examples/basics/wearable_os_subsystems_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "advanced_cinematic_motion_showcase"
+path = "examples/basics/advanced_cinematic_motion_showcase.rs"
+required-features = ["std"]
+
