@@ -5,262 +5,129 @@
 [![CI](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml/badge.svg)](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 
-`embedded-gui` is a `no_std` GUI/HUD crate for `embedded-graphics` displays.
-It is built around fixed-capacity data structures, deterministic rendering, and
-embedded-friendly interaction patterns (pointer, encoder, and keyboard-style input).
+`embedded-gui` is a lightweight, deterministic, zero-allocation (`no_std`) GUI & HUD framework for microcontrollers and [`embedded-graphics`](https://crates.io/crates/embedded-graphics) displays.
 
-Heavily inspired by the [Pebble](https://developer.rebble.io/developer.pebble.com/docs/index.html)
-smartwatch UI framework — its animation model, interaction contracts, and cinematic motion
-primitives draw directly from Pebble's design language. [LVGL](https://lvgl.io) is a
-secondary influence, particularly for widget composition and style-state conventions.
+Heavily inspired by the **Pebble** smartwatch UI framework—its animation model, interaction contracts, and cinematic motion primitives draw directly from Pebble's design language. **LVGL** serves as a secondary influence for widget composition, layout rules, and state-variant styling.
 
-## Current State
+---
 
-`embedded-gui` currently provides a broad baseline of widgets, interaction semantics,
-fixed-capacity animation primitives, and screen transition tooling for embedded UIs.
-Recent work has focused on tightening interaction fidelity, expanding state transition
-coverage, and improving regression-focused examples/docs.
+## Key Capabilities
 
-- Pointer release semantics now consistently target the originally pressed widget.
-- Focused open dropdowns now close on `Back` before global back handling.
-- State transitions now cover keyboard and pointer press feedback paths.
-- Enabled/disabled flag changes now participate in state transitions with regression coverage.
-- Style-class state overrides now participate correctly in transition endpoint blending.
-- Select activation now supports configurable double-select recognition (`DoubleClicked` events).
-- Per-widget raw key input policy now supports `SelectPressed/Released` and `BackPressed/Released`.
-- Pointer interaction now supports configurable double-click recognition (`DoubleClicked` events).
-- Per-widget key bindings can override `Select`/`Back` behavior (`Default`, `Ignore`, `Activate`, `Back`).
-- Textarea no-op edits avoid emitting mutation events, with regression coverage.
-- Wrapped-line selection navigation (`SelectHome`/`SelectEnd`) now has dedicated edge-case coverage.
-- Cross-widget interaction matrix coverage now includes dropdown/list/tabs/roller keyboard navigation paths.
-- Nested layout + clip behavior now has dedicated regression coverage for parent-relative composition.
-- A dedicated interaction semantics simulator example is available in `examples/interaction_semantics_showcase.rs`.
+- 🧱 **Zero-Allocation (`no_std`)**: Built entirely on fixed-capacity data structures (`heapless`) with strict memory bounds and deterministic execution times.
+- 🧩 **Rich Built-in Widgets**: Buttons, Sliders, Dropdowns, Toggles, Checkboxes, Gauges, Meters, Sweeping Arcs, Plotters/Charts, TextAreas, On-Screen Keyboards, and Circular Lists.
+- 🛠️ **Native Custom Widgets**: Extensible third-party widget support via type-erased `WidgetStorage<'a>` and object-safe `Widget` trait contracts.
+- 🎬 **Unified Motion Engine**: Pebble-inspired spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
+- 🎨 **Decoupled Rendering Engine**: Bounding-box dirty tracking, opacity layering, software IIR blur, subpixel anti-aliasing, and custom display backends.
+- ⚡ **Async DMA & Double/Triple Buffering**: Zero-copy presentation via `CompletionSlot` and `StandardSwapChain`, fully compatible with Embassy `async/await` or bare-metal superloop polling.
+- 🎯 **Multi-Target Tested**: Continuously verified across ARM Cortex-M0/M0+ (`thumbv6m`), Cortex-M4F/M7F (`thumbv7em`), Cortex-M33/M55 (`thumbv8m.main`), and RISC-V (`riscv32imac`).
+
+---
 
 ## Quick Start
 
 ```rust
+use embedded_graphics::pixelcolor::Rgb565;
 use embedded_gui::prelude::*;
 
-let mut gui = GuiContext::<8, 4, 8>::new(Rect::new(0, 0, 128, 64));
-gui.add_label(Rect::new(4, 4, 80, 8), "READY", Style::label())?;
-gui.add_progress_bar(Rect::new(4, 18, 80, 8), 0.6, Style::progress())?;
+// 1. Create a fixed-capacity GUI context (Max Widgets, Focus Group Capacity, Dirty Rects)
+let mut gui = GuiContext::<16, 4, 8>::new(Rect::new(0, 0, 320, 240));
+
+// 2. Spawn widgets using the fluent builder pattern
+let status_label = gui.spawn(
+    WidgetBuilder::new(Rect::new(10, 10, 150, 20))
+        .with_style_class("header")
+        .build()
+)?;
+
+// 3. Mutate properties dynamically using the generic property engine
+gui.set_widget_property(status_label, PropertyKey::Text, PropertyValue::Text("SYSTEM OK"))?;
+
+// 4. Render only dirty regions to your embedded-graphics DrawTarget
 gui.render(&mut display)?;
 ```
 
-## Implemented Feature Surface
-
-### Widgets and primitives
-
-The current widget set includes:
-
-- labels, panels, buttons, icon buttons, borders/spacers
-- progress bars, sliders, toggles, checkboxes, value labels
-- lists, menus, tabs, dialogs, toasts, scroll views
-- dropdowns, rollers, tables
-- chart (line and bars), spinner, meter/gauge/arc gauge/needle
-- textareas and on-screen keyboards
-- image widgets (`ImageRef`, `ImageFit`, atlas/sprite helpers)
-
-### Input and events
-
-- `InputEvent` supports D-pad/encoder navigation, pointer events, and text-editing-oriented key events
-- UI-level events (`UiEvent`) and widget-level events (`WidgetEvent`) are both exposed
-- Event flow supports capture, target, and bubble phases with filterable dispatch policy hooks
-- Pointer semantics include long-press, gesture dispatch, drag scrolling, inertia, and press-repeat timing hooks
-
-### Layout, styling, and text
-
-- `LinearLayout` and constraint-based item layout (`Length`, `Min/Max`, `Percent`, `Ratio`, `Fill`)
-- Style model with stateful variants (`normal`, `focused`, `pressed`, `disabled`)
-- Style interpolation and transition primitives (`StyleTransition`, `lerp_style`)
-- Text layout primitives (`Span`, `Line`, `Text`) with alignment, wrapping, spacing, overflow controls
-- Text shaping interface (`TextShaper`) with a basic shaping implementation for embedded-safe defaults
-
-### Animation and transitions
-
-- Core animation manager and easing/tween/path/spring/inertia primitives
-- Spatial timing (`moook_curve`, `TransitionPreset`) — see `docs/transition-presets.md`
-- Widget property animation (`WidgetAnimator`) and preset helpers (`presets`)
-- Timeline/keyframe sequencing support (`AnimationSequence`, `SequencePlayer`)
-- Screen stack + transition primitives for app-level flows (fade, slide, wipe, shutter, port-hole, round-flip, modal)
-
-## Animation Quickstart
-
-`embedded-gui` includes fixed-capacity animation primitives that stay `no_std` friendly.
-
-```rust
-use embedded_gui::prelude::*;
-
-let mut animator = WidgetAnimator::<8, 8>::new();
-let progress = gui.add_progress_bar(Rect::new(4, 18, 80, 8), 0.0, Style::progress())?;
-animator.animate_progress(progress, 0.0, 1.0, 600, Easing::InOutSine)?;
-
-// In your frame loop:
-animator.tick(16, &mut gui)?;
-gui.render_dirty(&mut display)?;
-gui.clear_dirty();
-```
-
-## Textarea Editing Input
-
-Textarea widgets support editor-style navigation and mutation events, including:
-
-- `InputEvent::WordLeft` / `InputEvent::WordRight`
-- `InputEvent::Home` / `InputEvent::End`
-- `InputEvent::Select*` expansion variants
-- `InputEvent::Undo` / `InputEvent::Redo`
-- selection-replace behavior on typing/backspace/delete
-
-See `docs/textarea-input-keybindings.md` for mappings and loop snippets.
-
-## Font Glyph Overrides
-
-The build pipeline supports external glyph overrides from:
-
-- `assets/fonts/ascii_3x5.txt`
-- `assets/fonts/ascii_4x7.txt`
-
-Format per line:
-
-```text
-key:row0,row1,row2,row3,row4
-```
-
-- `key`: a single character or `space`
-- each row: 3 bits using `0`/`1` (left to right)
-- blank lines and `#` comments are ignored
-
-Example:
-
-```text
-?:111,001,010,000,010
-!:010,010,010,000,010
-space:000,000,000,000,000
-```
-
-Unspecified glyphs fall back to built-in defaults in `build.rs`.
-
-Preview helper:
-
-```bash
-python3 scripts/preview_glyphs.py assets/fonts/ascii_3x5.txt "?!@"
-```
-
-## Examples
-
-The `examples/` folder currently includes:
-
-- `widgets_showcase.rs`
-- `dashboard_app.rs`
-- `simulator_menu.rs`
-- `event_dispatch_showcase.rs`
-- `interaction_semantics_showcase.rs`
-- `raw_key_input_showcase.rs`
-- `form_flow_showcase.rs`
-- `complex_layout_showcase.rs`
-- `input_gesture_drag_repeat_showcase.rs`
-- `long_press_input_showcase.rs`
-- `text_layout_showcase.rs`
-- `font_text_model_showcase.rs`
-- `animation_motion_showcase.rs`
-- `animation_kitchen_sink_showcase.rs`
-- `animation_dirty_showcase.rs`
-- `timeline_transition_showcase.rs`
-- `visual_quality_showcase.rs`
-- `embedded_3dgfx_overlay.rs`
-
-## Behavior Notes
-
-- Input and widget interaction guarantees are documented in `docs/interaction-behavior-contract.md`.
+---
 
 ## Visual Showcase
 
-Animation and transition capabilities (generated from simulator output):
-
+### Pebble-style Cinematic Motion & Transitions
 ![Animation and transition showcase](docs/screenshots/motion.gif)
 
-Flip-card screen transition (`RoundFlipLeft`) — card selection between views:
-
+### Flip-card Screen Stack Transitions
 ![Flipcard selection transition](docs/screenshots/flipcard.gif)
 
-Cinematic peek/glance/carddeck — launcher-style glance tiles cycling with slide-prominence animation, peek reveal, and card story transitions:
-
+### Launcher Glance Tiles & Card Story Deck
 ![Cinematic peek glance carddeck showcase](docs/screenshots/cinematic.gif)
 
-Dashboard-style UI composition:
-
+### Dashboard UI Composition
 ![Dashboard UI screenshot](docs/screenshots/dashboard.png)
 
-Typography and mixed-font text model:
-
+### Mixed Typography & Font Models
 ![Mixed font showcase screenshot](docs/screenshots/fonts.png)
 
-Static motion frame preview:
+---
 
-![Motion frame screenshot](docs/screenshots/motion.png)
+## Feature Architecture
 
-## Async present and DMA double-buffering
+### 1. Widgets & Layouts
+- **Controls**: Buttons, Icon Buttons, Sliders, Toggles, Checkboxes, Dropdowns, Rollers.
+- **Data & Display**: Progress Bars, Gauges, Meters, Sweeping Arcs, Plotters/Line Charts, Bar Charts, Busy Wheels.
+- **Structure & Layout**: Linear Layouts (Row/Column with spacing & constraints), Panels, Tabs, Cards, Dialogs, Circular Lists.
+- **Input & Text**: TextAreas (word wrap, selection, undo/redo), On-Screen Keyboards.
 
-Both `embedded-gui` and `embedded-3dgfx` share a runtime-agnostic present stack:
+### 2. Motion Framework (`src/motion/`)
+- **Easing & Physics**: Standard Easings (Linear, Quad, Cubic, Sine, Exponential) + Pebble Spatial Easing (`moook_curve`), Spring Physics, Inertia.
+- **Timelines & Keyframes**: Multi-track property keyframing and sequence controllers.
+- **Screen Stack Transitions**: Slide, Fade, Portal, Shutter, Modal Overlay, Round-Flip Card.
 
-- **Sync (fastest poll path):** `swap.try_present()` / `gui.try_present_dirty()` — ideal for RTIC tasks and bare-metal superloops.
-- **Blocking:** `swap.present()` — simple bring-up.
-- **Async:** `swap.present_async().await` — yields while DMA runs; works with Embassy or any `core::future` executor.
+### 3. Render Engine (`src/render/`)
+- **Dirty Region Tracking**: Merges overlapping invalidate rectangles to minimize SPI/I2C/Parallel bus transfers.
+- **Compositing**: Software alpha blending, opacity stacks, subpixel anti-aliasing, and IIR blur filters (RGB565, RGBA8888, GRAY8).
 
-Core types (always available, no Embassy dependency):
+### 4. Input & Semantics (`src/input/`)
+- Multi-device event mapping: Rotary Encoders (CW/CCW/Press), D-Pad/Keyboards (Arrow keys, Select, Back), Touch/Pointer (Tap, Long Press, Drag, Flick).
+- Configurable per-widget focus navigation, raw key policies, and event routing phases (Capture, Target, Bubble).
 
-- [`CompletionSlot`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.CompletionSlot.html) — ISR-safe DMA done flag + waker.
-- [`WaitTransfer`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.WaitTransfer.html) — reference `AsyncDmaTransfer` token wired to a `CompletionSlot`.
+---
 
-Optional Cargo features:
+## Examples Directory
 
-| Feature | Purpose |
-|---------|---------|
-| `embedded-graphics` | Enables transparent `embedded-graphics` `MonoFont` support (`&FONT_6X10`, `&FONT_9X15`, etc.) across `FontId`, `TextStyle`, `Style`, and `RenderCtx`. |
-| `embedded-text` | Enables `embedded-text` `TextBox` interop adapter |
-| `embedded-layout` | Enables `embedded-layout` `View` alignment adapter |
-| `embassy-time` | Monotonic `dt_ms` via `embassy_time::Instant` |
-| `embassy` | [`EmbassyWaitTransfer`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.EmbassyWaitTransfer.html) + [`FrameClock`](https://docs.rs/embedded-gui/latest/embedded_gui/struct.FrameClock.html) |
-| `triple-buffering` | Triple-buffer swap chain for bursty frame times |
+The repository includes showcase examples categorized under `examples/`:
 
-### `embedded-graphics` MonoFont Quickstart
+| Directory | Purpose & Highlights |
+|-----------|----------------------|
+| **`examples/basics/`** | Core layout rules, dashboard layout, form flows, interaction semantics, raw key input, and keyboard navigation (`dashboard_app.rs`, `complex_layout_showcase.rs`, `form_flow_showcase.rs`). |
+| **`examples/widgets/`** | Comprehensive widget showcases, gauges, sweeping arcs, alpha blending, and visual quality benchmarks (`widgets_showcase.rs`, `visual_quality_showcase.rs`, `sweeping_arc_widget_showcase.rs`). |
+| **`examples/motion/`** | Motion framework, Pebble-style spring physics, dirty-region animation, timeline keyframing, and cinematic peek/glance cards (`animation_motion_showcase.rs`, `cinematic_peek_glance_carddeck_showcase.rs`). |
+| **`examples/integrations/`** | Third-party interop, Embassy async frames, DMA swapchain simulation, and 3D graphics overlays (`embassy_gui_frame.rs`, `completion_swapchain_sim.rs`, `embedded_3dgfx_overlay.rs`). |
 
-To use any `embedded-graphics` `MonoFont` (such as `ascii::FONT_6X10`, `FONT_7X13`, `FONT_9X15`, `FONT_10X20`, `profont`, etc.) transparently in `embedded-gui`, enable the `embedded-graphics` feature in your `Cargo.toml`:
-
-```toml
-[dependencies]
-embedded-gui = { version = "0.1.5", features = ["embedded-graphics"] }
-embedded-graphics = "0.8"
-```
-
-Then pass `&MonoFont` references directly into `TextStyle`, `Style`, or `RenderCtx`:
-
-```rust
-use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_9X15};
-use embedded_gui::prelude::*;
-
-// 1. Direct style construction:
-let title_style = TextStyle::new(Rgb565::CYAN).with_font(&FONT_9X15);
-let body_style = Style::new().with_font(&FONT_6X10);
-
-// 2. RenderCtx calls:
-ctx.draw_text_in_with_font(rect, "DOOM HUD", title_style, &FONT_6X10)?;
-```
-
-Examples:
-
+Run any example using Cargo:
 ```bash
-cargo run --example completion_swapchain_sim --features std
-cargo run --example embassy_gui_frame --features embassy,std
+cargo run --example dashboard_app --features std
+cargo run --example animation_motion_showcase --features std
 ```
 
-**Performance note:** triangle and widget rasterization stay synchronous. Async is for **present/wait** only — overlapping CPU render with DMA scan-out. Making inner pixel loops async would add executor overhead without speeding up single-core MCUs.
+---
+
+## Cargo Features
+
+| Feature | Description |
+|---------|-------------|
+| `embedded-graphics` | *(Default)* Transparent support for `embedded-graphics` `MonoFont` references (`&FONT_6X10`, `&FONT_9X15`) in styles and text rendering. |
+| `libm` | Provides floating-point math support (`f32::sin`, `cos`, `round`, `sqrt`) when building for `no_std` targets without standard library floats. |
+| `rich-widgets` | Enables advanced visual widgets including Gauges, Plotters, TextAreas, and On-Screen Keyboards. |
+| `embedded-text` | Enables interoperability adapters for `embedded-text` `TextBox`. |
+| `embedded-layout` | Enables interoperability adapters for `embedded-layout` `View` alignment. |
+| `embassy` | Adds `EmbassyWaitTransfer` and `FrameClock` for Embassy async executor integration. |
+| `triple-buffering` | Enables triple-buffer swapchain for bursty display frame rates. |
+
+---
 
 ## License
 
-The contents of this repository are dual-licensed under the _MIT OR Apache 2.0_
-License. That means you can choose either the MIT license or the Apache 2.0
-license when you re-use this code. See [`LICENSE-MIT`](./LICENSE-MIT) or
-[`LICENSE-APACHE`](./LICENSE-APACHE) for more information on each specific
-license. Our Apache 2.0 notices can be found in [`NOTICE`](./NOTICE).
+Dual-licensed under either of:
 
+- **MIT License** ([`LICENSE-MIT`](./LICENSE-MIT))
+- **Apache License, Version 2.0** ([`LICENSE-APACHE`](./LICENSE-APACHE))
+
+at your option.
