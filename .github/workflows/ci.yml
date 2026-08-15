@@ -73,10 +73,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.MSRV }}
-      - run: cargo check --lib --no-default-features
+      - run: cargo check --lib --no-default-features --features libm
 
   clippy:
     name: Clippy
@@ -89,7 +89,7 @@ jobs:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy ${{ env.CLIPPY_ARGS }} -- -W clippy::all
-      - run: cargo clippy --lib --no-default-features --features rich-widgets --target thumbv7em-none-eabihf -- -W clippy::all
+      - run: cargo clippy --lib --no-default-features --features rich-widgets,libm --target thumbv7em-none-eabihf -- -W clippy::all
 
   test:
     name: Test Suite
