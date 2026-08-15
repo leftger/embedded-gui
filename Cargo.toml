@@ -107,3 +107,18 @@ name = "embedded_3dgfx_overlay"
 path = "examples/integrations/embedded_3dgfx_overlay.rs"
 required-features = ["embedded-3dgfx", "std"]
 
+[[example]]
+name = "draw_task_band_buffer_showcase"
+path = "examples/basics/draw_task_band_buffer_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "vector_pdc_round_screen_showcase"
+path = "examples/basics/vector_pdc_round_screen_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "relative_anchors_and_flex_justify_showcase"
+path = "examples/basics/relative_anchors_and_flex_justify_showcase.rs"
+required-features = ["std"]
+

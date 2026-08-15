@@ -7,7 +7,7 @@
 
 `embedded-gui` is a lightweight, deterministic, zero-allocation (`no_std`) GUI & HUD framework for microcontrollers and [`embedded-graphics`](https://crates.io/crates/embedded-graphics) displays.
 
-Heavily inspired by the **Pebble** smartwatch UI framework—its animation model, interaction contracts, and cinematic motion primitives draw directly from Pebble's design language. **LVGL** serves as a secondary influence for widget composition, layout rules, and state-variant styling.
+Heavily inspired by modern wearable and smartwatch UI frameworks—its animation model, interaction contracts, and cinematic motion primitives draw from fluid, tactile embedded design patterns. **LVGL** serves as a secondary influence for widget composition, layout rules, and state-variant styling.
 
 ---
 
@@ -16,7 +16,7 @@ Heavily inspired by the **Pebble** smartwatch UI framework—its animation model
 - **Zero-Allocation (`no_std`)**: Built entirely on fixed-capacity data structures (`heapless`) with strict memory bounds and deterministic execution times.
 - **Rich Built-in Widgets**: Buttons, Sliders, Dropdowns, Toggles, Checkboxes, Gauges, Meters, Sweeping Arcs, Plotters/Charts, TextAreas, On-Screen Keyboards, and Circular Lists.
 - **Native Custom Widgets**: Extensible third-party widget support via type-erased `WidgetStorage<'a>` and object-safe `Widget` trait contracts.
-- **Unified Motion Engine**: Pebble-inspired spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
+- **Unified Motion Engine**: Tactile spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
 - **Decoupled Rendering Engine**: Bounding-box dirty tracking, opacity layering, software IIR blur, subpixel anti-aliasing, and custom display backends.
 - **Async DMA & Double/Triple Buffering**: Zero-copy presentation via `CompletionSlot` and `StandardSwapChain`, fully compatible with Embassy `async/await` or bare-metal superloop polling.
 - **Multi-Target Tested**: Continuously verified across ARM Cortex-M0/M0+ (`thumbv6m`), Cortex-M4F/M7F (`thumbv7em`), Cortex-M33/M55 (`thumbv8m.main`), and RISC-V (`riscv32imac`).
@@ -50,7 +50,7 @@ gui.render(&mut display)?;
 
 ## Visual Showcase
 
-### Pebble-style Cinematic Motion & Transitions
+### Tactile Cinematic Motion & Transitions
 ![Animation and transition showcase](docs/screenshots/motion.gif)
 
 ### Flip-card Screen Stack Transitions
@@ -76,7 +76,7 @@ gui.render(&mut display)?;
 - **Input & Text**: TextAreas (word wrap, selection, undo/redo), On-Screen Keyboards.
 
 ### 2. Motion Framework (`src/motion/`)
-- **Easing & Physics**: Standard Easings (Linear, Quad, Cubic, Sine, Exponential) + Pebble Spatial Easing (`moook_curve`), Spring Physics, Inertia.
+- **Easing & Physics**: Standard Easings (Linear, Quad, Cubic, Sine, Exponential) + Spatial Easing (`moook_curve`), Spring Physics, Inertia.
 - **Timelines & Keyframes**: Multi-track property keyframing and sequence controllers.
 - **Screen Stack Transitions**: Slide, Fade, Portal, Shutter, Modal Overlay, Round-Flip Card.
 
@@ -110,7 +110,7 @@ The repository includes showcase examples categorized under `examples/`:
 |-----------|----------------------|
 | **`examples/basics/`** | Core layout rules, custom font drop-in interop, dashboard layout, form flows, interaction semantics, raw key input, and keyboard navigation (`custom_font_showcase.rs`, `dashboard_app.rs`, `complex_layout_showcase.rs`). |
 | **`examples/widgets/`** | Comprehensive widget showcases, gauges, sweeping arcs, alpha blending, and visual quality benchmarks (`widgets_showcase.rs`, `visual_quality_showcase.rs`, `sweeping_arc_widget_showcase.rs`). |
-| **`examples/motion/`** | Motion framework, Pebble-style spring physics, dirty-region animation, timeline keyframing, and cinematic peek/glance cards (`animation_motion_showcase.rs`, `cinematic_peek_glance_carddeck_showcase.rs`). |
+| **`examples/motion/`** | Motion framework, spring physics, dirty-region animation, timeline keyframing, and cinematic peek/glance cards (`animation_motion_showcase.rs`, `cinematic_peek_glance_carddeck_showcase.rs`). |
 | **`examples/integrations/`** | Third-party interop, Embassy async frames, DMA swapchain simulation, and 3D graphics overlays (`embassy_gui_frame.rs`, `completion_swapchain_sim.rs`, `embedded_3dgfx_overlay.rs`). |
 
 Run any example using Cargo:

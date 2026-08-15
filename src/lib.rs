@@ -25,6 +25,7 @@ pub mod layout;
 mod math;
 pub mod motion;
 pub mod palette;
+pub mod pdc;
 pub use motion as animation;
 pub use motion as animation_timeline;
 pub use motion as animation_timing;
@@ -34,6 +35,7 @@ pub use motion as transition_preset;
 pub use motion as widget_animation;
 pub mod present;
 pub mod render;
+pub mod round;
 pub mod screen;
 pub mod state;
 pub mod style;
@@ -91,7 +93,7 @@ pub use embedded_graphics_framebuf::{
 };
 pub use font::{BitmapFont, Font, FontId, PackedFont};
 pub use framebuffer::{Framebuffer, FramebufferGray8, FramebufferRgba8888, Rgba8888};
-pub use geometry::{DirtyTracker, EdgeInsets, Rect};
+pub use geometry::{Anchor, DirtyTracker, EdgeInsets, HorizontalAlign, Rect};
 #[cfg(all(feature = "std", feature = "image-decode"))]
 pub use image::{
     BasicImageDecoder, EncodedImageFormat, ImageDecodeError, ImageDecoder, decode_image_auto,
@@ -105,15 +107,18 @@ pub use input::{
     EventPhaseMask, InputEvent, PointerButton, PointerState, UiEvent, UiEventFilter,
     WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
 };
-pub use layout::{Align, Axis, Constraint, LayoutItem, Length, LinearLayout};
+pub use layout::{Align, Axis, Constraint, JustifyContent, LayoutItem, Length, LinearLayout};
 pub use palette::{DisplayMode, DisplayPalette, InkRole, RoleColors};
+pub use pdc::{PdcCommand, PdcCommandType, PdcImage, PdcPrecisePoint};
 pub use present::PresentRegion;
 pub use render::{
     AntiAliasMode, Blend, BlendMode, CHAR_HEIGHT, CHAR_WIDTH, ColorFormat, Compositor, Dither,
-    EllipsisMode, LayerState, PixelRead, RenderBackendCaps, RenderCtx, RenderQuality, StrokeCap,
-    StrokeJoin, StrokeStyle, TextAlign, TextMetrics, TextOverflow, TextOverflowPolicy, TextStyle,
-    TextWrap, Transform2D, VerticalAlign,
+    DrawTask, DrawTaskQueue, DrawUnit, EllipsisMode, LayerState, PartialBandBuffer, PixelRead,
+    RenderBackendCaps, RenderCtx, RenderQuality, SoftwareDrawUnit, StrokeCap, StrokeJoin,
+    StrokeStyle, TextAlign, TextMetrics, TextOverflow, TextOverflowPolicy, TextStyle, TextWrap,
+    Transform2D, VerticalAlign, dispatch_draw_tasks,
 };
+pub use round::{UnobstructedArea, circle_chord_width, round_screen_line_bounds};
 pub use screen::{
     Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError,
     ScreenTransition,
@@ -125,8 +130,9 @@ pub use screen_transition::{
 };
 pub use state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState};
 pub use style::{
-    AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient, Shadow,
-    StateStyle, Style, StyleTransition, Theme, VisualState, WidgetStyle, lerp_style,
+    AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient,
+    MultiPartStyle, PartStyleRule, Shadow, StateStyle, Style, StyleTransition, Theme, VisualState,
+    VisualStateMask, WidgetPart, WidgetStyle, lerp_style,
 };
 pub use swapchain::{StandardSwapChain, SwapChain};
 #[cfg(feature = "triple-buffering")]
@@ -145,6 +151,10 @@ pub use widget_animation::presets;
 pub use widget_animation::{
     AnimatedProperty, AnimationConflictPolicy, BindingSnapshot, WidgetAnimationCallbacks,
     WidgetAnimationError, WidgetAnimator, WidgetKeyframeState, WidgetPropertyKeyframe,
+};
+pub use widgets::{
+    ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
+    SelectionWidget,
 };
 pub use widgets::{
     ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,

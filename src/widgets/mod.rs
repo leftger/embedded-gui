@@ -22,12 +22,17 @@ pub mod cinematic;
 pub mod controls;
 pub mod data;
 pub mod gauges;
+pub mod wearable;
 
 pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
 pub use cinematic::GlanceTileWidget;
 pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
 pub use data::ListWidget;
 pub use gauges::ProgressBarWidget;
+pub use wearable::{
+    ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
+    SelectionWidget,
+};
 
 pub const TEXTAREA_CAPACITY: usize = 128;
 

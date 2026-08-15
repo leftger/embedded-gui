@@ -1,6 +1,11 @@
+pub mod band;
 pub mod compositor;
 pub mod stroke;
+pub mod task;
 pub mod text_style;
+
+pub use band::PartialBandBuffer;
+pub use task::{DrawTask, DrawTaskQueue, DrawUnit, SoftwareDrawUnit, dispatch_draw_tasks};
 
 use core::marker::PhantomData;
 

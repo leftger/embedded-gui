@@ -617,6 +617,115 @@ pub enum VisualState {
     Disabled,
 }
 
+/// Targetable sub-component part of a widget (analogous to LVGL widget parts).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WidgetPart {
+    Main,
+    Indicator,
+    Knob,
+    Scrollbar,
+    Custom(u8),
+}
+
+/// Bitmask representing active visual states (supports combining states like CHECKED | PRESSED).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct VisualStateMask(pub u8);
+
+impl VisualStateMask {
+    pub const NORMAL: Self = Self(1 << 0);
+    pub const FOCUSED: Self = Self(1 << 1);
+    pub const PRESSED: Self = Self(1 << 2);
+    pub const DISABLED: Self = Self(1 << 3);
+    pub const CHECKED: Self = Self(1 << 4);
+
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    pub const fn from_visual_state(state: VisualState) -> Self {
+        match state {
+            VisualState::Normal => Self::NORMAL,
+            VisualState::Focused => Self::FOCUSED,
+            VisualState::Pressed => Self::PRESSED,
+            VisualState::Disabled => Self::DISABLED,
+        }
+    }
+}
+
+/// A cascading rule that applies a style to a specific widget part under matching visual states.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PartStyleRule {
+    pub part: WidgetPart,
+    pub state_mask: VisualStateMask,
+    pub style: Style,
+}
+
+/// A multi-part style descriptor managing distinct visual rules for parts of a compound widget.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MultiPartStyle<const RULES: usize = 4> {
+    pub base_style: Style,
+    rules: [Option<PartStyleRule>; RULES],
+}
+
+impl<const RULES: usize> Default for MultiPartStyle<RULES> {
+    fn default() -> Self {
+        Self::new(Style::new())
+    }
+}
+
+impl<const RULES: usize> MultiPartStyle<RULES> {
+    pub const fn new(base_style: Style) -> Self {
+        Self {
+            base_style,
+            rules: [None; RULES],
+        }
+    }
+
+    pub const fn with_part_rule(
+        mut self,
+        part: WidgetPart,
+        state_mask: VisualStateMask,
+        style: Style,
+    ) -> Self {
+        let mut i = 0;
+        while i < RULES {
+            if self.rules[i].is_none() {
+                self.rules[i] = Some(PartStyleRule {
+                    part,
+                    state_mask,
+                    style,
+                });
+                return self;
+            }
+            i += 1;
+        }
+        self
+    }
+
+    pub fn resolve(&self, part: WidgetPart, state: VisualState) -> Style {
+        let mask = VisualStateMask::from_visual_state(state);
+        self.resolve_mask(part, mask)
+    }
+
+    pub fn resolve_mask(&self, part: WidgetPart, state_mask: VisualStateMask) -> Style {
+        for rule in self.rules.iter().flatten() {
+            if rule.part == part && (rule.state_mask.0 == 0 || rule.state_mask.contains(state_mask))
+            {
+                return rule.style;
+            }
+        }
+        self.base_style
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -715,5 +824,44 @@ mod tests {
         transition.tick(50);
         let current_style = transition.style(widget_style);
         assert_eq!(current_style.corner_radius, 4);
+    }
+
+    #[test]
+    fn test_multipart_style_resolution() {
+        let base_style = Style::new();
+        let knob_style = Style {
+            corner_radius: 10,
+            ..base_style
+        };
+        let indicator_pressed_style = Style {
+            corner_radius: 5,
+            ..base_style
+        };
+
+        let multipart = MultiPartStyle::<4>::new(base_style)
+            .with_part_rule(WidgetPart::Knob, VisualStateMask::empty(), knob_style)
+            .with_part_rule(
+                WidgetPart::Indicator,
+                VisualStateMask::PRESSED,
+                indicator_pressed_style,
+            );
+
+        // Knob gets knob_style regardless of normal state because state_mask is empty/wildcard
+        assert_eq!(
+            multipart.resolve(WidgetPart::Knob, VisualState::Normal),
+            knob_style
+        );
+
+        // Indicator in Normal state falls back to base_style
+        assert_eq!(
+            multipart.resolve(WidgetPart::Indicator, VisualState::Normal),
+            base_style
+        );
+
+        // Indicator in Pressed state resolves to indicator_pressed_style
+        assert_eq!(
+            multipart.resolve(WidgetPart::Indicator, VisualState::Pressed),
+            indicator_pressed_style
+        );
     }
 }

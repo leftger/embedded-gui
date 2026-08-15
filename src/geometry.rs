@@ -80,6 +80,118 @@ impl Rect {
             self.h - shrink_h,
         )
     }
+
+    /// Positions `self` relative to `reference` along horizontal and vertical alignment axes.
+    pub fn align_to(self, reference: Rect, h: HorizontalAlign, v: VerticalAlign) -> Rect {
+        let x = match h {
+            HorizontalAlign::Left => reference.x,
+            HorizontalAlign::Center => reference.x + (reference.w as i32 - self.w as i32) / 2,
+            HorizontalAlign::Right => reference.right() - self.w as i32,
+            HorizontalAlign::LeftToRight => reference.right(),
+            HorizontalAlign::RightToLeft => reference.x - self.w as i32,
+        };
+        let y = match v {
+            VerticalAlign::Top => reference.y,
+            VerticalAlign::Center => reference.y + (reference.h as i32 - self.h as i32) / 2,
+            VerticalAlign::Bottom => reference.bottom() - self.h as i32,
+            VerticalAlign::TopToBottom => reference.bottom(),
+            VerticalAlign::BottomToTop => reference.y - self.h as i32,
+        };
+        Rect::new(x, y, self.w, self.h)
+    }
+
+    /// Positions `self` relative to `reference` using a compound 2D anchor preset.
+    pub fn anchor_to(self, reference: Rect, anchor: Anchor) -> Rect {
+        match anchor {
+            Anchor::TopLeft => self.align_to(reference, HorizontalAlign::Left, VerticalAlign::Top),
+            Anchor::TopCenter => {
+                self.align_to(reference, HorizontalAlign::Center, VerticalAlign::Top)
+            }
+            Anchor::TopRight => {
+                self.align_to(reference, HorizontalAlign::Right, VerticalAlign::Top)
+            }
+            Anchor::CenterLeft => {
+                self.align_to(reference, HorizontalAlign::Left, VerticalAlign::Center)
+            }
+            Anchor::Center => {
+                self.align_to(reference, HorizontalAlign::Center, VerticalAlign::Center)
+            }
+            Anchor::CenterRight => {
+                self.align_to(reference, HorizontalAlign::Right, VerticalAlign::Center)
+            }
+            Anchor::BottomLeft => {
+                self.align_to(reference, HorizontalAlign::Left, VerticalAlign::Bottom)
+            }
+            Anchor::BottomCenter => {
+                self.align_to(reference, HorizontalAlign::Center, VerticalAlign::Bottom)
+            }
+            Anchor::BottomRight => {
+                self.align_to(reference, HorizontalAlign::Right, VerticalAlign::Bottom)
+            }
+            Anchor::OutsideTop => self.align_to(
+                reference,
+                HorizontalAlign::Center,
+                VerticalAlign::BottomToTop,
+            ),
+            Anchor::OutsideBottom => self.align_to(
+                reference,
+                HorizontalAlign::Center,
+                VerticalAlign::TopToBottom,
+            ),
+            Anchor::OutsideLeft => self.align_to(
+                reference,
+                HorizontalAlign::RightToLeft,
+                VerticalAlign::Center,
+            ),
+            Anchor::OutsideRight => self.align_to(
+                reference,
+                HorizontalAlign::LeftToRight,
+                VerticalAlign::Center,
+            ),
+        }
+    }
+}
+
+/// Horizontal alignment policy for relative positioning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HorizontalAlign {
+    Left,
+    Center,
+    Right,
+    /// Place directly adjacent to the right outer edge of reference.
+    LeftToRight,
+    /// Place directly adjacent to the left outer edge of reference.
+    RightToLeft,
+}
+
+/// Vertical alignment policy for relative positioning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VerticalAlign {
+    Top,
+    Center,
+    Bottom,
+    /// Place directly below the bottom outer edge of reference.
+    TopToBottom,
+    /// Place directly above the top outer edge of reference.
+    BottomToTop,
+}
+
+/// Compound 2D anchor presets for positioning UI elements relative to parents or siblings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    CenterLeft,
+    Center,
+    CenterRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+    OutsideTop,
+    OutsideBottom,
+    OutsideLeft,
+    OutsideRight,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -246,5 +358,27 @@ mod tests {
         dt.clear();
         assert!(dt.is_empty());
         assert_eq!(dt.bounding_rect(), None);
+    }
+
+    #[test]
+    fn test_rect_align_to_and_anchor_to() {
+        let parent = Rect::new(0, 0, 100, 100);
+        let child = Rect::new(0, 0, 20, 20);
+
+        // Center alignment
+        let centered = child.align_to(parent, HorizontalAlign::Center, VerticalAlign::Center);
+        assert_eq!(centered, Rect::new(40, 40, 20, 20));
+
+        // Top-right anchor
+        let top_right = child.anchor_to(parent, Anchor::TopRight);
+        assert_eq!(top_right, Rect::new(80, 0, 20, 20));
+
+        // Outside-bottom anchor (dropdown/tooltip)
+        let dropdown = child.anchor_to(parent, Anchor::OutsideBottom);
+        assert_eq!(dropdown, Rect::new(40, 100, 20, 20));
+
+        // Outside-right (badge/adjacent icon)
+        let badge = child.align_to(parent, HorizontalAlign::LeftToRight, VerticalAlign::Top);
+        assert_eq!(badge, Rect::new(100, 0, 20, 20));
     }
 }

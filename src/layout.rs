@@ -15,11 +15,22 @@ pub enum Align {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JustifyContent {
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LinearLayout {
     pub axis: Axis,
     pub gap: u16,
     pub padding: EdgeInsets,
     pub cross_align: Align,
+    pub justify: JustifyContent,
 }
 
 impl LinearLayout {
@@ -29,6 +40,7 @@ impl LinearLayout {
             gap: 2,
             padding: EdgeInsets::all(0),
             cross_align: Align::Stretch,
+            justify: JustifyContent::Start,
         }
     }
 
@@ -38,6 +50,7 @@ impl LinearLayout {
             gap: 2,
             padding: EdgeInsets::all(0),
             cross_align: Align::Stretch,
+            justify: JustifyContent::Start,
         }
     }
 
@@ -56,6 +69,16 @@ impl LinearLayout {
 
     pub const fn with_padding(mut self, padding: EdgeInsets) -> Self {
         self.padding = padding;
+        self
+    }
+
+    pub const fn with_justify(mut self, justify: JustifyContent) -> Self {
+        self.justify = justify;
+        self
+    }
+
+    pub const fn with_cross_align(mut self, cross_align: Align) -> Self {
+        self.cross_align = cross_align;
         self
     }
 
@@ -294,9 +317,74 @@ impl LinearLayout {
         let remaining = available.saturating_sub(fixed);
         let fill_unit = remaining.checked_div(fill_weight).unwrap_or(0);
 
-        let mut cursor = match self.axis {
-            Axis::Horizontal => inner.x,
-            Axis::Vertical => inner.y,
+        let (mut cursor, item_gap) = if fill_weight == 0 && remaining > 0 {
+            let total_slack = remaining + gap_total;
+            match self.justify {
+                JustifyContent::Start => (
+                    match self.axis {
+                        Axis::Horizontal => inner.x,
+                        Axis::Vertical => inner.y,
+                    },
+                    self.gap as i32,
+                ),
+                JustifyContent::Center => (
+                    match self.axis {
+                        Axis::Horizontal => inner.x + (remaining as i32 / 2),
+                        Axis::Vertical => inner.y + (remaining as i32 / 2),
+                    },
+                    self.gap as i32,
+                ),
+                JustifyContent::End => (
+                    match self.axis {
+                        Axis::Horizontal => inner.x + remaining as i32,
+                        Axis::Vertical => inner.y + remaining as i32,
+                    },
+                    self.gap as i32,
+                ),
+                JustifyContent::SpaceBetween => {
+                    let step = if count > 1 {
+                        total_slack / (count as u32 - 1)
+                    } else {
+                        0
+                    };
+                    (
+                        match self.axis {
+                            Axis::Horizontal => inner.x,
+                            Axis::Vertical => inner.y,
+                        },
+                        step as i32,
+                    )
+                }
+                JustifyContent::SpaceAround => {
+                    let step = total_slack / count as u32;
+                    let initial = step / 2;
+                    (
+                        match self.axis {
+                            Axis::Horizontal => inner.x + initial as i32,
+                            Axis::Vertical => inner.y + initial as i32,
+                        },
+                        step as i32,
+                    )
+                }
+                JustifyContent::SpaceEvenly => {
+                    let step = total_slack / (count as u32 + 1);
+                    (
+                        match self.axis {
+                            Axis::Horizontal => inner.x + step as i32,
+                            Axis::Vertical => inner.y + step as i32,
+                        },
+                        step as i32,
+                    )
+                }
+            }
+        } else {
+            (
+                match self.axis {
+                    Axis::Horizontal => inner.x,
+                    Axis::Vertical => inner.y,
+                },
+                self.gap as i32,
+            )
         };
         let mut used_fill = 0u32;
         let mut seen_fill_weight = 0u32;
@@ -348,7 +436,7 @@ impl LinearLayout {
                     main.min(available),
                 ),
             };
-            cursor += main as i32 + self.gap as i32;
+            cursor += main as i32 + item_gap;
         }
 
         count
@@ -516,6 +604,7 @@ mod tests {
             gap: 5,
             padding: EdgeInsets::all(10),
             cross_align: Align::Stretch,
+            justify: JustifyContent::Start,
         };
 
         let container = Rect::new(0, 0, 100, 50);
@@ -543,5 +632,14 @@ mod tests {
         // Item 2: x = 35 + 20 + 5 = 60, w = 30
         assert_eq!(out[2].x, 60);
         assert_eq!(out[2].w, 30);
+    }
+
+    #[test]
+    fn test_linear_layout_justify_content() {
+        let layout = LinearLayout::row()
+            .with_gap(0)
+            .with_justify(JustifyContent::SpaceBetween);
+
+        assert_eq!(layout.justify, JustifyContent::SpaceBetween);
     }
 }
