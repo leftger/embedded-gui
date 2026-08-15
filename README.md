@@ -135,6 +135,16 @@ cargo run --example animation_motion_showcase --features std
 
 ---
 
+## v0.2.0 Breaking Changes & Migration
+
+Version `0.2.0` introduces a flexible, trait-based font system supporting custom raw bitmap arrays (`BitmapFont`) and dynamic font providers (`Font` trait):
+
+- **`FontId` Enum Variants**: Added `FontId::Bitmap(&'static BitmapFont)` and `FontId::Dynamic(&'static dyn Font)`. Exhaustive `match` statements on `FontId` must include these new variants or a wildcard fallback arm (`_ => ...`).
+- **Non-`const` Geometry Methods**: `FontId::advance()` and `FontId::line_height()` are now standard `fn` methods instead of `const fn` to allow dispatching to dynamic trait references.
+- **Enhanced `CustomFont` Support**: Legacy 3x5 `PackedFont` usage can be upgraded to the new [`BitmapFont`](./docs/custom-fonts-abstraction.md) struct (`BitmapFont::new_8x16`, `new_8x8`, or custom dimensions) for arbitrary glyph sizes and `fill_rect` span acceleration.
+
+---
+
 ## License
 
 Dual-licensed under either of:
