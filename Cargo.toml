@@ -122,3 +122,8 @@ name = "relative_anchors_and_flex_justify_showcase"
 path = "examples/basics/relative_anchors_and_flex_justify_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "wearable_os_subsystems_showcase"
+path = "examples/basics/wearable_os_subsystems_showcase.rs"
+required-features = ["std"]
+

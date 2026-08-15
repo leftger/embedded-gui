@@ -153,8 +153,10 @@ pub use widget_animation::{
     WidgetAnimationError, WidgetAnimator, WidgetKeyframeState, WidgetPropertyKeyframe,
 };
 pub use widgets::{
-    ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
-    SelectionWidget,
+    ActionBarWidget, ActionMenuError, ActionMenuItem, ActionMenuWidget, ContentIndicatorDirection,
+    ContentIndicatorWidget, CrumbsIndicatorWidget, NotificationAction, NotificationError,
+    NotificationPriority, NotificationSheetWidget, PeekBannerWidget, RichTextError,
+    RichTextNodeWidget, SelectionWidget, TextSpan, TimelineNodeState, TimelineNodeWidget,
 };
 pub use widgets::{
     ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,

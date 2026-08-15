@@ -17,18 +17,28 @@ use crate::{
     },
 };
 
+pub mod action_menu;
 pub mod basic;
 pub mod cinematic;
 pub mod controls;
 pub mod data;
 pub mod gauges;
+pub mod notification;
+pub mod rich_text_node;
+pub mod timeline;
 pub mod wearable;
 
+pub use action_menu::{ActionMenuError, ActionMenuItem, ActionMenuWidget};
 pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
 pub use cinematic::GlanceTileWidget;
 pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
 pub use data::ListWidget;
 pub use gauges::ProgressBarWidget;
+pub use notification::{
+    NotificationAction, NotificationError, NotificationPriority, NotificationSheetWidget,
+};
+pub use rich_text_node::{RichTextError, RichTextNodeWidget, TextSpan};
+pub use timeline::{PeekBannerWidget, TimelineNodeState, TimelineNodeWidget};
 pub use wearable::{
     ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
     SelectionWidget,
