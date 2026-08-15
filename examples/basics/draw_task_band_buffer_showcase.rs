@@ -94,20 +94,6 @@ fn run_interactive_window() {
     let mut dir: i32 = 2;
 
     'running: loop {
-        for event in window.events() {
-            match event {
-                SimulatorEvent::Quit => break 'running,
-                SimulatorEvent::KeyDown { keycode, .. } => match keycode {
-                    Keycode::Escape | Keycode::Q => break 'running,
-                    Keycode::Space => {
-                        progress = (progress + 20) % 250;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-
         if progress >= 240 {
             dir = -2;
         } else if progress <= 20 {
@@ -124,6 +110,21 @@ fn run_interactive_window() {
             .expect("Render succeeded");
 
         window.update(&sim.display);
+
+        for event in window.events() {
+            match event {
+                SimulatorEvent::Quit => break 'running,
+                SimulatorEvent::KeyDown { keycode, .. } => match keycode {
+                    Keycode::Escape | Keycode::Q => break 'running,
+                    Keycode::Space => {
+                        progress = (progress + 20) % 250;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
 }

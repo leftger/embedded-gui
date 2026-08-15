@@ -53,6 +53,15 @@ fn run_interactive_window() {
     let mut justify_mode = 0usize;
 
     'running: loop {
+        display.clear(Rgb565::new(1, 2, 3)).unwrap();
+
+        let screen = Rect::new(0, 0, W, H);
+        let mut ctx = RenderCtx::new(&mut display, screen);
+
+        render_anchors_and_flex(&mut ctx, card_offset_x, card_offset_y, justify_mode);
+
+        window.update(&display);
+
         for event in window.events() {
             match event {
                 SimulatorEvent::Quit => break 'running,
@@ -71,14 +80,6 @@ fn run_interactive_window() {
             }
         }
 
-        display.clear(Rgb565::new(1, 2, 3)).unwrap();
-
-        let screen = Rect::new(0, 0, W, H);
-        let mut ctx = RenderCtx::new(&mut display, screen);
-
-        render_anchors_and_flex(&mut ctx, card_offset_x, card_offset_y, justify_mode);
-
-        window.update(&display);
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
 }

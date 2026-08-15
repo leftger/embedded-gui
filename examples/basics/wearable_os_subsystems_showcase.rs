@@ -68,6 +68,27 @@ fn run_interactive_window() {
     let mut notif_progress = 1.0f32;
 
     'running: loop {
+        notif_progress -= 0.003;
+        if notif_progress <= 0.0 {
+            notif_progress = 1.0;
+        }
+
+        display.clear(Rgb565::new(1, 2, 3)).unwrap();
+
+        let screen = Rect::new(0, 0, W, H);
+        let mut ctx = RenderCtx::new(&mut display, screen);
+
+        render_all_components(
+            &mut ctx,
+            screen,
+            peek_expanded,
+            selected_menu_idx,
+            selected_notif_action,
+            notif_progress,
+        );
+
+        window.update(&display);
+
         for event in window.events() {
             match event {
                 SimulatorEvent::Quit => break 'running,
@@ -94,26 +115,6 @@ fn run_interactive_window() {
             }
         }
 
-        notif_progress -= 0.003;
-        if notif_progress <= 0.0 {
-            notif_progress = 1.0;
-        }
-
-        display.clear(Rgb565::new(1, 2, 3)).unwrap();
-
-        let screen = Rect::new(0, 0, W, H);
-        let mut ctx = RenderCtx::new(&mut display, screen);
-
-        render_all_components(
-            &mut ctx,
-            screen,
-            peek_expanded,
-            selected_menu_idx,
-            selected_notif_action,
-            notif_progress,
-        );
-
-        window.update(&display);
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
 }

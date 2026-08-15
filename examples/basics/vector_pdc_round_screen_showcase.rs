@@ -54,6 +54,14 @@ fn run_interactive_window() {
     let mut overlay_active = false;
 
     'running: loop {
+        let screen = Rect::new(0, 0, W, H);
+        display.clear(Rgb565::new(0, 0, 0)).unwrap();
+
+        let mut ctx = RenderCtx::new(&mut display, screen);
+        render_round_screen(&mut ctx, &icon, overlay_active, selected_digit, active_page);
+
+        window.update(&display);
+
         for event in window.events() {
             match event {
                 SimulatorEvent::Quit => break 'running,
@@ -84,13 +92,6 @@ fn run_interactive_window() {
             }
         }
 
-        let screen = Rect::new(0, 0, W, H);
-        display.clear(Rgb565::new(0, 0, 0)).unwrap();
-
-        let mut ctx = RenderCtx::new(&mut display, screen);
-        render_round_screen(&mut ctx, &icon, overlay_active, selected_digit, active_page);
-
-        window.update(&display);
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
 }
