@@ -49,7 +49,7 @@ jobs:
       - run: cargo check ${{ env.CHECK_ARGS }}
 
   check-no-std-matrix:
-    name: Check (no_std: ${{ matrix.target }})
+    name: "Check (no_std: ${{ matrix.target }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
