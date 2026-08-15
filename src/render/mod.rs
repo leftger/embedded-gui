@@ -1030,12 +1030,64 @@ where
             return self.target.fill_solid(&eg_rect, color);
         }
 
-        for y in draw.y..draw.bottom() {
-            for x in draw.x..draw.right() {
-                if !in_rounded_rect(x, y, rect, radius) {
-                    continue;
+        let r = radius as i32;
+        if r == 0 {
+            for y in draw.y..draw.bottom() {
+                for x in draw.x..draw.right() {
+                    self.pixel(x, y, color, opacity)?;
                 }
-                self.pixel(x, y, color, opacity)?;
+            }
+            return Ok(());
+        }
+
+        let inner_w = rect.w.saturating_sub((radius as u32) * 2);
+        let inner_h = rect.h.saturating_sub((radius as u32) * 2);
+
+        // Center vertical band
+        if inner_w > 0 {
+            self.fill_rect_alpha(
+                Rect::new(rect.x + r, rect.y, inner_w, rect.h),
+                color,
+                opacity,
+            )?;
+        }
+        // Left & right bands
+        if inner_h > 0 && r > 0 {
+            self.fill_rect_alpha(
+                Rect::new(rect.x, rect.y + r, radius as u32, inner_h),
+                color,
+                opacity,
+            )?;
+            self.fill_rect_alpha(
+                Rect::new(rect.right() - r, rect.y + r, radius as u32, inner_h),
+                color,
+                opacity,
+            )?;
+        }
+
+        // Only scan 4 corner boxes (r x r pixels each)
+        let corners = [
+            Rect::new(rect.x, rect.y, radius as u32, radius as u32),
+            Rect::new(rect.right() - r, rect.y, radius as u32, radius as u32),
+            Rect::new(rect.x, rect.bottom() - r, radius as u32, radius as u32),
+            Rect::new(
+                rect.right() - r,
+                rect.bottom() - r,
+                radius as u32,
+                radius as u32,
+            ),
+        ];
+
+        for corner in corners {
+            let c_draw = self.visible_rect(corner);
+            if !c_draw.is_empty() {
+                for y in c_draw.y..c_draw.bottom() {
+                    for x in c_draw.x..c_draw.right() {
+                        if in_rounded_rect(x, y, rect, radius) {
+                            self.pixel(x, y, color, opacity)?;
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -1153,32 +1205,112 @@ where
         }
 
         let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
-        for y in draw.y..draw.bottom() {
-            for x in draw.x..draw.right() {
-                if !in_rounded_rect(x, y, rect, radius) {
-                    continue;
-                }
+        let r = radius as i32;
+        let b = (border.width as u32).min(rect.w / 2).min(rect.h / 2);
 
-                let mut inner_hit = false;
-                let mut i = 1u8;
-                while i < border.width {
-                    let inset = i as i32;
-                    let inner = Rect::new(
-                        rect.x + inset,
-                        rect.y + inset,
-                        rect.w.saturating_sub((i as u32) * 2),
-                        rect.h.saturating_sub((i as u32) * 2),
-                    );
-                    let inner_radius = radius.saturating_sub(i);
-                    if !inner.is_empty() && in_rounded_rect(x, y, inner, inner_radius) {
-                        inner_hit = true;
-                        break;
+        if r == 0 {
+            // Straight border edges
+            self.fill_rect_alpha(Rect::new(rect.x, rect.y, rect.w, b), border.color, opacity)?;
+            self.fill_rect_alpha(
+                Rect::new(rect.x, rect.bottom() - (b as i32), rect.w, b),
+                border.color,
+                opacity,
+            )?;
+            if rect.h > b * 2 {
+                self.fill_rect_alpha(
+                    Rect::new(rect.x, rect.y + (b as i32), b, rect.h - b * 2),
+                    border.color,
+                    opacity,
+                )?;
+                self.fill_rect_alpha(
+                    Rect::new(
+                        rect.right() - (b as i32),
+                        rect.y + (b as i32),
+                        b,
+                        rect.h - b * 2,
+                    ),
+                    border.color,
+                    opacity,
+                )?;
+            }
+            return Ok(());
+        }
+
+        let inner_w = rect.w.saturating_sub((radius as u32) * 2);
+        let inner_h = rect.h.saturating_sub((radius as u32) * 2);
+
+        // Top and bottom straight edges
+        if inner_w > 0 {
+            self.fill_rect_alpha(
+                Rect::new(rect.x + r, rect.y, inner_w, b),
+                border.color,
+                opacity,
+            )?;
+            self.fill_rect_alpha(
+                Rect::new(rect.x + r, rect.bottom() - (b as i32), inner_w, b),
+                border.color,
+                opacity,
+            )?;
+        }
+
+        // Left and right straight edges
+        if inner_h > 0 {
+            self.fill_rect_alpha(
+                Rect::new(rect.x, rect.y + r, b, inner_h),
+                border.color,
+                opacity,
+            )?;
+            self.fill_rect_alpha(
+                Rect::new(rect.right() - (b as i32), rect.y + r, b, inner_h),
+                border.color,
+                opacity,
+            )?;
+        }
+
+        // Only scan the 4 corner boxes
+        let corners = [
+            Rect::new(rect.x, rect.y, radius as u32, radius as u32),
+            Rect::new(rect.right() - r, rect.y, radius as u32, radius as u32),
+            Rect::new(rect.x, rect.bottom() - r, radius as u32, radius as u32),
+            Rect::new(
+                rect.right() - r,
+                rect.bottom() - r,
+                radius as u32,
+                radius as u32,
+            ),
+        ];
+
+        for corner in corners {
+            let c_draw = self.visible_rect(corner);
+            if !c_draw.is_empty() {
+                for y in c_draw.y..c_draw.bottom() {
+                    for x in c_draw.x..c_draw.right() {
+                        if !in_rounded_rect(x, y, rect, radius) {
+                            continue;
+                        }
+
+                        let mut inner_hit = false;
+                        let mut i = 1u8;
+                        while i < border.width {
+                            let inset = i as i32;
+                            let inner = Rect::new(
+                                rect.x + inset,
+                                rect.y + inset,
+                                rect.w.saturating_sub((i as u32) * 2),
+                                rect.h.saturating_sub((i as u32) * 2),
+                            );
+                            let inner_radius = radius.saturating_sub(i);
+                            if !inner.is_empty() && in_rounded_rect(x, y, inner, inner_radius) {
+                                inner_hit = true;
+                                break;
+                            }
+                            i += 1;
+                        }
+
+                        if !inner_hit {
+                            self.pixel(x, y, border.color, opacity)?;
+                        }
                     }
-                    i += 1;
-                }
-
-                if !inner_hit {
-                    self.pixel(x, y, border.color, opacity)?;
                 }
             }
         }
