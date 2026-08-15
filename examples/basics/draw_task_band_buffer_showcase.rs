@@ -1,13 +1,12 @@
-//! Showcase: Interactive Draw Task Graph & Partial Band-Buffer Rendering
+//! Showcase: Draw Task Graph & Partial Band-Buffer Rendering
 //!
 //! Demonstrates:
 //! 1. Queuing retained-mode drawing commands into a fixed-capacity `DrawTaskQueue`.
 //! 2. Dispatching drawing tasks through pluggable `DrawUnit` hardware/software units.
-//! 3. Band-buffered rendering using `PartialBandBuffer` (narrow horizontal slices) directly
-//!    to an interactive SDL2 desktop window.
+//! 3. Band-buffered rendering using `PartialBandBuffer` (narrow horizontal slices).
 //!
-//! ### Controls:
-//! - **Space**: Add / cycle draw tasks in the queue
+//! ### Interactive Controls (when desktop window is available):
+//! - **Space**: Step / animate progress bar
 //! - **Esc / Q**: Exit
 
 use core::convert::Infallible;
@@ -30,7 +29,6 @@ use embedded_gui::{
 const W: u32 = 320;
 const H: u32 = 240;
 
-/// Frame buffer wrapping SimulatorDisplay that supports WindowedDrawTarget.
 struct WindowedSimulator {
     display: SimulatorDisplay<Rgb565>,
     window_count: usize,
@@ -74,11 +72,20 @@ impl WindowedDrawTarget for WindowedSimulator {
 }
 
 fn main() {
-    println!("=== embedded-gui: Interactive Draw Task Graph & Band Buffer Showcase ===");
-    println!("Controls:");
-    println!("  [Space]  - Animate / cycle draw task progress");
-    println!("  [Esc/Q]  - Exit");
+    println!("=== embedded-gui: Draw Task Graph & Band Buffer Showcase ===");
 
+    let res = std::panic::catch_unwind(|| {
+        run_interactive_window();
+    });
+
+    if res.is_err() {
+        println!("\n[Notice: SDL2 desktop window could not be opened in current terminal session]");
+        println!("[Rendering in standalone console simulation mode...]\n");
+        run_console_showcase();
+    }
+}
+
+fn run_interactive_window() {
     let mut sim = WindowedSimulator::new();
     let settings = OutputSettingsBuilder::new().scale(3).build();
     let mut window = Window::new("Draw Task Graph & Band Buffer (320x240)", &settings);
@@ -101,7 +108,6 @@ fn main() {
             }
         }
 
-        // Animate progress smoothly
         if progress >= 240 {
             dir = -2;
         } else if progress <= 20 {
@@ -109,126 +115,7 @@ fn main() {
         }
         progress = (progress as i32 + dir).max(0) as u32;
 
-        // 1. Build a queue of draw tasks
-        let mut queue = DrawTaskQueue::<16>::new();
-
-        // Background fill task
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(0, 0, W, H),
-                color: Rgb565::new(2, 4, 6),
-                radius: 0,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        // Top Status Header
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(0, 0, W, 22),
-                color: Rgb565::new(4, 8, 14),
-                radius: 0,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Label {
-                rect: Rect::new(12, 5, 200, 14),
-                text: "BAND BUFFER RENDER ENGINE",
-                style: TextStyle::new(Rgb565::CSS_CYAN),
-            })
-            .expect("Task queued");
-
-        // Main Panel Card
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(20, 36, 280, 90),
-                color: Rgb565::new(6, 12, 18),
-                radius: 6,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Border {
-                rect: Rect::new(20, 36, 280, 90),
-                border: Border::one(Rgb565::CSS_DARK_CYAN),
-                radius: 6,
-            })
-            .expect("Task queued");
-
-        // Card Label
-        queue
-            .push(DrawTask::Label {
-                rect: Rect::new(35, 48, 250, 16),
-                text: "SRAM CONSUMPTION: 12.8 KB",
-                style: TextStyle::new(Rgb565::CSS_WHITE),
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Label {
-                rect: Rect::new(35, 66, 250, 14),
-                text: "Transfers 12 bands of 20 lines each",
-                style: TextStyle::new(Rgb565::new(15, 30, 20)),
-            })
-            .expect("Task queued");
-
-        // Progress Bar Background & Active Fill
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(35, 94, 250, 14),
-                color: Rgb565::new(3, 6, 9),
-                radius: 3,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(35, 94, progress, 14),
-                color: Rgb565::CSS_GREEN,
-                radius: 3,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        // Secondary Info Card
-        queue
-            .push(DrawTask::Fill {
-                rect: Rect::new(20, 138, 280, 80),
-                color: Rgb565::new(6, 12, 18),
-                radius: 6,
-                opacity: 255,
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Border {
-                rect: Rect::new(20, 138, 280, 80),
-                border: Border::one(Rgb565::new(12, 24, 18)),
-                radius: 6,
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Label {
-                rect: Rect::new(35, 152, 250, 16),
-                text: "HARDWARE DMA STREAMING",
-                style: TextStyle::new(Rgb565::CSS_GOLD),
-            })
-            .expect("Task queued");
-
-        queue
-            .push(DrawTask::Label {
-                rect: Rect::new(35, 172, 250, 14),
-                text: "Windowed SPI/8080 transfers direct to LCD",
-                style: TextStyle::new(Rgb565::new(20, 40, 30)),
-            })
-            .expect("Task queued");
-
-        // 2. Render using PartialBandBuffer (20 lines per band = 12.8 KB RAM)
+        let queue = build_queue(progress);
         let screen = Rect::new(0, 0, W, H);
         let mut band_buffer = PartialBandBuffer::<{ 320 * 20 }>::new(320, 20);
 
@@ -239,4 +126,97 @@ fn main() {
         window.update(&sim.display);
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
+}
+
+fn run_console_showcase() {
+    let mut sim = WindowedSimulator::new();
+    let queue = build_queue(175);
+    let screen = Rect::new(0, 0, W, H);
+    let mut band_buffer = PartialBandBuffer::<{ 320 * 20 }>::new(320, 20);
+
+    band_buffer
+        .render_tasks_banded(screen, screen, &queue, &mut sim, Some(Rgb565::new(2, 4, 6)))
+        .expect("Render succeeded");
+
+    println!("Queued {} draw tasks in task graph.", queue.len());
+    println!(
+        "Rendered 320x240 screen in 12 bands using {} window transfers.",
+        sim.window_count
+    );
+    println!("Band buffer rendering completed successfully!");
+}
+
+fn build_queue(progress: u32) -> DrawTaskQueue<'static, 16> {
+    let mut queue = DrawTaskQueue::<16>::new();
+
+    queue
+        .push(DrawTask::Fill {
+            rect: Rect::new(0, 0, W, H),
+            color: Rgb565::new(2, 4, 6),
+            radius: 0,
+            opacity: 255,
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Fill {
+            rect: Rect::new(0, 0, W, 22),
+            color: Rgb565::new(4, 8, 14),
+            radius: 0,
+            opacity: 255,
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Label {
+            rect: Rect::new(12, 5, 200, 14),
+            text: "BAND BUFFER RENDER ENGINE",
+            style: TextStyle::new(Rgb565::CSS_CYAN),
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Fill {
+            rect: Rect::new(20, 36, 280, 90),
+            color: Rgb565::new(6, 12, 18),
+            radius: 6,
+            opacity: 255,
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Border {
+            rect: Rect::new(20, 36, 280, 90),
+            border: Border::one(Rgb565::CSS_DARK_CYAN),
+            radius: 6,
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Label {
+            rect: Rect::new(35, 48, 250, 16),
+            text: "SRAM CONSUMPTION: 12.8 KB",
+            style: TextStyle::new(Rgb565::CSS_WHITE),
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Fill {
+            rect: Rect::new(35, 94, 250, 14),
+            color: Rgb565::new(3, 6, 9),
+            radius: 3,
+            opacity: 255,
+        })
+        .unwrap();
+
+    queue
+        .push(DrawTask::Fill {
+            rect: Rect::new(35, 94, progress, 14),
+            color: Rgb565::CSS_GREEN,
+            radius: 3,
+            opacity: 255,
+        })
+        .unwrap();
+
+    queue
 }
