@@ -155,3 +155,59 @@ impl Default for MenuContract {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropertyKey {
+    Value,
+    Min,
+    Max,
+    Text,
+    Progress,
+    Selected,
+    State,
+    Offset,
+    Open,
+    Expanded,
+    Custom(u16),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum PropertyValue<'a> {
+    Float(f32),
+    Int(i32),
+    Usize(usize),
+    Bool(bool),
+    Str(&'a str),
+    Char(char),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropertyError {
+    NotFound,
+    ReadOnly,
+    TypeMismatch,
+}
+
+pub trait Widget {
+    fn render_widget_bounds(&self, _bounds: Rect, _style: &crate::style::Style) {}
+
+    fn handle_widget_event(
+        &mut self,
+        _event: &crate::input::UiEvent,
+        _ctx: &mut EventContext,
+    ) -> EventPolicy {
+        EventPolicy::Continue
+    }
+
+    fn get_property(&self, _key: PropertyKey) -> Option<PropertyValue<'_>> {
+        None
+    }
+
+    fn set_property<'a>(
+        &mut self,
+        _key: PropertyKey,
+        _val: PropertyValue<'a>,
+    ) -> Result<(), PropertyError> {
+        Err(PropertyError::NotFound)
+    }
+}

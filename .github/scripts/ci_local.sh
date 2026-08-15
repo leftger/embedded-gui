@@ -49,30 +49,13 @@ host_target_args() {
 }
 
 run_check_no_std() {
-  if [[ -z "${NO_STD_TARGET:-}" ]]; then
-    echo "SKIP: no_std target not configured"
-    return 0
-  fi
-  case "$(basename "$repo_root")" in
-    bq25887)
-      rustup target add thumbv8m.main-none-eabihf
-      cargo check --target thumbv8m.main-none-eabihf
-      cargo check --target thumbv8m.main-none-eabihf --features defmt-03
-      cargo check --target thumbv8m.main-none-eabihf --features log
-      ;;
-    lis2de12)
-      rustup target add thumbv8m.main-none-eabihf
-      cargo check --target thumbv8m.main-none-eabihf
-      cargo check --target thumbv8m.main-none-eabihf --features async
-      cargo check --target thumbv8m.main-none-eabihf --features defmt-03
-      cargo check --target thumbv8m.main-none-eabihf --features async,defmt-03
-      ;;
-    *)
-      rustup target add "${NO_STD_TARGET}"
-      # shellcheck disable=SC2086
-      cargo check --lib ${NO_STD_CARGO_ARGS:---no-default-features} --target "${NO_STD_TARGET}"
-      ;;
-  esac
+  local targets=("thumbv6m-none-eabi" "thumbv7em-none-eabihf" "thumbv8m.main-none-eabihf")
+  for target in "${targets[@]}"; do
+    echo "Checking no_std target: ${target}"
+    rustup target add "$target"
+    cargo check --lib --no-default-features --features libm --target "$target"
+    cargo check --lib --no-default-features --features rich-widgets,libm --target "$target"
+  done
 }
 
 run_msrv() {

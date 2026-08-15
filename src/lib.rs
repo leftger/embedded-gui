@@ -3,11 +3,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-pub mod animation;
-pub mod animation_timeline;
-pub mod animation_timing;
 pub mod block;
-pub mod cinematic;
 pub mod completion;
 pub mod context;
 pub mod display_backend;
@@ -24,20 +20,25 @@ pub mod interop;
 pub mod layout;
 mod math;
 pub mod palette;
+pub mod motion;
+pub use motion as animation;
+pub use motion as animation_timeline;
+pub use motion as animation_timing;
+pub use motion as cinematic;
+pub use motion as screen_transition;
+pub use motion as transition_preset;
+pub use motion as widget_animation;
 pub mod present;
 pub mod render;
 pub mod screen;
-pub mod screen_transition;
 pub mod state;
 pub mod style;
 pub mod swapchain;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
-pub mod transition_preset;
 pub mod visual_widgets;
 pub mod widget;
-pub mod widget_animation;
 pub mod widgets;
 
 pub use haptics::{HapticPattern, HapticSequencer};
@@ -71,7 +72,8 @@ pub use cinematic::{
 };
 pub use completion::{CompletionSlot, WaitTransfer, WaitTransferFuture};
 pub use context::{
-    GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetKeyBindings, WidgetKeyInputPolicy,
+    GuiContext, GuiError, KeyBindingAction, PressTiming, WidgetBuilder, WidgetKeyBindings,
+    WidgetKeyInputPolicy,
 };
 pub use display_backend::{
     AsyncDmaTransfer, DisplayBackend, DisplayError, DisplayRegion, DmaTransfer, SimulatorBackend,
@@ -132,8 +134,8 @@ pub use text::{
 };
 pub use transition_preset::TransitionPreset;
 pub use widget::{
-    EventContext, EventPhase, EventPolicy, FocusGroupId, MenuContract, StatefulWidget,
-    StyleClassId, WidgetFlags, WidgetId,
+    EventContext, EventPhase, EventPolicy, FocusGroupId, MenuContract, PropertyError, PropertyKey,
+    PropertyValue, StatefulWidget, StyleClassId, Widget, WidgetFlags, WidgetId,
 };
 pub use widget_animation::presets;
 pub use widget_animation::{

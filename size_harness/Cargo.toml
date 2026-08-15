@@ -1,0 +1,22 @@
+[package]
+name = "size_harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+embedded-graphics-core = "0.4.1"
+panic-halt = "0.2"
+
+[dependencies.embedded-gui]
+path = ".."
+default-features = false
+features = ["libm", "rich-widgets"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

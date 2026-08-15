@@ -1,22 +1,100 @@
-use embedded_graphics_core::pixelcolor::Rgb565;
-
-#[cfg(not(feature = "std"))]
-use crate::math::F32Ext as _;
 use crate::{
     geometry::Rect,
     haptics::HapticPattern,
     image::{ImageFit, ImageRef, ReelPlayer},
     render::TextAlign,
     style::{Style, WidgetStyle},
-    widget::WidgetId,
+    widget::{FocusGroupId, StyleClassId, Widget, WidgetId},
     widgets::{ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind},
 };
+use embedded_graphics_core::pixelcolor::Rgb565;
 
 use super::*;
+
+pub struct WidgetBuilder<'a, 'ctx, W, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
+    ctx: &'ctx mut GuiContext<'a, NODES, EVENTS, DIRTY>,
+    rect: Rect,
+    _widget: W,
+    parent: Option<WidgetId>,
+    style_class: Option<StyleClassId>,
+    focus_group: FocusGroupId,
+    style: Option<WidgetStyle>,
+}
+
+impl<'a, 'ctx, W, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
+    WidgetBuilder<'a, 'ctx, W, NODES, EVENTS, DIRTY>
+where
+    W: Widget + 'a,
+{
+    pub fn new(
+        ctx: &'ctx mut GuiContext<'a, NODES, EVENTS, DIRTY>,
+        rect: impl Into<Rect>,
+        widget: W,
+    ) -> Self {
+        Self {
+            ctx,
+            rect: rect.into(),
+            _widget: widget,
+            parent: None,
+            style_class: None,
+            focus_group: FocusGroupId::ROOT,
+            style: None,
+        }
+    }
+
+    pub fn with_parent(mut self, parent: WidgetId) -> Self {
+        self.parent = Some(parent);
+        self
+    }
+
+    pub fn with_style_class(mut self, style_class: StyleClassId) -> Self {
+        self.style_class = Some(style_class);
+        self
+    }
+
+    pub fn with_focus_group(mut self, focus_group: FocusGroupId) -> Self {
+        self.focus_group = focus_group;
+        self
+    }
+
+    pub fn with_style(mut self, style: impl Into<WidgetStyle>) -> Self {
+        self.style = Some(style.into());
+        self
+    }
+
+    pub fn build(self) -> Result<WidgetId, GuiError> {
+        let style = self
+            .style
+            .unwrap_or_else(|| WidgetStyle::from(Style::default()));
+        let id = self.ctx.add_widget(self.rect, WidgetKind::Spacer, style)?;
+        if let Some(parent) = self.parent {
+            self.ctx.add_child(parent, id)?;
+        }
+        if let Some(class_id) = self.style_class {
+            if let Some(node) = self.ctx.node_mut(id) {
+                node.style_class = Some(class_id);
+            }
+        }
+        if self.focus_group != FocusGroupId::ROOT {
+            self.ctx.set_focus_group(id, self.focus_group)?;
+        }
+        Ok(id)
+    }
+}
 
 impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     GuiContext<'a, NODES, EVENTS, DIRTY>
 {
+    pub fn spawn<'ctx, W>(
+        &'ctx mut self,
+        rect: impl Into<Rect>,
+        widget: W,
+    ) -> WidgetBuilder<'a, 'ctx, W, NODES, EVENTS, DIRTY>
+    where
+        W: Widget + 'a,
+    {
+        WidgetBuilder::new(self, rect, widget)
+    }
     pub fn add_panel<S>(&mut self, rect: impl Into<Rect>, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,

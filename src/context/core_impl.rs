@@ -1,7 +1,3 @@
-use heapless::Vec;
-
-#[cfg(not(feature = "std"))]
-use crate::math::F32Ext as _;
 use crate::{
     geometry::{DirtyTracker, Rect},
     haptics::{HapticPattern, HapticSequencer},
@@ -12,6 +8,7 @@ use crate::{
     widget::{MenuContract, StyleClassId, WidgetId},
     widgets::WidgetNode,
 };
+use heapless::Vec;
 
 use super::*;
 

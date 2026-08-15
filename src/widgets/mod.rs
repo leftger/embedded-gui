@@ -11,8 +11,23 @@ use crate::{
     image::{ImageFit, ImageRef, ReelPlayer},
     render::{Compositor, RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
-    widget::{FocusGroupId, StyleClassId, WidgetFlags, WidgetId},
+    widget::{
+        FocusGroupId, PropertyError, PropertyKey, PropertyValue, StyleClassId, WidgetFlags,
+        WidgetId,
+    },
 };
+
+pub mod basic;
+pub mod cinematic;
+pub mod controls;
+pub mod data;
+pub mod gauges;
+
+pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
+pub use cinematic::GlanceTileWidget;
+pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
+pub use data::ListWidget;
+pub use gauges::ProgressBarWidget;
 
 pub const TEXTAREA_CAPACITY: usize = 128;
 
@@ -402,6 +417,95 @@ impl<'a> WidgetNode<'a> {
 
     pub const fn focusable(&self) -> bool {
         !self.hidden() && !self.disabled() && self.flags.contains(WidgetFlags::FOCUSABLE)
+    }
+
+    pub fn get_property(&self, key: PropertyKey) -> Option<PropertyValue<'a>> {
+        match (key, &self.kind) {
+            (PropertyKey::Value, WidgetKind::ProgressBar { value })
+            | (PropertyKey::Progress, WidgetKind::ProgressBar { value }) => {
+                Some(PropertyValue::Float(*value))
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Value, WidgetKind::Slider { value, .. }) => {
+                Some(PropertyValue::Float(*value))
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Min, WidgetKind::Slider { min, .. }) => Some(PropertyValue::Float(*min)),
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Max, WidgetKind::Slider { max, .. }) => Some(PropertyValue::Float(*max)),
+            (PropertyKey::Text, WidgetKind::Label(text)) => Some(PropertyValue::Str(text)),
+            (PropertyKey::Text, WidgetKind::Button(text)) => Some(PropertyValue::Str(text)),
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::State, WidgetKind::Toggle { on, .. }) => Some(PropertyValue::Bool(*on)),
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::State, WidgetKind::Checkbox { checked, .. }) => {
+                Some(PropertyValue::Bool(*checked))
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Selected, WidgetKind::List { selected, .. }) => {
+                Some(PropertyValue::Usize(*selected))
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Selected, WidgetKind::Tabs { selected, .. }) => {
+                Some(PropertyValue::Usize(*selected))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn set_property(
+        &mut self,
+        key: PropertyKey,
+        val: PropertyValue<'a>,
+    ) -> Result<(), PropertyError> {
+        match (key, &mut self.kind, val) {
+            (
+                PropertyKey::Value | PropertyKey::Progress,
+                WidgetKind::ProgressBar { value },
+                PropertyValue::Float(v),
+            ) => {
+                *value = v.clamp(0.0, 1.0);
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (
+                PropertyKey::Value,
+                WidgetKind::Slider { value, min, max },
+                PropertyValue::Float(v),
+            ) => {
+                *value = v.clamp(*min, *max);
+                Ok(())
+            }
+            (PropertyKey::Text, WidgetKind::Label(text), PropertyValue::Str(s)) => {
+                *text = s;
+                Ok(())
+            }
+            (PropertyKey::Text, WidgetKind::Button(text), PropertyValue::Str(s)) => {
+                *text = s;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::State, WidgetKind::Toggle { on, .. }, PropertyValue::Bool(b)) => {
+                *on = b;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::State, WidgetKind::Checkbox { checked, .. }, PropertyValue::Bool(b)) => {
+                *checked = b;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Selected, WidgetKind::List { selected, .. }, PropertyValue::Usize(s)) => {
+                *selected = s;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Selected, WidgetKind::Tabs { selected, .. }, PropertyValue::Usize(s)) => {
+                *selected = s;
+                Ok(())
+            }
+            _ => Err(PropertyError::NotFound),
+        }
     }
 
     pub fn render<D, C>(

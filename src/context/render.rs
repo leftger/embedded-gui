@@ -1,12 +1,9 @@
-use embedded_graphics_core::pixelcolor::Rgb565;
-
-#[cfg(not(feature = "std"))]
-use crate::math::F32Ext as _;
 use crate::{
     geometry::Rect,
     render::RenderCtx,
     style::{VisualState, lerp_style},
 };
+use embedded_graphics_core::pixelcolor::Rgb565;
 
 use super::*;
 

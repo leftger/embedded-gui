@@ -18,165 +18,19 @@ use crate::{
     text,
 };
 
-pub const CHAR_WIDTH: u32 = 4;
-pub const CHAR_HEIGHT: u32 = 6;
+pub mod compositor;
+pub mod stroke;
+pub mod text_style;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextAlign {
-    Left,
-    Center,
-    Right,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VerticalAlign {
-    Top,
-    Middle,
-    Bottom,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextWrap {
-    None,
-    Character,
-    Word,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextOverflow {
-    Clip,
-    Ellipsis,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EllipsisMode {
-    ThreeDots,
-    SingleGlyph,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextOverflowPolicy {
-    Global(TextOverflow),
-    WrapThenEllipsis { max_lines: u8 },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TextStyle {
-    pub color: Rgb565,
-    pub font: FontId,
-    pub opacity: u8,
-    pub align: TextAlign,
-    pub vertical_align: VerticalAlign,
-    pub wrap: TextWrap,
-    pub overflow: TextOverflow,
-    pub overflow_policy: TextOverflowPolicy,
-    pub kerning: bool,
-    pub max_lines: Option<u8>,
-    pub ellipsis: EllipsisMode,
-    pub line_spacing: u8,
-}
-
-impl TextStyle {
-    pub const fn new(color: Rgb565) -> Self {
-        Self {
-            color,
-            font: FontId::Tiny3x5,
-            opacity: 255,
-            align: TextAlign::Left,
-            vertical_align: VerticalAlign::Top,
-            wrap: TextWrap::None,
-            overflow: TextOverflow::Clip,
-            overflow_policy: TextOverflowPolicy::Global(TextOverflow::Clip),
-            kerning: false,
-            max_lines: None,
-            ellipsis: EllipsisMode::ThreeDots,
-            line_spacing: 1,
-        }
-    }
-
-    pub const fn centered(mut self) -> Self {
-        self.align = TextAlign::Center;
-        self.vertical_align = VerticalAlign::Middle;
-        self
-    }
-
-    pub const fn with_align(mut self, align: TextAlign) -> Self {
-        self.align = align;
-        self
-    }
-
-    pub const fn with_vertical_align(mut self, align: VerticalAlign) -> Self {
-        self.vertical_align = align;
-        self
-    }
-
-    pub const fn with_wrap(mut self, wrap: TextWrap) -> Self {
-        self.wrap = wrap;
-        self
-    }
-
-    pub const fn with_line_spacing(mut self, spacing: u8) -> Self {
-        self.line_spacing = spacing;
-        self
-    }
-
-    pub const fn with_overflow(mut self, overflow: TextOverflow) -> Self {
-        self.overflow = overflow;
-        self.overflow_policy = TextOverflowPolicy::Global(overflow);
-        self
-    }
-
-    pub const fn with_kerning(mut self, kerning: bool) -> Self {
-        self.kerning = kerning;
-        self
-    }
-
-    pub const fn with_max_lines(mut self, max_lines: Option<u8>) -> Self {
-        self.max_lines = max_lines;
-        self
-    }
-
-    pub const fn with_ellipsis_mode(mut self, ellipsis: EllipsisMode) -> Self {
-        self.ellipsis = ellipsis;
-        self
-    }
-
-    pub const fn with_overflow_policy(mut self, policy: TextOverflowPolicy) -> Self {
-        self.overflow_policy = policy;
-        self
-    }
-
-    pub const fn with_opacity(mut self, opacity: u8) -> Self {
-        self.opacity = opacity;
-        self
-    }
-
-    pub const fn with_font_id(mut self, font: FontId) -> Self {
-        self.font = font;
-        self
-    }
-
-    pub fn with_font(mut self, font: impl Into<FontId>) -> Self {
-        self.font = font.into();
-        self
-    }
-}
-
-#[cfg(feature = "embedded-graphics")]
-impl From<&embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
-    fn from(mono_style: &embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
-        let mut style = TextStyle::new(mono_style.text_color.unwrap_or(Rgb565::WHITE));
-        style.font = FontId::MonoFont(mono_style.font);
-        style
-    }
-}
-
-#[cfg(feature = "embedded-graphics")]
-impl From<embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
-    fn from(mono_style: embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
-        Self::from(&mono_style)
-    }
-}
+pub use compositor::{
+    Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
+    WindowedDrawTarget, lerp_rgb565,
+};
+pub use stroke::{AntiAliasMode, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D};
+pub use text_style::{
+    CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,
+    TextOverflowPolicy, TextStyle, TextWrap, VerticalAlign,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextMetrics {
@@ -531,6 +385,17 @@ impl StrokeStyle {
         self
     }
 }
+=======
+pub use compositor::{
+    Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
+    WindowedDrawTarget, lerp_rgb565,
+};
+pub use stroke::{AntiAliasMode, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D};
+pub use text_style::{
+    CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,
+    TextOverflowPolicy, TextStyle, TextWrap, VerticalAlign,
+};
+>>>>>>> 28a8b4c (refactor: modularize repository structure, property engine, rendering, motion framework, tests, examples, benchmarks, and multi-target CI):src/render/mod.rs
 
 pub struct RenderCtx<'a, D, C = Dither>
 where
@@ -2516,33 +2381,6 @@ where
         let tile = TileRef::from_image(image, TileMode::None);
         self.draw_tile_transformed_ssaa(rect, tile, transform, opacity, enable_ssaa)
     }
-}
-
-fn should_draw_at_opacity(x: i32, y: i32, opacity: u8) -> bool {
-    if opacity == 255 {
-        return true;
-    }
-    if opacity == 0 {
-        return false;
-    }
-    let bayer4 = [
-        [0u8, 8, 2, 10],
-        [12, 4, 14, 6],
-        [3, 11, 1, 9],
-        [15, 7, 13, 5],
-    ];
-    let threshold = ((opacity as u16 * 16) / 255) as u8;
-    let sample = bayer4[(y as usize) & 3][(x as usize) & 3];
-    sample < threshold.max(1)
-}
-
-fn lerp_rgb565(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
-    let t = t as u16;
-    let inv = 255u16.saturating_sub(t);
-    let r = ((a.r() as u16 * inv) + (b.r() as u16 * t)) / 255;
-    let g = ((a.g() as u16 * inv) + (b.g() as u16 * t)) / 255;
-    let bb = ((a.b() as u16 * inv) + (b.b() as u16 * t)) / 255;
-    Rgb565::new(r as u8, g as u8, bb as u8)
 }
 
 #[inline]

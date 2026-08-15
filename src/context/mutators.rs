@@ -1,21 +1,39 @@
-use embedded_graphics_core::pixelcolor::Rgb565;
-
-#[cfg(not(feature = "std"))]
-use crate::math::F32Ext as _;
 use crate::{
     geometry::Rect,
     input::{UiEvent, WidgetEvent, WidgetEventKind},
     layout::{Axis, LayoutItem, LinearLayout},
     state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState},
-    widget::{EventContext, EventPhase, EventPolicy, FocusGroupId, WidgetFlags, WidgetId},
+    widget::{
+        EventContext, EventPhase, EventPolicy, FocusGroupId, PropertyKey, PropertyValue,
+        WidgetFlags, WidgetId,
+    },
     widgets::{KeyboardLayout, SurfaceState, TEXTAREA_CAPACITY, WidgetKind, WidgetNode},
 };
+use embedded_graphics_core::pixelcolor::Rgb565;
 
 use super::*;
 
 impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     GuiContext<'a, NODES, EVENTS, DIRTY>
 {
+    pub fn get_widget_property(&self, id: WidgetId, key: PropertyKey) -> Option<PropertyValue<'a>> {
+        let node = self.node(id)?;
+        node.get_property(key)
+    }
+
+    pub fn set_widget_property(
+        &mut self,
+        id: WidgetId,
+        key: PropertyKey,
+        val: PropertyValue<'a>,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.set_property(key, val)
+            .map_err(|_| GuiError::NotFound)?;
+        self.dirty.add(rect)?;
+        Ok(())
+    }
     pub fn set_progress(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;

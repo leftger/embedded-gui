@@ -1,7 +1,3 @@
-use heapless::Vec;
-
-#[cfg(not(feature = "std"))]
-use crate::math::F32Ext as _;
 use crate::{
     geometry::{DirtyError, DirtyTracker, Rect},
     haptics::HapticSequencer,
@@ -11,6 +7,7 @@ use crate::{
     widget::{FocusGroupId, MenuContract, StyleClassId, WidgetId},
     widgets::{TEXTAREA_CAPACITY, WidgetNode},
 };
+use heapless::Vec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuiError {

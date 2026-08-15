@@ -6,6 +6,7 @@ pub mod present;
 pub mod render;
 pub mod types;
 
+pub use builders::WidgetBuilder;
 pub(crate) use input::*;
 pub use types::*;
 

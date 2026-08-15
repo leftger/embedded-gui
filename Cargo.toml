@@ -66,6 +66,7 @@ embedded-dsp = { version = "0.2.0", optional = true, default-features = false }
 
 [dev-dependencies]
 critical-section = { version = "1.1", features = ["std"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 embassy-time = { version = "0.5", features = ["std"] }
 embassy-sync = { version = "0.8" }
 embedded-3dgfx = { version = "0.3.2" }
@@ -74,16 +75,23 @@ embedded-graphics-framebuf = "0.3"
 embedded-graphics-simulator = "0.8"
 nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 
+[[bench]]
+name = "gui_benchmarks"
+harness = false
+
 [[example]]
 name = "interop_showcase"
+path = "examples/integrations/interop_showcase.rs"
 required-features = ["embedded-text", "embedded-layout"]
 
 [[example]]
 name = "completion_swapchain_sim"
+path = "examples/integrations/completion_swapchain_sim.rs"
 required-features = ["std"]
 
 [[example]]
 name = "embassy_gui_frame"
+path = "examples/integrations/embassy_gui_frame.rs"
 required-features = ["embassy", "std"]
 
 [[test]]
