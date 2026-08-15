@@ -22,9 +22,12 @@ pub mod basic;
 pub mod cinematic;
 pub mod controls;
 pub mod data;
+pub mod dialog;
 pub mod gauges;
 pub mod notification;
+pub mod picker;
 pub mod rich_text_node;
+pub mod status_bar;
 pub mod timeline;
 pub mod wearable;
 
@@ -33,11 +36,16 @@ pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
 pub use cinematic::GlanceTileWidget;
 pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
 pub use data::ListWidget;
+pub use dialog::{
+    ActionableDialogWidget, ConfirmationDialogWidget, DialogAction, DialogError, DialogType,
+};
 pub use gauges::ProgressBarWidget;
 pub use notification::{
     NotificationAction, NotificationError, NotificationPriority, NotificationSheetWidget,
 };
+pub use picker::{NumberPickerWidget, PickerError, TimeFormat, TimePickerField, TimePickerWidget};
 pub use rich_text_node::{RichTextError, RichTextNodeWidget, TextSpan};
+pub use status_bar::{BatteryState, StatusBarError, StatusBarMode, StatusBarWidget};
 pub use timeline::{PeekBannerWidget, TimelineNodeState, TimelineNodeWidget};
 pub use wearable::{
     ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,

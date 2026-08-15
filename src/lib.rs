@@ -153,10 +153,13 @@ pub use widget_animation::{
     WidgetAnimationError, WidgetAnimator, WidgetKeyframeState, WidgetPropertyKeyframe,
 };
 pub use widgets::{
-    ActionBarWidget, ActionMenuError, ActionMenuItem, ActionMenuWidget, ContentIndicatorDirection,
-    ContentIndicatorWidget, CrumbsIndicatorWidget, NotificationAction, NotificationError,
-    NotificationPriority, NotificationSheetWidget, PeekBannerWidget, RichTextError,
-    RichTextNodeWidget, SelectionWidget, TextSpan, TimelineNodeState, TimelineNodeWidget,
+    ActionBarWidget, ActionMenuError, ActionMenuItem, ActionMenuWidget, ActionableDialogWidget,
+    BatteryState, ConfirmationDialogWidget, ContentIndicatorDirection, ContentIndicatorWidget,
+    CrumbsIndicatorWidget, DialogAction, DialogError, DialogType, NotificationAction,
+    NotificationError, NotificationPriority, NotificationSheetWidget, NumberPickerWidget,
+    PeekBannerWidget, PickerError, RichTextError, RichTextNodeWidget, SelectionWidget,
+    StatusBarError, StatusBarMode, StatusBarWidget, TextSpan, TimeFormat, TimePickerField,
+    TimePickerWidget, TimelineNodeState, TimelineNodeWidget,
 };
 pub use widgets::{
     ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,

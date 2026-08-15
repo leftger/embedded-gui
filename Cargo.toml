@@ -132,3 +132,8 @@ name = "advanced_cinematic_motion_showcase"
 path = "examples/basics/advanced_cinematic_motion_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "wearable_dialogs_pickers_status_showcase"
+path = "examples/basics/wearable_dialogs_pickers_status_showcase.rs"
+required-features = ["std"]
+

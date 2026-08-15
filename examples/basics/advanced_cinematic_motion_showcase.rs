@@ -385,11 +385,11 @@ where
     let card_h = 130u32;
 
     // Simulate 3D Flip angle [0..PI]
-    let angle = t * 3.14159f32;
+    let angle = t * core::f32::consts::PI;
     let cos_val = angle.cos().abs(); // perspective foreshortening factor
     let current_h = ((card_h as f32) * cos_val).max(12.0) as u32;
 
-    let is_front = angle < 1.57079f32;
+    let is_front = angle < core::f32::consts::FRAC_PI_2;
     let card_rect = Rect::new(
         center_x - (card_w as i32 / 2),
         center_y - (current_h as i32 / 2),
