@@ -93,7 +93,3 @@ required-features = ["std"]
 name = "embassy_gui_frame"
 path = "examples/integrations/embassy_gui_frame.rs"
 required-features = ["embassy", "std"]
-
-[[test]]
-name = "gui"
-required-features = ["embedded-graphics"]
