@@ -38,6 +38,7 @@ micromath = ["dep:micromath"]
 embedded-text = ["dep:embedded-text", "dep:embedded-graphics"]
 embedded-layout = ["dep:embedded-layout", "dep:embedded-graphics"]
 embedded-graphics = ["dep:embedded-graphics"]
+embedded-3dgfx = ["dep:embedded-3dgfx", "embedded-graphics", "dep:nalgebra"]
 # Only pulls in the embedded-dsp modules visual_widgets.rs actually calls
 # (biquad filtering + RMS/max statistics) instead of the whole crate
 # (FFT, SVM, Bayes, quaternion, ...) — see embedded-dsp's per-module features.
@@ -51,7 +52,7 @@ embassy = ["embassy-time", "dep:embassy-sync"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
-embedded-draw-target = { version = "0.1", default-features = false }
+embedded-draw-target = { version = "0.1", path = "../embedded-draw-target" }
 embedded-graphics-framebuf = "0.3"
 critical-section = "1.1"
 heapless = "0.9"
@@ -63,17 +64,19 @@ embedded-graphics = { version = "0.8", optional = true }
 embedded-text = { version = "0.7.3", optional = true }
 embedded-layout = { version = "0.4.2", optional = true }
 embedded-dsp = { version = "0.2.0", optional = true, default-features = false }
+embedded-3dgfx = { version = "0.5.2", path = "../embedded-3dgfx", optional = true }
+nalgebra = { version = "0.35", default-features = false, features = ["libm"], optional = true }
 
 [dev-dependencies]
 critical-section = { version = "1.1", features = ["std"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 embassy-time = { version = "0.5", features = ["std"] }
 embassy-sync = { version = "0.8" }
-embedded-3dgfx = { version = "0.3.2" }
+embedded-3dgfx = { version = "0.5.2", path = "../embedded-3dgfx" }
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
 embedded-graphics-simulator = "0.8"
-nalgebra = { version = "0.34", default-features = false, features = ["std"] }
+nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 [[bench]]
 name = "gui_benchmarks"
@@ -98,4 +101,9 @@ required-features = ["embassy", "std"]
 name = "custom_font_showcase"
 path = "examples/basics/custom_font_showcase.rs"
 required-features = ["std"]
+
+[[example]]
+name = "embedded_3dgfx_overlay"
+path = "examples/integrations/embedded_3dgfx_overlay.rs"
+required-features = ["embedded-3dgfx", "std"]
 

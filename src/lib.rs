@@ -15,7 +15,11 @@ pub mod geometry;
 pub mod haptics;
 pub mod image;
 pub mod input;
-#[cfg(any(feature = "embedded-text", feature = "embedded-layout"))]
+#[cfg(any(
+    feature = "embedded-text",
+    feature = "embedded-layout",
+    feature = "embedded-3dgfx"
+))]
 pub mod interop;
 pub mod layout;
 mod math;

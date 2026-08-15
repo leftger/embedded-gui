@@ -30,3 +30,6 @@ pub mod layout;
 
 #[cfg(feature = "embedded-text")]
 pub mod text;
+
+#[cfg(feature = "embedded-3dgfx")]
+pub mod three_d;
