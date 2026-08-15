@@ -43,7 +43,7 @@ pub struct Dither;
 pub struct Blend;
 
 #[inline(always)]
-fn should_draw_at_opacity(x: i32, y: i32, opacity: u8) -> bool {
+pub(crate) fn should_draw_at_opacity(x: i32, y: i32, opacity: u8) -> bool {
     if opacity == 255 {
         return true;
     }
@@ -72,6 +72,7 @@ pub fn lerp_rgb565(c1: Rgb565, c2: Rgb565, alpha: u8) -> Rgb565 {
         return c2;
     }
     let a = alpha as u32;
+    let inv = 255 - a;
     let r1 = c1.r() as u32;
     let g1 = c1.g() as u32;
     let b1 = c1.b() as u32;
@@ -79,15 +80,20 @@ pub fn lerp_rgb565(c1: Rgb565, c2: Rgb565, alpha: u8) -> Rgb565 {
     let g2 = c2.g() as u32;
     let b2 = c2.b() as u32;
 
-    let r = ((r1 * (255 - a) + r2 * a) / 255) as u8;
-    let g = ((g1 * (255 - a) + g2 * a) / 255) as u8;
-    let b = ((b1 * (255 - a) + b2 * a) / 255) as u8;
+    // Fast division-free /255: for x in 0..(255*63), ((x * 257 + 257) >> 16) == x / 255
+    let r_val = r1 * inv + r2 * a;
+    let g_val = g1 * inv + g2 * a;
+    let b_val = b1 * inv + b2 * a;
+
+    let r = ((r_val * 257 + 257) >> 16) as u8;
+    let g = ((g_val * 257 + 257) >> 16) as u8;
+    let b = ((b_val * 257 + 257) >> 16) as u8;
 
     Rgb565::new(r, g, b)
 }
 
 #[inline(always)]
-fn apply_blend_mode(fg: Rgb565, mode: BlendMode, bg: Rgb565) -> Rgb565 {
+pub(crate) fn apply_blend_mode(fg: Rgb565, mode: BlendMode, bg: Rgb565) -> Rgb565 {
     match mode {
         BlendMode::Normal => fg,
         BlendMode::Add => {

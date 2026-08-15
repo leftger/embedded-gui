@@ -5,7 +5,17 @@ pub mod task;
 pub mod text_style;
 
 pub use band::PartialBandBuffer;
+pub(crate) use compositor::apply_blend_mode;
+pub use compositor::{
+    Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
+    WindowedDrawTarget, lerp_rgb565,
+};
+pub use stroke::{AntiAliasMode, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D};
 pub use task::{DrawTask, DrawTaskQueue, DrawUnit, SoftwareDrawUnit, dispatch_draw_tasks};
+pub use text_style::{
+    CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,
+    TextOverflowPolicy, TextStyle, TextWrap, VerticalAlign,
+};
 
 use core::marker::PhantomData;
 
@@ -26,520 +36,6 @@ use crate::{
     style::{AlphaLinearGradient, AlphaRadialGradient, Border, GradientDirection, LinearGradient},
     text,
 };
-
-pub const CHAR_WIDTH: u32 = 4;
-pub const CHAR_HEIGHT: u32 = 6;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextAlign {
-    Left,
-    Center,
-    Right,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VerticalAlign {
-    Top,
-    Middle,
-    Bottom,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextWrap {
-    None,
-    Character,
-    Word,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextOverflow {
-    Clip,
-    Ellipsis,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EllipsisMode {
-    ThreeDots,
-    SingleGlyph,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextOverflowPolicy {
-    Global(TextOverflow),
-    WrapThenEllipsis { max_lines: u8 },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TextStyle {
-    pub color: Rgb565,
-    pub font: FontId,
-    pub opacity: u8,
-    pub align: TextAlign,
-    pub vertical_align: VerticalAlign,
-    pub wrap: TextWrap,
-    pub overflow: TextOverflow,
-    pub overflow_policy: TextOverflowPolicy,
-    pub kerning: bool,
-    pub max_lines: Option<u8>,
-    pub ellipsis: EllipsisMode,
-    pub line_spacing: u8,
-}
-
-impl TextStyle {
-    pub const fn new(color: Rgb565) -> Self {
-        Self {
-            color,
-            font: FontId::Tiny3x5,
-            opacity: 255,
-            align: TextAlign::Left,
-            vertical_align: VerticalAlign::Top,
-            wrap: TextWrap::None,
-            overflow: TextOverflow::Clip,
-            overflow_policy: TextOverflowPolicy::Global(TextOverflow::Clip),
-            kerning: false,
-            max_lines: None,
-            ellipsis: EllipsisMode::ThreeDots,
-            line_spacing: 1,
-        }
-    }
-
-    pub const fn centered(mut self) -> Self {
-        self.align = TextAlign::Center;
-        self.vertical_align = VerticalAlign::Middle;
-        self
-    }
-
-    pub const fn with_align(mut self, align: TextAlign) -> Self {
-        self.align = align;
-        self
-    }
-
-    pub const fn with_vertical_align(mut self, align: VerticalAlign) -> Self {
-        self.vertical_align = align;
-        self
-    }
-
-    pub const fn with_wrap(mut self, wrap: TextWrap) -> Self {
-        self.wrap = wrap;
-        self
-    }
-
-    pub const fn with_line_spacing(mut self, spacing: u8) -> Self {
-        self.line_spacing = spacing;
-        self
-    }
-
-    pub const fn with_overflow(mut self, overflow: TextOverflow) -> Self {
-        self.overflow = overflow;
-        self.overflow_policy = TextOverflowPolicy::Global(overflow);
-        self
-    }
-
-    pub const fn with_kerning(mut self, kerning: bool) -> Self {
-        self.kerning = kerning;
-        self
-    }
-
-    pub const fn with_max_lines(mut self, max_lines: Option<u8>) -> Self {
-        self.max_lines = max_lines;
-        self
-    }
-
-    pub const fn with_ellipsis_mode(mut self, ellipsis: EllipsisMode) -> Self {
-        self.ellipsis = ellipsis;
-        self
-    }
-
-    pub const fn with_overflow_policy(mut self, policy: TextOverflowPolicy) -> Self {
-        self.overflow_policy = policy;
-        self
-    }
-
-    pub const fn with_opacity(mut self, opacity: u8) -> Self {
-        self.opacity = opacity;
-        self
-    }
-
-    pub const fn with_font_id(mut self, font: FontId) -> Self {
-        self.font = font;
-        self
-    }
-
-    pub fn with_font(mut self, font: impl Into<FontId>) -> Self {
-        self.font = font.into();
-        self
-    }
-}
-
-#[cfg(feature = "embedded-graphics")]
-impl From<&embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
-    fn from(mono_style: &embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
-        let mut style = TextStyle::new(mono_style.text_color.unwrap_or(Rgb565::WHITE));
-        style.font = FontId::MonoFont(mono_style.font);
-        style
-    }
-}
-
-#[cfg(feature = "embedded-graphics")]
-impl From<embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>> for TextStyle {
-    fn from(mono_style: embedded_graphics::mono_font::MonoTextStyle<'static, Rgb565>) -> Self {
-        Self::from(&mono_style)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TextMetrics {
-    pub width: u32,
-    pub height: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderQuality {
-    Low,
-    Medium,
-    High,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AntiAliasMode {
-    None,
-    Coverage,
-    Subpixel,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StrokeStyle {
-    pub color: Rgb565,
-    pub width: u8,
-    pub antialias: bool,
-    pub antialias_mode: AntiAliasMode,
-    pub cap: StrokeCap,
-    pub join: StrokeJoin,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StrokeCap {
-    Butt,
-    Round,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StrokeJoin {
-    Miter,
-    Round,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Transform2D {
-    pub m11: f32,
-    pub m12: f32,
-    pub m21: f32,
-    pub m22: f32,
-    pub tx: f32,
-    pub ty: f32,
-}
-
-impl Transform2D {
-    pub const IDENTITY: Self = Self {
-        m11: 1.0,
-        m12: 0.0,
-        m21: 0.0,
-        m22: 1.0,
-        tx: 0.0,
-        ty: 0.0,
-    };
-
-    pub const fn translation(x: f32, y: f32) -> Self {
-        Self {
-            tx: x,
-            ty: y,
-            ..Self::IDENTITY
-        }
-    }
-
-    pub const fn scale(x: f32, y: f32) -> Self {
-        Self {
-            m11: x,
-            m22: y,
-            ..Self::IDENTITY
-        }
-    }
-
-    pub fn rotation(deg: f32) -> Self {
-        let r = deg.to_radians();
-        Self {
-            m11: r.cos(),
-            m12: -r.sin(),
-            m21: r.sin(),
-            m22: r.cos(),
-            ..Self::IDENTITY
-        }
-    }
-
-    pub fn skew(x_deg: f32, y_deg: f32) -> Self {
-        Self {
-            m12: x_deg.to_radians().tan(),
-            m21: y_deg.to_radians().tan(),
-            ..Self::IDENTITY
-        }
-    }
-
-    pub fn then(self, rhs: Self) -> Self {
-        Self {
-            m11: self.m11 * rhs.m11 + self.m12 * rhs.m21,
-            m12: self.m11 * rhs.m12 + self.m12 * rhs.m22,
-            m21: self.m21 * rhs.m11 + self.m22 * rhs.m21,
-            m22: self.m21 * rhs.m12 + self.m22 * rhs.m22,
-            tx: self.m11 * rhs.tx + self.m12 * rhs.ty + self.tx,
-            ty: self.m21 * rhs.tx + self.m22 * rhs.ty + self.ty,
-        }
-    }
-
-    #[inline(always)]
-    pub fn is_identity(self) -> bool {
-        self.m11 == 1.0
-            && self.m12 == 0.0
-            && self.m21 == 0.0
-            && self.m22 == 1.0
-            && self.tx == 0.0
-            && self.ty == 0.0
-    }
-
-    #[inline(always)]
-    pub fn apply(self, x: i32, y: i32) -> (i32, i32) {
-        if self.is_identity() {
-            (x, y)
-        } else {
-            let xf = x as f32;
-            let yf = y as f32;
-            (
-                (self.m11 * xf + self.m12 * yf + self.tx).round() as i32,
-                (self.m21 * xf + self.m22 * yf + self.ty).round() as i32,
-            )
-        }
-    }
-
-    #[inline(always)]
-    pub fn apply_f32(self, x: f32, y: f32) -> (f32, f32) {
-        if self.is_identity() {
-            (x, y)
-        } else {
-            (
-                self.m11 * x + self.m12 * y + self.tx,
-                self.m21 * x + self.m22 * y + self.ty,
-            )
-        }
-    }
-
-    pub fn inverse(self) -> Option<Self> {
-        let det = self.m11 * self.m22 - self.m12 * self.m21;
-        if det.abs() < 1e-7 {
-            return None;
-        }
-        let inv_det = 1.0 / det;
-        let m11 = self.m22 * inv_det;
-        let m12 = -self.m12 * inv_det;
-        let m21 = -self.m21 * inv_det;
-        let m22 = self.m11 * inv_det;
-        let tx = (self.m12 * self.ty - self.m22 * self.tx) * inv_det;
-        let ty = (self.m21 * self.tx - self.m11 * self.ty) * inv_det;
-        Some(Self {
-            m11,
-            m12,
-            m21,
-            m22,
-            tx,
-            ty,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BlendMode {
-    Normal,
-    Add,
-    Multiply,
-    Screen,
-}
-
-/// Capability trait for draw targets that can read back a pixel they've
-/// already written. Optional: the default opacity/blend APIs on
-/// [`RenderCtx`] only require [`DrawTarget`] and approximate translucency
-/// with ordered dithering, so they keep working on write-only displays.
-/// Implementing `PixelRead` additionally unlocks the `*_true_alpha` methods,
-/// which composite against the destination's actual current contents
-/// instead of dithering.
-///
-/// Re-exported from [`embedded_draw_target`] so that a buffer implementing it
-/// once is accepted by every crate in the ecosystem that needs readback,
-/// rather than by this one alone.
-pub use embedded_draw_target::PixelRead;
-
-/// Capability trait for hardware display controllers (e.g. ST7789, ILI9341, SSD1306)
-/// supporting direct column/row address window setting (`set_address_window`).
-/// Allows rendering dirty regions by transmitting SPI/DMA transfers exclusively to
-/// the target sub-window instead of the full screen.
-///
-/// Re-exported from [`embedded_draw_target`].
-pub use embedded_draw_target::WindowedDrawTarget;
-
-/// Pixel-plotting policy for a [`RenderCtx`]. Selected by the ctx's `C` type
-/// parameter so the *same* drawing calls composite differently depending on
-/// the target's capabilities — with no runtime branch and no specialization.
-///
-/// - [`Dither`] (the default) approximates translucency with ordered dithering
-///   and works on any write-only [`DrawTarget`].
-/// - [`Blend`] performs true per-pixel alpha compositing and requires a
-///   readback-capable target ([`PixelRead`]), e.g. a
-///   [`Framebuffer`](crate::Framebuffer).
-///
-/// `plot` receives screen-space coords already transformed and clipped, the
-/// layer-combined `opacity`, and the active layer blend mode + backdrop.
-pub trait Compositor<D: DrawTarget<Color = Rgb565>> {
-    fn plot(
-        target: &mut D,
-        x: i32,
-        y: i32,
-        color: Rgb565,
-        opacity: u8,
-        blend: BlendMode,
-        backdrop: Rgb565,
-    ) -> Result<(), D::Error>;
-}
-
-/// Ordered-dither compositor (default). No readback required.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Dither;
-
-/// True alpha-blending compositor. Requires a [`PixelRead`] target.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Blend;
-
-impl<D: DrawTarget<Color = Rgb565>> Compositor<D> for Dither {
-    fn plot(
-        target: &mut D,
-        x: i32,
-        y: i32,
-        color: Rgb565,
-        opacity: u8,
-        blend: BlendMode,
-        backdrop: Rgb565,
-    ) -> Result<(), D::Error> {
-        if !should_draw_at_opacity(x, y, opacity) {
-            return Ok(());
-        }
-        let color = apply_blend_mode(color, blend, backdrop);
-        target.draw_iter([Pixel(Point::new(x, y), color)])
-    }
-}
-
-impl<D: DrawTarget<Color = Rgb565> + PixelRead> Compositor<D> for Blend {
-    fn plot(
-        target: &mut D,
-        x: i32,
-        y: i32,
-        color: Rgb565,
-        opacity: u8,
-        blend: BlendMode,
-        backdrop: Rgb565,
-    ) -> Result<(), D::Error> {
-        if opacity == 0 {
-            return Ok(());
-        }
-        let bg = target.get_pixel(Point::new(x, y));
-        let blended = lerp_rgb565(bg, color, opacity);
-        let blended = apply_blend_mode(blended, blend, backdrop);
-        target.draw_iter([Pixel(Point::new(x, y), blended)])
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ColorFormat {
-    Rgb565,
-    Rgb888,
-    Argb8888,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RenderBackendCaps {
-    pub color_format: ColorFormat,
-    pub supports_layers: bool,
-    pub supports_subpixel: bool,
-}
-
-impl RenderBackendCaps {
-    pub const fn software_rgb565() -> Self {
-        Self {
-            color_format: ColorFormat::Rgb565,
-            supports_layers: true,
-            supports_subpixel: false,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LayerState {
-    pub opacity: u8,
-    pub blend: BlendMode,
-    pub backdrop: Rgb565,
-}
-
-impl LayerState {
-    pub const fn normal() -> Self {
-        Self {
-            opacity: 255,
-            blend: BlendMode::Normal,
-            backdrop: Rgb565::BLACK,
-        }
-    }
-}
-
-impl StrokeStyle {
-    pub const fn new(color: Rgb565) -> Self {
-        Self {
-            color,
-            width: 1,
-            antialias: false,
-            antialias_mode: AntiAliasMode::None,
-            cap: StrokeCap::Butt,
-            join: StrokeJoin::Miter,
-        }
-    }
-
-    pub const fn with_width(mut self, width: u8) -> Self {
-        self.width = if width == 0 { 1 } else { width };
-        self
-    }
-
-    pub const fn with_antialias(mut self, antialias: bool) -> Self {
-        self.antialias = antialias;
-        if antialias {
-            if let AntiAliasMode::None = self.antialias_mode {
-                self.antialias_mode = AntiAliasMode::Coverage;
-            }
-        }
-        if !antialias {
-            self.antialias_mode = AntiAliasMode::None;
-        }
-        self
-    }
-
-    pub const fn with_antialias_mode(mut self, mode: AntiAliasMode) -> Self {
-        self.antialias_mode = mode;
-        self.antialias = !matches!(mode, AntiAliasMode::None);
-        self
-    }
-
-    pub const fn with_cap(mut self, cap: StrokeCap) -> Self {
-        self.cap = cap;
-        self
-    }
-
-    pub const fn with_join(mut self, join: StrokeJoin) -> Self {
-        self.join = join;
-        self
-    }
-}
 
 pub struct RenderCtx<'a, D, C = Dither>
 where
@@ -643,8 +139,9 @@ where
         let y1 = draw.bottom();
         let alpha = 256 - (blur_degree as i32);
 
-        let mut row_buf = [Rgb565::BLACK; 1024];
-        let w_buf = ((x1 - x0) as usize).min(1024);
+        const MAX_DIM: usize = 512;
+        let mut row_buf = [Rgb565::BLACK; MAX_DIM];
+        let w_buf = ((x1 - x0) as usize).min(MAX_DIM);
 
         // Horizontal forward & reverse passes (row by row)
         for y in y0..y1 {
@@ -700,15 +197,17 @@ where
                 );
             }
 
-            for (i, x) in (x0..x1).take(r_len).enumerate() {
-                self.target
-                    .draw_iter([Pixel(Point::new(x, y), row_buf[i])])?;
-            }
+            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                Point::new(x0, y),
+                embedded_graphics_core::geometry::Size::new(r_len as u32, 1),
+            );
+            self.target
+                .fill_contiguous(&eg_rect, row_buf[..r_len].iter().copied())?;
         }
 
         // Vertical forward & reverse passes (column by column)
-        let mut col_buf = [Rgb565::BLACK; 1024];
-        let h_buf = ((y1 - y0) as usize).min(1024);
+        let mut col_buf = [Rgb565::BLACK; MAX_DIM];
+        let h_buf = ((y1 - y0) as usize).min(MAX_DIM);
 
         for x in x0..x1 {
             let c_len = ((y1 - y0) as usize).min(h_buf);
@@ -1106,29 +605,66 @@ where
             return Ok(());
         }
         let radius = radius.min((rect.w.min(rect.h) / 2) as u8);
-        let denom = match gradient.direction {
-            GradientDirection::Horizontal => rect.w.saturating_sub(1).max(1),
-            GradientDirection::Vertical => rect.h.saturating_sub(1).max(1),
-        };
+        let r = radius as i32;
+        let layer = self.current_layer();
+        let combined_opacity = ((opacity as u16 * layer.opacity as u16) / 255) as u8;
+        let fast_solid = combined_opacity == 255
+            && self.current_transform().is_identity()
+            && layer.blend == BlendMode::Normal;
 
-        for y in draw.y..draw.bottom() {
-            for x in draw.x..draw.right() {
-                if !in_rounded_rect(x, y, rect, radius) {
-                    continue;
+        match gradient.direction {
+            GradientDirection::Vertical => {
+                let denom = rect.h.saturating_sub(1).max(1);
+                for y in draw.y..draw.bottom() {
+                    let numer = ((y - rect.y).max(0) as u32).min(denom);
+                    let mut t = ((numer * 255) / denom) as u8;
+                    t = match self.quality {
+                        RenderQuality::Low => 128,
+                        RenderQuality::Medium => (t / 64) * 64,
+                        RenderQuality::High => t,
+                    };
+                    let color = lerp_rgb565(gradient.start, gradient.end, t);
+
+                    let is_middle_row = r == 0 || (y >= rect.y + r && y < rect.bottom() - r);
+                    if is_middle_row {
+                        if fast_solid {
+                            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                                Point::new(draw.x, y),
+                                embedded_graphics_core::geometry::Size::new(draw.w, 1),
+                            );
+                            self.target.fill_solid(&eg_rect, color)?;
+                        } else {
+                            for x in draw.x..draw.right() {
+                                self.pixel(x, y, color, opacity)?;
+                            }
+                        }
+                    } else {
+                        for x in draw.x..draw.right() {
+                            if in_rounded_rect(x, y, rect, radius) {
+                                self.pixel(x, y, color, opacity)?;
+                            }
+                        }
+                    }
                 }
-                let numer = match gradient.direction {
-                    GradientDirection::Horizontal => (x - rect.x).max(0) as u32,
-                    GradientDirection::Vertical => (y - rect.y).max(0) as u32,
+            }
+            GradientDirection::Horizontal => {
+                let denom = rect.w.saturating_sub(1).max(1);
+                for y in draw.y..draw.bottom() {
+                    let is_middle_row = r == 0 || (y >= rect.y + r && y < rect.bottom() - r);
+                    for x in draw.x..draw.right() {
+                        if is_middle_row || in_rounded_rect(x, y, rect, radius) {
+                            let numer = ((x - rect.x).max(0) as u32).min(denom);
+                            let mut t = ((numer * 255) / denom) as u8;
+                            t = match self.quality {
+                                RenderQuality::Low => 128,
+                                RenderQuality::Medium => (t / 64) * 64,
+                                RenderQuality::High => t,
+                            };
+                            let color = lerp_rgb565(gradient.start, gradient.end, t);
+                            self.pixel(x, y, color, opacity)?;
+                        }
+                    }
                 }
-                .min(denom);
-                let mut t = ((numer * 255) / denom) as u8;
-                t = match self.quality {
-                    RenderQuality::Low => 128,
-                    RenderQuality::Medium => (t / 64) * 64,
-                    RenderQuality::High => t,
-                };
-                let color = lerp_rgb565(gradient.start, gradient.end, t);
-                self.pixel(x, y, color, opacity)?;
             }
         }
         Ok(())
@@ -1808,24 +1344,66 @@ where
             return Ok(());
         }
         let src_w = image.width as usize;
+        let layer = self.current_layer();
+        let is_1to1 = fit == ImageFit::Center || (bounds.w == src_rect.w && bounds.h == src_rect.h);
+        let fast_blit = is_1to1
+            && layer.opacity == 255
+            && self.current_transform().is_identity()
+            && layer.blend == BlendMode::Normal;
+
+        if fast_blit {
+            let vis = self.visible_rect(bounds);
+            if vis.is_empty() {
+                return Ok(());
+            }
+            let src_y_base = src_rect.y.max(0) as usize;
+            let src_x_base = src_rect.x.max(0) as usize;
+            let off_x = (vis.x - bounds.x).max(0) as usize;
+            let off_y = (vis.y - bounds.y).max(0) as usize;
+            let w = vis.w as usize;
+
+            for (row_idx, dy) in (vis.y..vis.bottom()).enumerate() {
+                let sy = src_y_base + off_y + row_idx;
+                let sx = src_x_base + off_x;
+                let start_idx = sy * src_w + sx;
+                if let Some(row_slice) = image.pixels.get(start_idx..start_idx + w) {
+                    let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                        Point::new(vis.x, dy),
+                        embedded_graphics_core::geometry::Size::new(vis.w, 1),
+                    );
+                    self.target.fill_contiguous(
+                        &eg_rect,
+                        row_slice.iter().map(|&raw| {
+                            Rgb565::new(
+                                ((raw >> 11) & 0x1F) as u8,
+                                ((raw >> 5) & 0x3F) as u8,
+                                (raw & 0x1F) as u8,
+                            )
+                        }),
+                    )?;
+                }
+            }
+            return Ok(());
+        }
+
+        // Scaled / transformed fallback with fixed-point stepping
+        let x_step_fp = ((src_rect.w as u64) << 16) / bounds.w.max(1) as u64;
+        let y_step_fp = ((src_rect.h as u64) << 16) / bounds.h.max(1) as u64;
+        let src_y_base = src_rect.y.max(0) as usize;
+        let src_x_base = src_rect.x.max(0) as usize;
+
         for y in 0..bounds.h {
             let src_y = match fit {
-                ImageFit::Stretch => {
-                    src_rect.y.max(0) as usize
-                        + ((y as u64 * src_rect.h as u64) / bounds.h as u64) as usize
-                }
-                ImageFit::Center => src_rect.y.max(0) as usize + y as usize,
+                ImageFit::Stretch => src_y_base + (((y as u64 * y_step_fp) >> 16) as usize),
+                ImageFit::Center => src_y_base + y as usize,
             };
             for x in 0..bounds.w {
                 let src_x = match fit {
-                    ImageFit::Stretch => {
-                        src_rect.x.max(0) as usize
-                            + ((x as u64 * src_rect.w as u64) / bounds.w as u64) as usize
-                    }
-                    ImageFit::Center => src_rect.x.max(0) as usize + x as usize,
+                    ImageFit::Stretch => src_x_base + (((x as u64 * x_step_fp) >> 16) as usize),
+                    ImageFit::Center => src_x_base + x as usize,
                 };
                 let idx = src_y.saturating_mul(src_w).saturating_add(src_x);
-                if let Some(raw) = image.pixels.get(idx) {
+                if let Some(&raw) = image.pixels.get(idx) {
                     let color = Rgb565::new(
                         ((raw >> 11) & 0x1F) as u8,
                         ((raw >> 5) & 0x3F) as u8,
@@ -2704,33 +2282,6 @@ where
     }
 }
 
-fn should_draw_at_opacity(x: i32, y: i32, opacity: u8) -> bool {
-    if opacity == 255 {
-        return true;
-    }
-    if opacity == 0 {
-        return false;
-    }
-    let bayer4 = [
-        [0u8, 8, 2, 10],
-        [12, 4, 14, 6],
-        [3, 11, 1, 9],
-        [15, 7, 13, 5],
-    ];
-    let threshold = ((opacity as u16 * 16) / 255) as u8;
-    let sample = bayer4[(y as usize) & 3][(x as usize) & 3];
-    sample < threshold.max(1)
-}
-
-fn lerp_rgb565(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
-    let t = t as u16;
-    let inv = 255u16.saturating_sub(t);
-    let r = ((a.r() as u16 * inv) + (b.r() as u16 * t)) / 255;
-    let g = ((a.g() as u16 * inv) + (b.g() as u16 * t)) / 255;
-    let bb = ((a.b() as u16 * inv) + (b.b() as u16 * t)) / 255;
-    Rgb565::new(r as u8, g as u8, bb as u8)
-}
-
 #[inline]
 fn normalize_angle_deg(mut deg: f32) -> f32 {
     while deg < 0.0 {
@@ -2770,27 +2321,6 @@ fn cardinal_unit(deg: f32) -> Option<(f32, f32)> {
 #[inline]
 fn cross(ux: f32, uy: f32, vx: f32, vy: f32) -> f32 {
     ux * vy - uy * vx
-}
-
-fn apply_blend_mode(src: Rgb565, mode: BlendMode, backdrop: Rgb565) -> Rgb565 {
-    match mode {
-        BlendMode::Normal => src,
-        BlendMode::Add => Rgb565::new(
-            src.r().saturating_add(backdrop.r()),
-            src.g().saturating_add(backdrop.g()),
-            src.b().saturating_add(backdrop.b()),
-        ),
-        BlendMode::Multiply => Rgb565::new(
-            ((src.r() as u16 * backdrop.r() as u16) / 31) as u8,
-            ((src.g() as u16 * backdrop.g() as u16) / 63) as u8,
-            ((src.b() as u16 * backdrop.b() as u16) / 31) as u8,
-        ),
-        BlendMode::Screen => Rgb565::new(
-            (31 - ((31 - src.r() as u16) * (31 - backdrop.r() as u16) / 31)) as u8,
-            (63 - ((63 - src.g() as u16) * (63 - backdrop.g() as u16) / 63)) as u8,
-            (31 - ((31 - src.b() as u16) * (31 - backdrop.b() as u16) / 31)) as u8,
-        ),
-    }
 }
 
 fn in_rounded_rect(x: i32, y: i32, rect: Rect, radius: u8) -> bool {

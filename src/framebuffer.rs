@@ -14,6 +14,7 @@ use embedded_graphics_core::{
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Point, Size},
     pixelcolor::{Gray8, GrayColor, Rgb565, RgbColor},
+    primitives::Rectangle,
 };
 
 use crate::geometry::Rect;
@@ -331,6 +332,62 @@ impl<const N: usize> DrawTarget for Framebuffer<N> {
         }
         Ok(())
     }
+
+    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let x0 = intersect.top_left.x as usize;
+        let y0 = intersect.top_left.y as usize;
+        let w = intersect.size.width as usize;
+        let h = intersect.size.height as usize;
+        let stride = self.width as usize;
+
+        for row in 0..h {
+            let start = (y0 + row) * stride + x0;
+            if start + w <= N {
+                self.pixels[start..start + w].fill(color);
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let mut colors = colors.into_iter();
+        let stride = self.width as usize;
+        let x_end = area.top_left.x + area.size.width as i32;
+        let y_end = area.top_left.y + area.size.height as i32;
+
+        for y in area.top_left.y..y_end {
+            for x in area.top_left.x..x_end {
+                if let Some(c) = colors.next() {
+                    if x >= 0 && y >= 0 && (x as u32) < self.width && (y as u32) < self.height {
+                        let idx = (y as usize) * stride + (x as usize);
+                        if idx < N {
+                            self.pixels[idx] = c;
+                        }
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        let len = self.len();
+        self.pixels[..len].fill(color);
+        Ok(())
+    }
 }
 
 impl<const N: usize> PixelRead for Framebuffer<N> {
@@ -578,6 +635,62 @@ impl<const N: usize> DrawTarget for FramebufferRgba8888<N> {
         }
         Ok(())
     }
+
+    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let x0 = intersect.top_left.x as usize;
+        let y0 = intersect.top_left.y as usize;
+        let w = intersect.size.width as usize;
+        let h = intersect.size.height as usize;
+        let stride = self.width as usize;
+
+        for row in 0..h {
+            let start = (y0 + row) * stride + x0;
+            if start + w <= N {
+                self.pixels[start..start + w].fill(color);
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let mut colors = colors.into_iter();
+        let stride = self.width as usize;
+        let x_end = area.top_left.x + area.size.width as i32;
+        let y_end = area.top_left.y + area.size.height as i32;
+
+        for y in area.top_left.y..y_end {
+            for x in area.top_left.x..x_end {
+                if let Some(c) = colors.next() {
+                    if x >= 0 && y >= 0 && (x as u32) < self.width && (y as u32) < self.height {
+                        let idx = (y as usize) * stride + (x as usize);
+                        if idx < N {
+                            self.pixels[idx] = c;
+                        }
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        let len = self.len();
+        self.pixels[..len].fill(color);
+        Ok(())
+    }
 }
 
 impl<const N: usize> PixelRead for FramebufferRgba8888<N> {
@@ -742,6 +855,62 @@ impl<const N: usize> DrawTarget for FramebufferGray8<N> {
                 self.pixels[idx] = color;
             }
         }
+        Ok(())
+    }
+
+    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let x0 = intersect.top_left.x as usize;
+        let y0 = intersect.top_left.y as usize;
+        let w = intersect.size.width as usize;
+        let h = intersect.size.height as usize;
+        let stride = self.width as usize;
+
+        for row in 0..h {
+            let start = (y0 + row) * stride + x0;
+            if start + w <= N {
+                self.pixels[start..start + w].fill(color);
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let mut colors = colors.into_iter();
+        let stride = self.width as usize;
+        let x_end = area.top_left.x + area.size.width as i32;
+        let y_end = area.top_left.y + area.size.height as i32;
+
+        for y in area.top_left.y..y_end {
+            for x in area.top_left.x..x_end {
+                if let Some(c) = colors.next() {
+                    if x >= 0 && y >= 0 && (x as u32) < self.width && (y as u32) < self.height {
+                        let idx = (y as usize) * stride + (x as usize);
+                        if idx < N {
+                            self.pixels[idx] = c;
+                        }
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        let len = self.len();
+        self.pixels[..len].fill(color);
         Ok(())
     }
 }

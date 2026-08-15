@@ -114,11 +114,7 @@ impl<const N: usize> PartialBandBuffer<N> {
 
             // Stream active pixels
             let count = (band_rect.w * band_rect.h) as usize;
-            target.draw_iter((0..count).map(|i| {
-                let px = (i % band_rect.w as usize) as i32 + band_rect.x;
-                let py = (i / band_rect.w as usize) as i32 + band_rect.y;
-                Pixel(Point::new(px, py), self.buffer[i])
-            }))?;
+            target.fill_contiguous(&eg_rect, self.buffer[..count].iter().copied())?;
 
             y += band_h as i32;
         }
@@ -153,6 +149,68 @@ impl<const N: usize> DrawTarget for PartialBandBuffer<N> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn fill_solid(
+        &mut self,
+        area: &embedded_graphics_core::primitives::Rectangle,
+        color: Self::Color,
+    ) -> Result<(), Self::Error> {
+        let intersect = area.intersection(&embedded_graphics_core::primitives::Rectangle::new(
+            Point::zero(),
+            self.size(),
+        ));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let x0 = intersect.top_left.x as usize;
+        let y0 = intersect.top_left.y as usize;
+        let w = intersect.size.width as usize;
+        let h = intersect.size.height as usize;
+        let stride = self.width;
+
+        for row in 0..h {
+            let start = (y0 + row) * stride + x0;
+            if start + w <= N {
+                self.buffer[start..start + w].fill(color);
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_contiguous<I>(
+        &mut self,
+        area: &embedded_graphics_core::primitives::Rectangle,
+        colors: I,
+    ) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let mut colors = colors.into_iter();
+        let stride = self.width;
+        let x_end = area.top_left.x + area.size.width as i32;
+        let y_end = area.top_left.y + area.size.height as i32;
+
+        for y in area.top_left.y..y_end {
+            for x in area.top_left.x..x_end {
+                if let Some(c) = colors.next() {
+                    if x >= 0 && y >= 0 && (x as usize) < self.width && (y as usize) < self.height {
+                        let idx = (y as usize) * stride + (x as usize);
+                        if idx < N {
+                            self.buffer[idx] = c;
+                        }
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        self.clear_color(color);
         Ok(())
     }
 }
@@ -208,6 +266,45 @@ impl<'a, const N: usize> DrawTarget for BandTargetWrapper<'a, N> {
             }
         }
         Ok(())
+    }
+
+    fn fill_solid(
+        &mut self,
+        area: &embedded_graphics_core::primitives::Rectangle,
+        color: Self::Color,
+    ) -> Result<(), Self::Error> {
+        let ox = self.band_origin.x;
+        let oy = self.band_origin.y;
+        let local_rect = embedded_graphics_core::primitives::Rectangle::new(
+            Point::new(area.top_left.x - ox, area.top_left.y - oy),
+            area.size,
+        );
+        self.parent.fill_solid(&local_rect, color)
+    }
+
+    fn fill_contiguous<I>(
+        &mut self,
+        area: &embedded_graphics_core::primitives::Rectangle,
+        colors: I,
+    ) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let ox = self.band_origin.x;
+        let oy = self.band_origin.y;
+        let local_rect = embedded_graphics_core::primitives::Rectangle::new(
+            Point::new(area.top_left.x - ox, area.top_left.y - oy),
+            area.size,
+        );
+        self.parent.fill_contiguous(&local_rect, colors)
+    }
+}
+
+impl<'a, const N: usize> PixelRead for BandTargetWrapper<'a, N> {
+    fn get_pixel(&self, point: Point) -> Rgb565 {
+        let lx = point.x - self.band_origin.x;
+        let ly = point.y - self.band_origin.y;
+        self.parent.get_pixel(Point::new(lx, ly))
     }
 }
 

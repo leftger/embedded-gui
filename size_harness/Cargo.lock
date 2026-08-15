@@ -97,6 +97,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-draw-target"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "748264a4284c70371da5e8cc0fdcf4b5ef5cedff75ac132eee228f133633fd7b"
+dependencies = [
+ "critical-section",
+ "embedded-graphics-core",
+ "embedded-graphics-framebuf",
+]
+
+[[package]]
 name = "embedded-dsp"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -140,9 +151,10 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.1.5"
+version = "0.2.1"
 dependencies = [
  "critical-section",
+ "embedded-draw-target",
  "embedded-dsp",
  "embedded-graphics-core",
  "embedded-graphics-framebuf",
