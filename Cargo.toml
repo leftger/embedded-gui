@@ -52,7 +52,7 @@ embassy = ["embassy-time", "dep:embassy-sync"]
 
 [dependencies]
 embedded-graphics-core = "0.4.1"
-embedded-draw-target = { version = "0.1.1", path = "../embedded-draw-target" }
+embedded-draw-target = "0.1.1"
 embedded-graphics-framebuf = "0.3"
 critical-section = "1.1"
 heapless = "0.9"
@@ -64,7 +64,7 @@ embedded-graphics = { version = "0.8", optional = true }
 embedded-text = { version = "0.7.3", optional = true }
 embedded-layout = { version = "0.4.2", optional = true }
 embedded-dsp = { version = "0.2.0", optional = true, default-features = false }
-embedded-3dgfx = { version = "0.5.5", path = "../embedded-3dgfx", optional = true }
+embedded-3dgfx = { version = "0.5.5", optional = true }
 nalgebra = { version = "0.35", default-features = false, features = ["libm"], optional = true }
 
 [dev-dependencies]
@@ -72,7 +72,7 @@ critical-section = { version = "1.1", features = ["std"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 embassy-time = { version = "0.5", features = ["std"] }
 embassy-sync = { version = "0.8" }
-embedded-3dgfx = { version = "0.5.5", path = "../embedded-3dgfx" }
+embedded-3dgfx = "0.5.5"
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
 embedded-graphics-simulator = "0.8"
