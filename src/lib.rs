@@ -85,7 +85,7 @@ pub use embedded_graphics_framebuf::{
     FrameBuf,
     backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
 };
-pub use font::FontId;
+pub use font::{BitmapFont, Font, FontId, PackedFont};
 pub use framebuffer::{Framebuffer, FramebufferGray8, FramebufferRgba8888, Rgba8888};
 pub use geometry::{DirtyTracker, EdgeInsets, Rect};
 #[cfg(all(feature = "std", feature = "image-decode"))]
@@ -151,21 +151,21 @@ pub mod prelude {
         ActiveScreenTransition, Align, AlphaLinearGradient, AlphaRadialGradient, AnimatedProperty,
         Animation, AnimationConflictPolicy, AnimationError, AnimationGroup, AnimationHandlers,
         AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
-        AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, Blend, BlendMode,
-        Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, ChartMode,
-        CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
+        AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, BitmapFont, Blend,
+        BlendMode, Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition,
+        ChartMode, CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
         ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
         Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
         EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
-        FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
+        Font, FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
         GradientDirection, GuiContext, GuiError, HapticPattern, HapticSequencer, ImageAtlas,
         ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction,
         KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem,
         Length, Line, LinearGradient, LinearLayout, ListState, MenuContract, MotionTokens,
-        NotificationLevel, PathAnimator, PathPoint, PeekRevealSpec, PixelRead, PointerButton,
-        PointerState, PresentRegion, PressTiming, Rect, ReelFrame, ReelPlayer, RenderBackendCaps,
-        RenderCtx, RenderQuality, RepeatMode, Rgba8888, Screen, ScreenCommand, ScreenId,
-        ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
+        NotificationLevel, PackedFont, PathAnimator, PathPoint, PeekRevealSpec, PixelRead,
+        PointerButton, PointerState, PresentRegion, PressTiming, Rect, ReelFrame, ReelPlayer,
+        RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, Rgba8888, Screen, ScreenCommand,
+        ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
         ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
         ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SequencePlayer,
         SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState,

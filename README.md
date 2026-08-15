@@ -90,13 +90,25 @@ gui.render(&mut display)?;
 
 ---
 
+## Documentation & Guides
+
+Detailed architecture specifications and integration guides are available in [`docs/`](./docs/):
+
+- 🔤 **[Custom Font Abstraction & Interop Guide](./docs/custom-fonts-abstraction.md)**: Drop-in custom bitmap fonts (`BitmapFont`), `Font` trait abstraction, and `embedded-graphics` `MonoFont` interop.
+- 🎬 **[Animation Presets Guide](./docs/animation-presets.md)**: Easing curves, spring physics, and timeline keyframing specifications.
+- 🔀 **[Transition Presets Guide](./docs/transition-presets.md)**: Screen stack slide, fade, portal, and flip-card transition rules.
+- 🎹 **[TextArea & Keybindings Specification](./docs/textarea-input-keybindings.md)**: Input policies, key bindings, and text editing behavior.
+- 🎯 **[Interaction Behavior Contract](./docs/interaction-behavior-contract.md)**: Focus management, event bubble paths, and pointer semantics.
+
+---
+
 ## Examples Directory
 
 The repository includes showcase examples categorized under `examples/`:
 
 | Directory | Purpose & Highlights |
 |-----------|----------------------|
-| **`examples/basics/`** | Core layout rules, dashboard layout, form flows, interaction semantics, raw key input, and keyboard navigation (`dashboard_app.rs`, `complex_layout_showcase.rs`, `form_flow_showcase.rs`). |
+| **`examples/basics/`** | Core layout rules, custom font drop-in interop, dashboard layout, form flows, interaction semantics, raw key input, and keyboard navigation (`custom_font_showcase.rs`, `dashboard_app.rs`, `complex_layout_showcase.rs`). |
 | **`examples/widgets/`** | Comprehensive widget showcases, gauges, sweeping arcs, alpha blending, and visual quality benchmarks (`widgets_showcase.rs`, `visual_quality_showcase.rs`, `sweeping_arc_widget_showcase.rs`). |
 | **`examples/motion/`** | Motion framework, Pebble-style spring physics, dirty-region animation, timeline keyframing, and cinematic peek/glance cards (`animation_motion_showcase.rs`, `cinematic_peek_glance_carddeck_showcase.rs`). |
 | **`examples/integrations/`** | Third-party interop, Embassy async frames, DMA swapchain simulation, and 3D graphics overlays (`embassy_gui_frame.rs`, `completion_swapchain_sim.rs`, `embedded_3dgfx_overlay.rs`). |

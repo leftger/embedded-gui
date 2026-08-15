@@ -93,3 +93,9 @@ required-features = ["std"]
 name = "embassy_gui_frame"
 path = "examples/integrations/embassy_gui_frame.rs"
 required-features = ["embassy", "std"]
+
+[[example]]
+name = "custom_font_showcase"
+path = "examples/basics/custom_font_showcase.rs"
+required-features = ["std"]
+

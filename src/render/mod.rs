@@ -2038,6 +2038,51 @@ where
                     last_point = Some((draw_x, draw_y));
                 }
             }
+            FontId::Bitmap(bitmap_font) => {
+                use crate::font::GlyphOp;
+                let mut draw_err = Ok(());
+                bitmap_font.draw_glyph_to(ch, |op| {
+                    if draw_err.is_ok() {
+                        match op {
+                            GlyphOp::Pixel(dx, dy) => {
+                                if let Err(e) = self.pixel(x + dx, y + dy, color, opacity) {
+                                    draw_err = Err(e);
+                                }
+                            }
+                            GlyphOp::Span(dx, dy, len) => {
+                                if fast_spans {
+                                    if let Err(e) =
+                                        self.fill_rect(Rect::new(x + dx, y + dy, len, 1), color)
+                                    {
+                                        draw_err = Err(e);
+                                    }
+                                } else {
+                                    for col in 0..len {
+                                        if let Err(e) =
+                                            self.pixel(x + dx + col as i32, y + dy, color, opacity)
+                                        {
+                                            draw_err = Err(e);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                draw_err?;
+            }
+            FontId::Dynamic(dyn_font) => {
+                let mut draw_err = Ok(());
+                dyn_font.draw_glyph(ch, &mut |dx, dy| {
+                    if draw_err.is_ok() {
+                        if let Err(e) = self.pixel(x + dx, y + dy, color, opacity) {
+                            draw_err = Err(e);
+                        }
+                    }
+                });
+                draw_err?;
+            }
             #[cfg(feature = "embedded-graphics")]
             FontId::MonoFont(font) => {
                 use embedded_graphics::Drawable;
