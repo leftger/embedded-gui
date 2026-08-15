@@ -317,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-3dgfx"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "critical-section",
  "embedded-draw-target",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-draw-target"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "critical-section",
  "embedded-graphics-core",
@@ -404,7 +404,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "criterion",
  "critical-section",
