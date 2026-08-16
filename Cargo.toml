@@ -147,3 +147,14 @@ name = "rich_controls_grid_showcase"
 path = "examples/basics/rich_controls_grid_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "smart_home_dashboard"
+path = "examples/basics/smart_home_dashboard.rs"
+required-features = ["std"]
+
+[[example]]
+name = "cinematic_transitions_showcase"
+path = "examples/basics/cinematic_transitions_showcase.rs"
+required-features = ["std"]
+
+

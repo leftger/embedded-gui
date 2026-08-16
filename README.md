@@ -50,26 +50,25 @@ gui.render(&mut display)?;
 
 ## Visual Showcase
 
-### Grand Showcase: Rich Controls, 2D Grid Layout & Vector Bézier Curves
+### 1. Grand Showcase: Rich Controls, 2D Grid Layout & Vector Bézier Curves
+2D CSS-style `GridLayout` with fractional (`fr`) and fixed (`px`) tracks, radial tachometer scale, linear graduated scale, interactive table grid with cell selection navigation, precision decimal spinbox, and stroked multi-stop quadratic/cubic Bézier wave paths.
 ![Grand showcase of rich controls, 2D GridLayout, tables, graduated scales, spinboxes, and Bézier curves](docs/screenshots/rich_controls_grid_showcase.gif)
 
-### Accelerated Graphics Pipeline & Frosted Glass Blur
+### 2. Accelerated Graphics Pipeline & Frosted Glass Blur
+Zero-allocation 2D pipeline rendering box IIR blurs (frosted glass overlays), alpha linear/radial gradients, 1:1 row slice image blits, 2x texture scaling, and solid scanline fills.
 ![Frosted glass and graphics pipeline showcase](docs/screenshots/frosted_glass_pipeline.gif)
 
-### Tactile Cinematic Motion & Transitions
-![Animation and transition showcase](docs/screenshots/motion.gif)
+### 3. Smart Home & Industrial IoT Telemetry Dashboard
+Multi-card ambient glassmorphism dashboard with HVAC radial temperature gauges, smooth warm/cool color temperature sliders, live power sparkline curves with area fills, and interactive scene preset buttons.
+![Smart home and industrial IoT telemetry dashboard](docs/screenshots/smart_home_dashboard.gif)
 
-### Flip-card Screen Stack Transitions
-![Flipcard selection transition](docs/screenshots/flipcard.gif)
+### 4. Smartwatch & Wearable UI Subsystems
+Real-time status bar (animated charging battery, Bluetooth beacon, DND, clock), 12h/24h time pickers with focus glow halos, numeric range rollers with units, step goal progress meters, and actionable alert dialogs.
+![Wearable status bar, pickers, and actionable dialogs](docs/screenshots/wearable_suite_showcase.gif)
 
-### Launcher Glance Tiles & Card Story Deck
-![Cinematic peek glance carddeck showcase](docs/screenshots/cinematic.gif)
-
-### Dashboard UI Composition
-![Dashboard UI screenshot](docs/screenshots/dashboard.png)
-
-### Mixed Typography & Font Models
-![Mixed font showcase screenshot](docs/screenshots/fonts.png)
+### 5. Fluid Cinematic Card Transitions & Navigation
+Spatial easing curves (`moook`), 3D card story deck transitions, daily fitness progress rings, sleep stage bar charts, and ambient glance widgets.
+![Cinematic card transitions and motion showcase](docs/screenshots/cinematic_transitions.gif)
 
 ---
 
