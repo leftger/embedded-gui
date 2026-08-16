@@ -580,6 +580,233 @@ impl LinearLayout {
     }
 }
 
+/// Sizing track definition for 2D Grid layouts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GridTrack {
+    /// Fixed pixel size.
+    Px(u32),
+    /// Fractional unit (proportional weight among remaining space).
+    Fr(u8),
+    /// Sized automatically / evenly.
+    Auto,
+}
+
+impl GridTrack {
+    pub const fn px(pixels: u32) -> Self {
+        Self::Px(pixels)
+    }
+
+    pub const fn fr(weight: u8) -> Self {
+        Self::Fr(weight)
+    }
+
+    pub const fn auto() -> Self {
+        Self::Auto
+    }
+}
+
+/// Placement and span of an item within a 2D Grid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GridPlacement {
+    pub col: usize,
+    pub row: usize,
+    pub col_span: usize,
+    pub row_span: usize,
+}
+
+impl GridPlacement {
+    pub const fn cell(col: usize, row: usize) -> Self {
+        Self {
+            col,
+            row,
+            col_span: 1,
+            row_span: 1,
+        }
+    }
+
+    pub const fn span(col: usize, row: usize, col_span: usize, row_span: usize) -> Self {
+        Self {
+            col,
+            row,
+            col_span: if col_span == 0 { 1 } else { col_span },
+            row_span: if row_span == 0 { 1 } else { row_span },
+        }
+    }
+}
+
+/// 2D CSS-style Grid Layout engine (fixed const capacity, `#![no_std]` zero-allocation).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GridLayout<const COLS: usize, const ROWS: usize> {
+    pub col_tracks: [GridTrack; COLS],
+    pub row_tracks: [GridTrack; ROWS],
+    pub col_gap: u16,
+    pub row_gap: u16,
+    pub padding: EdgeInsets,
+}
+
+impl<const COLS: usize, const ROWS: usize> GridLayout<COLS, ROWS> {
+    pub const fn new(col_tracks: [GridTrack; COLS], row_tracks: [GridTrack; ROWS]) -> Self {
+        Self {
+            col_tracks,
+            row_tracks,
+            col_gap: 2,
+            row_gap: 2,
+            padding: EdgeInsets::all(0),
+        }
+    }
+
+    pub const fn uniform(col_gap: u16, row_gap: u16) -> Self {
+        Self {
+            col_tracks: [GridTrack::Auto; COLS],
+            row_tracks: [GridTrack::Auto; ROWS],
+            col_gap,
+            row_gap,
+            padding: EdgeInsets::all(0),
+        }
+    }
+
+    pub const fn with_gap(mut self, gap: u16) -> Self {
+        self.col_gap = gap;
+        self.row_gap = gap;
+        self
+    }
+
+    pub const fn with_col_gap(mut self, gap: u16) -> Self {
+        self.col_gap = gap;
+        self
+    }
+
+    pub const fn with_row_gap(mut self, gap: u16) -> Self {
+        self.row_gap = gap;
+        self
+    }
+
+    pub const fn with_padding(mut self, padding: EdgeInsets) -> Self {
+        self.padding = padding;
+        self
+    }
+
+    /// Resolves track coordinates (positions and sizes) for a set of grid tracks.
+    fn resolve_tracks(
+        available: u32,
+        start_pos: i32,
+        tracks: &[GridTrack],
+        gap: u16,
+        out_pos: &mut [i32],
+        out_sizes: &mut [u32],
+    ) {
+        let n = tracks.len();
+        if n == 0 {
+            return;
+        }
+
+        let total_gaps = ((n.saturating_sub(1)) as u32).saturating_mul(gap as u32);
+        let space = available.saturating_sub(total_gaps);
+
+        let mut fixed_sum: u32 = 0;
+        let mut total_fr: u32 = 0;
+        let mut auto_count: u32 = 0;
+
+        for track in tracks {
+            match *track {
+                GridTrack::Px(px) => fixed_sum = fixed_sum.saturating_add(px),
+                GridTrack::Fr(fr) => total_fr = total_fr.saturating_add(fr as u32),
+                GridTrack::Auto => auto_count = auto_count.saturating_add(1),
+            }
+        }
+
+        let remaining = space.saturating_sub(fixed_sum);
+
+        // Auto tracks are treated as 1fr if fr tracks are also present or evenly divided
+        if auto_count > 0 && total_fr == 0 {
+            total_fr = auto_count;
+        } else if auto_count > 0 {
+            total_fr = total_fr.saturating_add(auto_count);
+        }
+
+        // Calculate sizes
+        for (i, track) in tracks.iter().enumerate() {
+            let size = match *track {
+                GridTrack::Px(px) => px,
+                GridTrack::Fr(fr) => (remaining * fr as u32).checked_div(total_fr).unwrap_or(0),
+                GridTrack::Auto => remaining.checked_div(total_fr).unwrap_or(0),
+            };
+            out_sizes[i] = size;
+        }
+
+        // Compute starting positions
+        let mut cur_pos = start_pos;
+        for i in 0..n {
+            out_pos[i] = cur_pos;
+            cur_pos += out_sizes[i] as i32 + gap as i32;
+        }
+    }
+
+    /// Arranges items into calculated grid cell bounds according to their `GridPlacement`.
+    pub fn arrange_cells(
+        &self,
+        container: Rect,
+        placements: &[GridPlacement],
+        out: &mut [Rect],
+    ) -> usize {
+        let inner = container.inset(self.padding);
+        let mut col_pos = [0i32; COLS];
+        let mut col_sizes = [0u32; COLS];
+        let mut row_pos = [0i32; ROWS];
+        let mut row_sizes = [0u32; ROWS];
+
+        Self::resolve_tracks(
+            inner.w,
+            inner.x,
+            &self.col_tracks,
+            self.col_gap,
+            &mut col_pos,
+            &mut col_sizes,
+        );
+
+        Self::resolve_tracks(
+            inner.h,
+            inner.y,
+            &self.row_tracks,
+            self.row_gap,
+            &mut row_pos,
+            &mut row_sizes,
+        );
+
+        let count = placements.len().min(out.len());
+        for i in 0..count {
+            let p = placements[i];
+            let col = p.col.min(COLS.saturating_sub(1));
+            let row = p.row.min(ROWS.saturating_sub(1));
+            let col_end = (col + p.col_span).min(COLS);
+            let row_end = (row + p.row_span).min(ROWS);
+
+            let x = col_pos[col];
+            let y = row_pos[row];
+
+            let mut w: u32 = 0;
+            for (c, &size) in col_sizes.iter().enumerate().take(col_end).skip(col) {
+                w += size;
+                if c + 1 < col_end {
+                    w += self.col_gap as u32;
+                }
+            }
+
+            let mut h: u32 = 0;
+            for (r, &size) in row_sizes.iter().enumerate().take(row_end).skip(row) {
+                h += size;
+                if r + 1 < row_end {
+                    h += self.row_gap as u32;
+                }
+            }
+
+            out[i] = Rect::new(x, y, w, h);
+        }
+
+        count
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,9 +850,7 @@ mod tests {
         assert_eq!(out[0].x, 10);
         assert_eq!(out[0].w, 20);
 
-        // Item 2: w=30, x=10 + 20 + 5 (gap) + fill_w + 5 (gap)...
-        // Main space for fill: 80 - 20 (item 0) - 30 (item 2) - 10 (2 gaps) = 20
-        // So Item 1: x = 10 + 20 + 5 = 35, w = 20
+        // Item 1: x = 10 + 20 + 5 = 35, w = 20
         assert_eq!(out[1].x, 35);
         assert_eq!(out[1].w, 20);
 
@@ -641,5 +866,42 @@ mod tests {
             .with_justify(JustifyContent::SpaceBetween);
 
         assert_eq!(layout.justify, JustifyContent::SpaceBetween);
+    }
+
+    #[test]
+    fn test_grid_layout_resolution_and_spans() {
+        let grid = GridLayout::<3, 2>::new(
+            [GridTrack::Px(50), GridTrack::Fr(1), GridTrack::Fr(2)],
+            [GridTrack::Px(30), GridTrack::Fr(1)],
+        )
+        .with_col_gap(10)
+        .with_row_gap(5)
+        .with_padding(EdgeInsets::all(10));
+
+        let container = Rect::new(0, 0, 320, 240);
+        let placements = [
+            GridPlacement::cell(0, 0),       // Top-left fixed 50x30
+            GridPlacement::span(1, 0, 2, 1), // Top row spanning cols 1 & 2
+            GridPlacement::span(0, 1, 3, 1), // Bottom row spanning all 3 cols
+        ];
+        let mut out = [Rect::empty(); 3];
+
+        let count = grid.arrange_cells(container, &placements, &mut out);
+        assert_eq!(count, 3);
+
+        // Item 0 (0,0):
+        assert_eq!(out[0].x, 10);
+        assert_eq!(out[0].y, 10);
+        assert_eq!(out[0].w, 50);
+        assert_eq!(out[0].h, 30);
+
+        // Item 1 (1,0, span col 2):
+        assert_eq!(out[1].x, 70); // 10 + 50 + 10 = 70
+        assert_eq!(out[1].y, 10);
+        assert_eq!(out[1].h, 30);
+
+        // Item 2 (0,1, span col 3):
+        assert_eq!(out[2].x, 10);
+        assert_eq!(out[2].y, 45); // 10 + 30 + 5 = 45
     }
 }

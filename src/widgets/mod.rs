@@ -27,7 +27,10 @@ pub mod gauges;
 pub mod notification;
 pub mod picker;
 pub mod rich_text_node;
+pub mod scale;
+pub mod spinbox;
 pub mod status_bar;
+pub mod table;
 pub mod timeline;
 pub mod wearable;
 
@@ -45,7 +48,10 @@ pub use notification::{
 };
 pub use picker::{NumberPickerWidget, PickerError, TimeFormat, TimePickerField, TimePickerWidget};
 pub use rich_text_node::{RichTextError, RichTextNodeWidget, TextSpan};
+pub use scale::{ScaleMode, ScaleWidget};
+pub use spinbox::SpinboxWidget;
 pub use status_bar::{BatteryState, StatusBarError, StatusBarMode, StatusBarWidget};
+pub use table::TableWidget;
 pub use timeline::{PeekBannerWidget, TimelineNodeState, TimelineNodeWidget};
 pub use wearable::{
     ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
@@ -234,6 +240,31 @@ pub enum WidgetKind<'a> {
         separators: bool,
         cell_padding: u8,
         align: TextAlign,
+    },
+    #[cfg(feature = "rich-widgets")]
+    Scale {
+        mode: ScaleMode,
+        value: f32,
+        min: f32,
+        max: f32,
+        major_ticks: u8,
+        minor_ticks: u8,
+        start_angle: i16,
+        end_angle: i16,
+        show_labels: bool,
+        show_needle: bool,
+        tick_color: Rgb565,
+        needle_color: Rgb565,
+    },
+    #[cfg(feature = "rich-widgets")]
+    Spinbox {
+        value: i32,
+        min: i32,
+        max: i32,
+        step: i32,
+        digits: u8,
+        decimals: u8,
+        focused_digit: u8,
     },
     #[cfg(feature = "rich-widgets")]
     TextArea {
@@ -782,6 +813,58 @@ impl<'a> WidgetNode<'a> {
                 self.style,
                 state,
             ),
+            #[cfg(feature = "rich-widgets")]
+            WidgetKind::Scale {
+                mode,
+                value,
+                min,
+                max,
+                major_ticks,
+                minor_ticks,
+                start_angle,
+                end_angle,
+                show_labels,
+                show_needle,
+                tick_color,
+                needle_color,
+            } => {
+                let scale = ScaleWidget {
+                    mode,
+                    value,
+                    min,
+                    max,
+                    major_ticks,
+                    minor_ticks,
+                    start_angle,
+                    end_angle,
+                    show_labels,
+                    show_needle,
+                    tick_color,
+                    needle_color,
+                };
+                scale.render(ctx, rect, self.style, state)
+            }
+            #[cfg(feature = "rich-widgets")]
+            WidgetKind::Spinbox {
+                value,
+                min,
+                max,
+                step,
+                digits,
+                decimals,
+                focused_digit,
+            } => {
+                let spinbox = SpinboxWidget {
+                    value,
+                    min,
+                    max,
+                    step,
+                    digits,
+                    decimals,
+                    focused_digit,
+                };
+                spinbox.render(ctx, rect, self.style, state)
+            }
             #[cfg(feature = "rich-widgets")]
             WidgetKind::TextArea {
                 text_buf,

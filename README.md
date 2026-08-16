@@ -7,7 +7,7 @@
 
 `embedded-gui` is a lightweight, deterministic, zero-allocation (`no_std`) GUI & HUD framework for microcontrollers and [`embedded-graphics`](https://crates.io/crates/embedded-graphics) displays.
 
-Heavily inspired by modern wearable and smartwatch UI frameworks—its animation model, interaction contracts, and cinematic motion primitives draw from fluid, tactile embedded design patterns. **LVGL** serves as a secondary influence for widget composition, layout rules, and state-variant styling.
+Heavily inspired by modern wearable and smartwatch UI frameworks—its animation model, interaction contracts, and cinematic motion primitives draw from fluid, tactile embedded design patterns for widget composition, layout rules, and state-variant styling.
 
 ---
 

@@ -10,7 +10,10 @@ pub use compositor::{
     Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
     WindowedDrawTarget, lerp_rgb565,
 };
-pub use stroke::{AntiAliasMode, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D};
+pub use stroke::{
+    AntiAliasMode, PathVerb, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D,
+    VectorPath,
+};
 pub use task::{DrawTask, DrawTaskQueue, DrawUnit, SoftwareDrawUnit, dispatch_draw_tasks};
 pub use text_style::{
     CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,
@@ -1075,6 +1078,111 @@ where
             if e2 <= dx {
                 err += dx;
                 y += sy;
+            }
+        }
+        Ok(())
+    }
+
+    /// Draws a quadratic Bézier curve from `p0` to `p2` with control point `p1`.
+    pub fn draw_bezier_quad(
+        &mut self,
+        p0: Point,
+        p1: Point,
+        p2: Point,
+        style: StrokeStyle,
+    ) -> Result<(), D::Error> {
+        let dx = (p2.x - p0.x).abs() + (p1.x - p0.x).abs();
+        let dy = (p2.y - p0.y).abs() + (p1.y - p0.y).abs();
+        let steps = ((dx + dy).max(4) / 4).clamp(8, 64) as usize;
+
+        let mut prev = p0;
+        for i in 1..=steps {
+            let t = i as f32 / steps as f32;
+            let inv = 1.0 - t;
+            let x = (inv * inv * p0.x as f32 + 2.0 * inv * t * p1.x as f32 + t * t * p2.x as f32)
+                .round() as i32;
+            let y = (inv * inv * p0.y as f32 + 2.0 * inv * t * p1.y as f32 + t * t * p2.y as f32)
+                .round() as i32;
+            let cur = Point::new(x, y);
+            self.draw_line_styled(prev.x, prev.y, cur.x, cur.y, style)?;
+            prev = cur;
+        }
+        Ok(())
+    }
+
+    /// Draws a cubic Bézier curve from `p0` to `p3` with control points `p1` and `p2`.
+    pub fn draw_bezier_cubic(
+        &mut self,
+        p0: Point,
+        p1: Point,
+        p2: Point,
+        p3: Point,
+        style: StrokeStyle,
+    ) -> Result<(), D::Error> {
+        let dx = (p3.x - p0.x).abs() + (p1.x - p0.x).abs() + (p2.x - p1.x).abs();
+        let dy = (p3.y - p0.y).abs() + (p1.y - p0.y).abs() + (p2.y - p1.y).abs();
+        let steps = ((dx + dy).max(4) / 4).clamp(12, 96) as usize;
+
+        let mut prev = p0;
+        for i in 1..=steps {
+            let t = i as f32 / steps as f32;
+            let inv = 1.0 - t;
+            let t2 = t * t;
+            let inv2 = inv * inv;
+            let x = (inv2 * inv * p0.x as f32
+                + 3.0 * inv2 * t * p1.x as f32
+                + 3.0 * inv * t2 * p2.x as f32
+                + t2 * t * p3.x as f32)
+                .round() as i32;
+            let y = (inv2 * inv * p0.y as f32
+                + 3.0 * inv2 * t * p1.y as f32
+                + 3.0 * inv * t2 * p2.y as f32
+                + t2 * t * p3.y as f32)
+                .round() as i32;
+            let cur = Point::new(x, y);
+            self.draw_line_styled(prev.x, prev.y, cur.x, cur.y, style)?;
+            prev = cur;
+        }
+        Ok(())
+    }
+
+    /// Draws a vector path containing line, quadratic, and cubic segments.
+    pub fn draw_vector_path<const N: usize>(
+        &mut self,
+        path: &VectorPath<N>,
+        style: StrokeStyle,
+    ) -> Result<(), D::Error> {
+        let mut cur = Point::zero();
+        let mut start = Point::zero();
+
+        for verb in path.verbs() {
+            match *verb {
+                PathVerb::MoveTo(pt) => {
+                    cur = pt;
+                    start = pt;
+                }
+                PathVerb::LineTo(pt) => {
+                    self.draw_line_styled(cur.x, cur.y, pt.x, pt.y, style)?;
+                    cur = pt;
+                }
+                PathVerb::QuadTo { control, to } => {
+                    self.draw_bezier_quad(cur, control, to, style)?;
+                    cur = to;
+                }
+                PathVerb::CubicTo {
+                    control1,
+                    control2,
+                    to,
+                } => {
+                    self.draw_bezier_cubic(cur, control1, control2, to, style)?;
+                    cur = to;
+                }
+                PathVerb::Close => {
+                    if cur != start {
+                        self.draw_line_styled(cur.x, cur.y, start.x, start.y, style)?;
+                        cur = start;
+                    }
+                }
             }
         }
         Ok(())

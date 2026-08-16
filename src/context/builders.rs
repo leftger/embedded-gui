@@ -5,9 +5,9 @@ use crate::{
     render::TextAlign,
     style::{Style, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, Widget, WidgetId},
-    widgets::{ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind},
+    widgets::{ChartMode, KeyboardLayout, NotificationLevel, ScaleMode, SurfaceState, WidgetKind},
 };
-use embedded_graphics_core::pixelcolor::Rgb565;
+use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
 
 use super::*;
 
@@ -933,6 +933,96 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
             _ => Err(GuiError::NotFound),
         }
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn add_scale<S>(
+        &mut self,
+        rect: Rect,
+        mode: ScaleMode,
+        min: f32,
+        max: f32,
+        value: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Scale {
+                mode,
+                value: value.clamp(min, max),
+                min,
+                max,
+                major_ticks: 5,
+                minor_ticks: 3,
+                start_angle: 135,
+                end_angle: 45,
+                show_labels: true,
+                show_needle: true,
+                tick_color: Rgb565::CSS_GRAY,
+                needle_color: Rgb565::CSS_RED,
+            },
+            style,
+        )
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn add_radial_scale<S>(
+        &mut self,
+        rect: Rect,
+        min: f32,
+        max: f32,
+        value: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_scale(rect, ScaleMode::Radial, min, max, value, style)
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn add_linear_scale<S>(
+        &mut self,
+        rect: Rect,
+        min: f32,
+        max: f32,
+        value: f32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_scale(rect, ScaleMode::LinearHorizontal, min, max, value, style)
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn add_spinbox<S>(
+        &mut self,
+        rect: Rect,
+        min: i32,
+        max: i32,
+        value: i32,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Spinbox {
+                value: value.clamp(min, max),
+                min,
+                max,
+                step: 1,
+                digits: 4,
+                decimals: 0,
+                focused_digit: 0,
+            },
+            style,
+        )
     }
 
     #[cfg(feature = "rich-widgets")]

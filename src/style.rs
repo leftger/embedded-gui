@@ -617,7 +617,7 @@ pub enum VisualState {
     Disabled,
 }
 
-/// Targetable sub-component part of a widget (analogous to LVGL widget parts).
+/// Targetable sub-component part of a widget.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetPart {
     Main,

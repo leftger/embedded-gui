@@ -210,3 +210,102 @@ impl Transform2D {
         })
     }
 }
+
+/// Path command for 2D vector paths.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PathVerb {
+    MoveTo(embedded_graphics_core::geometry::Point),
+    LineTo(embedded_graphics_core::geometry::Point),
+    QuadTo {
+        control: embedded_graphics_core::geometry::Point,
+        to: embedded_graphics_core::geometry::Point,
+    },
+    CubicTo {
+        control1: embedded_graphics_core::geometry::Point,
+        control2: embedded_graphics_core::geometry::Point,
+        to: embedded_graphics_core::geometry::Point,
+    },
+    Close,
+}
+
+/// Fixed-capacity vector path (`#![no_std]` zero-allocation).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VectorPath<const N: usize> {
+    pub verbs: [PathVerb; N],
+    pub len: usize,
+}
+
+impl<const N: usize> Default for VectorPath<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> VectorPath<N> {
+    pub const fn new() -> Self {
+        Self {
+            verbs: [PathVerb::Close; N],
+            len: 0,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn push(&mut self, verb: PathVerb) -> bool {
+        if self.len < N {
+            self.verbs[self.len] = verb;
+            self.len += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn move_to(&mut self, pt: embedded_graphics_core::geometry::Point) -> &mut Self {
+        self.push(PathVerb::MoveTo(pt));
+        self
+    }
+
+    pub fn line_to(&mut self, pt: embedded_graphics_core::geometry::Point) -> &mut Self {
+        self.push(PathVerb::LineTo(pt));
+        self
+    }
+
+    pub fn quad_to(
+        &mut self,
+        control: embedded_graphics_core::geometry::Point,
+        to: embedded_graphics_core::geometry::Point,
+    ) -> &mut Self {
+        self.push(PathVerb::QuadTo { control, to });
+        self
+    }
+
+    pub fn cubic_to(
+        &mut self,
+        control1: embedded_graphics_core::geometry::Point,
+        control2: embedded_graphics_core::geometry::Point,
+        to: embedded_graphics_core::geometry::Point,
+    ) -> &mut Self {
+        self.push(PathVerb::CubicTo {
+            control1,
+            control2,
+            to,
+        });
+        self
+    }
+
+    pub fn close(&mut self) -> &mut Self {
+        self.push(PathVerb::Close);
+        self
+    }
+
+    pub fn verbs(&self) -> &[PathVerb] {
+        &self.verbs[..self.len]
+    }
+}

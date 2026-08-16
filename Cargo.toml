@@ -142,3 +142,8 @@ name = "graphics_pipeline_showcase"
 path = "examples/basics/graphics_pipeline_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "rich_controls_grid_showcase"
+path = "examples/basics/rich_controls_grid_showcase.rs"
+required-features = ["std"]
+

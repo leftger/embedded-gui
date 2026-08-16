@@ -150,7 +150,7 @@ impl<'a, const CAPACITY: usize> DrawTaskQueue<'a, CAPACITY> {
     }
 }
 
-/// A pluggable hardware or software rendering unit (analogous to LVGL's `lv_draw_unit_t`).
+/// A pluggable hardware or software rendering unit.
 pub trait DrawUnit<D: DrawTarget<Color = Rgb565>> {
     /// Returns whether this draw unit can accelerate or handle the given task.
     fn can_handle(&self, task: &DrawTask) -> bool;

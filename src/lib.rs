@@ -107,16 +107,19 @@ pub use input::{
     EventPhaseMask, InputEvent, PointerButton, PointerState, UiEvent, UiEventFilter,
     WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
 };
-pub use layout::{Align, Axis, Constraint, JustifyContent, LayoutItem, Length, LinearLayout};
+pub use layout::{
+    Align, Axis, Constraint, GridLayout, GridPlacement, GridTrack, JustifyContent, LayoutItem,
+    Length, LinearLayout,
+};
 pub use palette::{DisplayMode, DisplayPalette, InkRole, RoleColors};
 pub use pdc::{PdcCommand, PdcCommandType, PdcImage, PdcPrecisePoint};
 pub use present::PresentRegion;
 pub use render::{
     AntiAliasMode, Blend, BlendMode, CHAR_HEIGHT, CHAR_WIDTH, ColorFormat, Compositor, Dither,
-    DrawTask, DrawTaskQueue, DrawUnit, EllipsisMode, LayerState, PartialBandBuffer, PixelRead,
-    RenderBackendCaps, RenderCtx, RenderQuality, SoftwareDrawUnit, StrokeCap, StrokeJoin,
-    StrokeStyle, TextAlign, TextMetrics, TextOverflow, TextOverflowPolicy, TextStyle, TextWrap,
-    Transform2D, VerticalAlign, dispatch_draw_tasks,
+    DrawTask, DrawTaskQueue, DrawUnit, EllipsisMode, LayerState, PartialBandBuffer, PathVerb,
+    PixelRead, RenderBackendCaps, RenderCtx, RenderQuality, SoftwareDrawUnit, StrokeCap,
+    StrokeJoin, StrokeStyle, TextAlign, TextMetrics, TextOverflow, TextOverflowPolicy, TextStyle,
+    TextWrap, Transform2D, VectorPath, VerticalAlign, dispatch_draw_tasks,
 };
 pub use round::{UnobstructedArea, circle_chord_width, round_screen_line_bounds};
 pub use screen::{
@@ -157,9 +160,9 @@ pub use widgets::{
     BatteryState, ConfirmationDialogWidget, ContentIndicatorDirection, ContentIndicatorWidget,
     CrumbsIndicatorWidget, DialogAction, DialogError, DialogType, NotificationAction,
     NotificationError, NotificationPriority, NotificationSheetWidget, NumberPickerWidget,
-    PeekBannerWidget, PickerError, RichTextError, RichTextNodeWidget, SelectionWidget,
-    StatusBarError, StatusBarMode, StatusBarWidget, TextSpan, TimeFormat, TimePickerField,
-    TimePickerWidget, TimelineNodeState, TimelineNodeWidget,
+    PeekBannerWidget, PickerError, RichTextError, RichTextNodeWidget, ScaleMode, ScaleWidget,
+    SelectionWidget, SpinboxWidget, StatusBarError, StatusBarMode, StatusBarWidget, TableWidget,
+    TextSpan, TimeFormat, TimePickerField, TimePickerWidget, TimelineNodeState, TimelineNodeWidget,
 };
 pub use widgets::{
     ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,
@@ -177,29 +180,30 @@ pub mod prelude {
         Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
         EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
         Font, FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
-        GradientDirection, GuiContext, GuiError, HapticPattern, HapticSequencer, ImageAtlas,
-        ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction,
-        KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem,
-        Length, Line, LinearGradient, LinearLayout, ListState, MenuContract, MotionTokens,
-        NotificationLevel, PackedFont, PathAnimator, PathPoint, PeekRevealSpec, PixelRead,
-        PointerButton, PointerState, PresentRegion, PressTiming, Rect, ReelFrame, ReelPlayer,
-        RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, Rgba8888, Screen, ScreenCommand,
-        ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
+        GradientDirection, GridLayout, GridPlacement, GridTrack, GuiContext, GuiError,
+        HapticPattern, HapticSequencer, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef,
+        InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
+        KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout,
+        ListState, MenuContract, MotionTokens, NotificationLevel, PackedFont, PathAnimator,
+        PathPoint, PathVerb, PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion,
+        PressTiming, Rect, ReelFrame, ReelPlayer, RenderBackendCaps, RenderCtx, RenderQuality,
+        RepeatMode, Rgba8888, ScaleMode, ScaleWidget, Screen, ScreenCommand, ScreenId,
+        ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
         ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
         ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SequencePlayer,
         SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, SliderState,
-        Span, SpringAnimator, SpriteSheet, StateStyle, StatefulWidget, StrokeCap, StrokeJoin,
-        StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TabsState, Text,
-        TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
-        TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError, TimelineMotionPreset,
-        TimelineStep, Timer, Transform2D, TransitionPreset, Tween, UiEvent, UiEventFilter,
-        VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
-        WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
-        WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
-        WidgetNode, WidgetPropertyKeyframe, WidgetStyle, animate_glance_focus, animate_peek_reveal,
-        apply_carddeck_visibility, apply_easing, lerp_style, presets, render_transition_pair,
-        setup_card_story, setup_launcher_glance, setup_launcher_glance_with_tokens,
-        setup_peek_timeline, setup_peek_timeline_with_tokens,
+        Span, SpinboxWidget, SpringAnimator, SpriteSheet, StateStyle, StatefulWidget, StrokeCap,
+        StrokeJoin, StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TableWidget,
+        TabsState, Text, TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy,
+        TextShaper, TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError,
+        TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset, Tween, UiEvent,
+        UiEventFilter, VectorPath, VerticalAlign, VisualState, WidgetAnimationCallbacks,
+        WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter,
+        WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy,
+        WidgetKeyframeState, WidgetKind, WidgetNode, WidgetPropertyKeyframe, WidgetStyle,
+        animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility, apply_easing,
+        lerp_style, presets, render_transition_pair, setup_card_story, setup_launcher_glance,
+        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
     };
 
     #[cfg(all(feature = "std", feature = "image-decode"))]
