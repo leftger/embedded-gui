@@ -48,6 +48,15 @@ impl Default for GridPlacementDef {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum PathVerbDef {
+    MoveTo(i32, i32),
+    LineTo(i32, i32),
+    QuadTo(i32, i32, i32, i32),
+    CubicTo(i32, i32, i32, i32, i32, i32),
+    Close,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum WidgetDef {
     Label {
         id: Option<String>,
@@ -65,11 +74,26 @@ pub enum WidgetDef {
         label: String,
         checked: bool,
     },
+    Checkbox {
+        id: Option<String>,
+        label: String,
+        checked: bool,
+    },
     Slider {
         id: Option<String>,
         min: i32,
         max: i32,
         value: i32,
+    },
+    Dropdown {
+        id: Option<String>,
+        options: Vec<String>,
+        selected: usize,
+    },
+    Roller {
+        id: Option<String>,
+        options: Vec<String>,
+        selected: usize,
     },
     Scale {
         id: Option<String>,
@@ -97,6 +121,63 @@ pub enum WidgetDef {
         id: Option<String>,
         value: f32,
     },
+    SweepingArc {
+        id: Option<String>,
+        start_angle: i16,
+        end_angle: i16,
+    },
+    BusyWheel {
+        id: Option<String>,
+        active: bool,
+    },
+    Plotter {
+        id: Option<String>,
+        mode: String,
+    },
+    StatusBar {
+        id: Option<String>,
+        time: String,
+    },
+    TimePicker {
+        id: Option<String>,
+        hour: u8,
+        minute: u8,
+        is_12h: bool,
+        is_pm: bool,
+    },
+    NumberPicker {
+        id: Option<String>,
+        min: i32,
+        max: i32,
+        value: i32,
+        unit: String,
+    },
+    Dialog {
+        id: Option<String>,
+        title: String,
+        message: String,
+        dialog_type: String,
+    },
+    ContentIndicator {
+        id: Option<String>,
+        count: u8,
+        active: u8,
+    },
+    CrumbsIndicator {
+        id: Option<String>,
+        count: u8,
+        active: u8,
+    },
+    Panel {
+        id: Option<String>,
+        style: Option<String>,
+    },
+    Spacer,
+    VectorPath {
+        id: Option<String>,
+        stroke_width: u8,
+        verbs: Vec<PathVerbDef>,
+    },
 }
 
 impl WidgetDef {
@@ -105,11 +186,26 @@ impl WidgetDef {
             WidgetDef::Label { id, .. }
             | WidgetDef::Button { id, .. }
             | WidgetDef::Toggle { id, .. }
+            | WidgetDef::Checkbox { id, .. }
             | WidgetDef::Slider { id, .. }
+            | WidgetDef::Dropdown { id, .. }
+            | WidgetDef::Roller { id, .. }
             | WidgetDef::Scale { id, .. }
             | WidgetDef::Spinbox { id, .. }
             | WidgetDef::Table { id, .. }
-            | WidgetDef::ProgressBar { id, .. } => id.as_deref(),
+            | WidgetDef::ProgressBar { id, .. }
+            | WidgetDef::SweepingArc { id, .. }
+            | WidgetDef::BusyWheel { id, .. }
+            | WidgetDef::Plotter { id, .. }
+            | WidgetDef::StatusBar { id, .. }
+            | WidgetDef::TimePicker { id, .. }
+            | WidgetDef::NumberPicker { id, .. }
+            | WidgetDef::Dialog { id, .. }
+            | WidgetDef::ContentIndicator { id, .. }
+            | WidgetDef::CrumbsIndicator { id, .. }
+            | WidgetDef::Panel { id, .. }
+            | WidgetDef::VectorPath { id, .. } => id.as_deref(),
+            WidgetDef::Spacer => None,
         }
     }
 }
@@ -204,6 +300,46 @@ fn get_bool_prop(node: &KdlNode, name: &str) -> Option<bool> {
     })
 }
 
+fn parse_path_verbs(node: &KdlNode) -> Vec<PathVerbDef> {
+    let mut verbs = Vec::new();
+    if let Some(children) = node.children() {
+        for child in children.nodes() {
+            let name = child.name().value();
+            let args: Vec<i32> = child
+                .entries()
+                .iter()
+                .filter_map(|e| match e.value() {
+                    KdlValue::Base10(i) => Some(*i as i32),
+                    KdlValue::Base10Float(f) => Some(*f as i32),
+                    _ => None,
+                })
+                .collect();
+
+            match name {
+                "move_to" | "move" if args.len() >= 2 => {
+                    verbs.push(PathVerbDef::MoveTo(args[0], args[1]));
+                }
+                "line_to" | "line" if args.len() >= 2 => {
+                    verbs.push(PathVerbDef::LineTo(args[0], args[1]));
+                }
+                "quad_to" | "quad" if args.len() >= 4 => {
+                    verbs.push(PathVerbDef::QuadTo(args[0], args[1], args[2], args[3]));
+                }
+                "cubic_to" | "cubic" if args.len() >= 6 => {
+                    verbs.push(PathVerbDef::CubicTo(
+                        args[0], args[1], args[2], args[3], args[4], args[5],
+                    ));
+                }
+                "close" => {
+                    verbs.push(PathVerbDef::Close);
+                }
+                _ => {}
+            }
+        }
+    }
+    verbs
+}
+
 /// Parses a single widget KDL node.
 pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), CodegenError> {
     let tag = node.name().value();
@@ -258,6 +394,14 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
             let checked = get_bool_prop(node, "checked").unwrap_or(false);
             WidgetDef::Toggle { id, label, checked }
         }
+        "checkbox" => {
+            let label = get_string_prop(node, "label")
+                .or_else(|| get_string_prop(node, "text"))
+                .unwrap_or("")
+                .to_string();
+            let checked = get_bool_prop(node, "checked").unwrap_or(false);
+            WidgetDef::Checkbox { id, label, checked }
+        }
         "slider" => {
             let min = get_i64_prop(node, "min").unwrap_or(0) as i32;
             let max = get_i64_prop(node, "max").unwrap_or(100) as i32;
@@ -267,6 +411,42 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
                 min,
                 max,
                 value,
+            }
+        }
+        "dropdown" => {
+            let mut options = Vec::new();
+            if let Some(children) = node.children() {
+                for child in children.nodes() {
+                    if child.name().value() == "option" {
+                        if let Some(opt_text) = child.entries().first().and_then(entry_to_str) {
+                            options.push(opt_text.to_string());
+                        }
+                    }
+                }
+            }
+            let selected = get_i64_prop(node, "selected").unwrap_or(0).max(0) as usize;
+            WidgetDef::Dropdown {
+                id,
+                options,
+                selected,
+            }
+        }
+        "roller" => {
+            let mut options = Vec::new();
+            if let Some(children) = node.children() {
+                for child in children.nodes() {
+                    if child.name().value() == "option" {
+                        if let Some(opt_text) = child.entries().first().and_then(entry_to_str) {
+                            options.push(opt_text.to_string());
+                        }
+                    }
+                }
+            }
+            let selected = get_i64_prop(node, "selected").unwrap_or(0).max(0) as usize;
+            WidgetDef::Roller {
+                id,
+                options,
+                selected,
             }
         }
         "scale" | "gauge" => {
@@ -306,6 +486,87 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
         "progress" | "progress_bar" => {
             let value = get_f64_prop(node, "value").unwrap_or(0.0) as f32;
             WidgetDef::ProgressBar { id, value }
+        }
+        "sweeping_arc" | "arc" => {
+            let start_angle = get_i64_prop(node, "start_angle").unwrap_or(0) as i16;
+            let end_angle = get_i64_prop(node, "end_angle").unwrap_or(270) as i16;
+            WidgetDef::SweepingArc {
+                id,
+                start_angle,
+                end_angle,
+            }
+        }
+        "busy_wheel" | "spinner" => {
+            let active = get_bool_prop(node, "active").unwrap_or(true);
+            WidgetDef::BusyWheel { id, active }
+        }
+        "plotter" | "chart" => {
+            let mode = get_string_prop(node, "mode").unwrap_or("line").to_string();
+            WidgetDef::Plotter { id, mode }
+        }
+        "status_bar" => {
+            let time = get_string_prop(node, "time").unwrap_or("12:00").to_string();
+            WidgetDef::StatusBar { id, time }
+        }
+        "time_picker" => {
+            let hour = get_i64_prop(node, "hour").unwrap_or(12).clamp(0, 23) as u8;
+            let minute = get_i64_prop(node, "minute").unwrap_or(0).clamp(0, 59) as u8;
+            let is_12h = get_bool_prop(node, "is_12h").unwrap_or(true);
+            let is_pm = get_bool_prop(node, "is_pm").unwrap_or(false);
+            WidgetDef::TimePicker {
+                id,
+                hour,
+                minute,
+                is_12h,
+                is_pm,
+            }
+        }
+        "number_picker" => {
+            let min = get_i64_prop(node, "min").unwrap_or(0) as i32;
+            let max = get_i64_prop(node, "max").unwrap_or(100) as i32;
+            let value = get_i64_prop(node, "value").unwrap_or(min as i64) as i32;
+            let unit = get_string_prop(node, "unit").unwrap_or("").to_string();
+            WidgetDef::NumberPicker {
+                id,
+                min,
+                max,
+                value,
+                unit,
+            }
+        }
+        "dialog" => {
+            let title = get_string_prop(node, "title")
+                .unwrap_or("Alert")
+                .to_string();
+            let message = get_string_prop(node, "message").unwrap_or("").to_string();
+            let dialog_type = get_string_prop(node, "type").unwrap_or("info").to_string();
+            WidgetDef::Dialog {
+                id,
+                title,
+                message,
+                dialog_type,
+            }
+        }
+        "content_indicator" => {
+            let count = get_i64_prop(node, "count").unwrap_or(3).max(1) as u8;
+            let active = get_i64_prop(node, "active").unwrap_or(0) as u8;
+            WidgetDef::ContentIndicator { id, count, active }
+        }
+        "crumbs" | "crumbs_indicator" => {
+            let count = get_i64_prop(node, "count").unwrap_or(3).max(1) as u8;
+            let active = get_i64_prop(node, "active").unwrap_or(0) as u8;
+            WidgetDef::CrumbsIndicator { id, count, active }
+        }
+        "panel" | "card" => WidgetDef::Panel { id, style },
+        "spacer" => WidgetDef::Spacer,
+        "vector_path" | "path" => {
+            let stroke_width = get_i64_prop(node, "stroke_width").unwrap_or(2).max(1) as u8;
+            let verbs = parse_path_verbs(node);
+            WidgetDef::VectorPath {
+                id,
+                stroke_width,
+                verbs,
+            }
         }
         "table" => {
             let mut headers = None;
@@ -593,6 +854,13 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     var_name, idx, label, checked
                 );
             }
+            WidgetDef::Checkbox { label, checked, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_checkbox(cells[{}], \"{}\", {}, Style::default())?;",
+                    var_name, idx, label, checked
+                );
+            }
             WidgetDef::Slider {
                 min, max, value, ..
             } => {
@@ -600,6 +868,34 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     &mut out,
                     "        let {} = gui.add_slider(cells[{}], {}, {}, {}, Style::default())?;",
                     var_name, idx, min, max, value
+                );
+            }
+            WidgetDef::Dropdown {
+                options, selected, ..
+            } => {
+                let opts_joined = options
+                    .iter()
+                    .map(|s| format!("\"{}\"", s))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_dropdown(cells[{}], &[{}], {}, Style::panel())?;",
+                    var_name, idx, opts_joined, selected
+                );
+            }
+            WidgetDef::Roller {
+                options, selected, ..
+            } => {
+                let opts_joined = options
+                    .iter()
+                    .map(|s| format!("\"{}\"", s))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_roller(cells[{}], &[{}], {}, Style::panel())?;",
+                    var_name, idx, opts_joined, selected
                 );
             }
             WidgetDef::Scale {
@@ -623,27 +919,179 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                 );
             }
             WidgetDef::Spinbox {
-                min,
-                max,
-                value,
-                digits,
-                decimals,
-                ..
+                min, max, value, ..
             } => {
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_spinbox(cells[{}], {}, {}, {}, Style::panel())?;",
                     var_name, idx, min, max, value
                 );
-                if *digits != 4 || *decimals != 0 {
-                    // Optional attribute adjustments
-                }
             }
             WidgetDef::ProgressBar { value, .. } => {
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_progress_bar(cells[{}], {:.2}, Style::default())?;",
                     var_name, idx, value
+                );
+            }
+            WidgetDef::SweepingArc {
+                start_angle,
+                end_angle,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_sweeping_arc(cells[{}], {}, {}, Style::panel())?;",
+                    var_name, idx, start_angle, end_angle
+                );
+            }
+            WidgetDef::BusyWheel { active, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_busy_wheel(cells[{}], {}, Style::panel())?;",
+                    var_name, idx, active
+                );
+            }
+            WidgetDef::Plotter { mode, .. } => {
+                let chart_mode = if mode.eq_ignore_ascii_case("bar") {
+                    "ChartMode::Bar"
+                } else {
+                    "ChartMode::Line"
+                };
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_plotter(cells[{}], {}, Style::panel())?;",
+                    var_name, idx, chart_mode
+                );
+            }
+            WidgetDef::StatusBar { time, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_status_bar(cells[{}], \"{}\", Style::panel())?;",
+                    var_name, idx, time
+                );
+            }
+            WidgetDef::TimePicker {
+                hour,
+                minute,
+                is_12h,
+                is_pm,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_time_picker(cells[{}], {}, {}, {}, {}, Style::panel())?;",
+                    var_name, idx, hour, minute, is_12h, is_pm
+                );
+            }
+            WidgetDef::NumberPicker {
+                min,
+                max,
+                value,
+                unit,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_number_picker(cells[{}], {}, {}, {}, \"{}\", Style::panel())?;",
+                    var_name, idx, min, max, value, unit
+                );
+            }
+            WidgetDef::Dialog { title, message, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_dialog(cells[{}], \"{}\", \"{}\", Style::panel())?;",
+                    var_name, idx, title, message
+                );
+            }
+            WidgetDef::ContentIndicator { count, active, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_content_indicator(cells[{}], {}, {}, Style::panel())?;",
+                    var_name, idx, count, active
+                );
+            }
+            WidgetDef::CrumbsIndicator { count, active, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_crumbs_indicator(cells[{}], {}, {}, Style::panel())?;",
+                    var_name, idx, count, active
+                );
+            }
+            WidgetDef::Panel { style, .. } => {
+                let st = style.as_deref().unwrap_or("Style::panel()");
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_panel(cells[{}], {})?;",
+                    var_name, idx, st
+                );
+            }
+            WidgetDef::Spacer => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_spacer(cells[{}])?;",
+                    var_name, idx
+                );
+            }
+            WidgetDef::VectorPath {
+                stroke_width,
+                verbs,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let mut _path_{} = VectorPath::<{}>::new();",
+                    var_name,
+                    verbs.len().max(1)
+                );
+                for v in verbs {
+                    match v {
+                        PathVerbDef::MoveTo(x, y) => {
+                            let _ = writeln!(
+                                &mut out,
+                                "        _path_{}.push(PathVerb::MoveTo(Point::new({}, {})));",
+                                var_name, x, y
+                            );
+                        }
+                        PathVerbDef::LineTo(x, y) => {
+                            let _ = writeln!(
+                                &mut out,
+                                "        _path_{}.push(PathVerb::LineTo(Point::new({}, {})));",
+                                var_name, x, y
+                            );
+                        }
+                        PathVerbDef::QuadTo(cx, cy, x, y) => {
+                            let _ = writeln!(
+                                &mut out,
+                                "        _path_{}.push(PathVerb::QuadTo(Point::new({}, {}), Point::new({}, {})));",
+                                var_name, cx, cy, x, y
+                            );
+                        }
+                        PathVerbDef::CubicTo(c1x, c1y, c2x, c2y, x, y) => {
+                            let _ = writeln!(
+                                &mut out,
+                                "        _path_{}.push(PathVerb::CubicTo(Point::new({}, {}), Point::new({}, {}), Point::new({}, {})));",
+                                var_name, c1x, c1y, c2x, c2y, x, y
+                            );
+                        }
+                        PathVerbDef::Close => {
+                            let _ = writeln!(
+                                &mut out,
+                                "        _path_{}.push(PathVerb::Close);",
+                                var_name
+                            );
+                        }
+                    }
+                }
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_panel(cells[{}], Style::panel())?;",
+                    var_name, idx
+                );
+                let _ = writeln!(
+                    &mut out,
+                    "        let _ = {}; // stroke_width: {}",
+                    var_name, stroke_width
                 );
             }
             WidgetDef::Table { .. } => {
@@ -695,26 +1143,41 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_kdl_screen_to_rust() {
+    fn test_compile_full_widget_suite_to_rust() {
         let kdl = r#"
-screen id="Thermostat" width=320 height=240 theme="dark" {
-    grid cols="140px 1fr" rows="24px 1fr 48px" gap=6 padding=8 {
-        banner col=0 row=0 col_span=2 text="Smart Thermostat"
-        spinbox id="TempSetpoint" col=0 row=1 min=100 max=350 value=215 digits=4 decimals=1
-        scale id="RoomGauge" col=1 row=1 mode="radial" min=10.0 max=40.0 value=22.5
-        button id="FanBtn" col=0 row=2 text="TOGGLE FAN"
-        toggle id="EcoMode" col=1 row=2 checked=true
+screen id="FullSuite" width=320 height=240 theme="dark" {
+    grid cols="100px 1fr 100px" rows="24px 1fr 1fr 40px" gap=4 padding=6 {
+        status_bar id="StatusBar" col=0 row=0 col_span=3 time="10:42"
+        banner col=0 row=1 text="Smart Climate"
+        spinbox id="Temp" col=1 row=1 min=100 max=350 value=215
+        scale id="Tach" col=2 row=1 mode="radial" min=0.0 max=120.0 value=65.0
+        
+        dropdown id="ModeSelect" col=0 row=2 {
+            option "Auto"
+            option "Cool"
+            option "Heat"
+        }
+        number_picker id="BpmPicker" col=1 row=2 min=40 max=200 value=135 unit="BPM"
+        sweeping_arc id="Sweep" col=2 row=2 start_angle=0 end_angle=180
+        
+        button id="SaveBtn" col=0 row=3 text="SAVE"
+        toggle id="EcoTog" col=1 row=3 label="ECO" checked=true
+        checkbox id="SyncChk" col=2 row=3 label="SYNC" checked=false
     }
 }
 "#;
         let rust_code = compile_kdl_to_rust(kdl).unwrap();
-        assert!(rust_code.contains("pub struct ThermostatWidgets {"));
-        assert!(rust_code.contains("pub temp_setpoint: WidgetId,"));
-        assert!(rust_code.contains("pub room_gauge: WidgetId,"));
-        assert!(rust_code.contains("pub fan_btn: WidgetId,"));
-        assert!(rust_code.contains("pub eco_mode: WidgetId,"));
-        assert!(rust_code.contains("pub struct ThermostatApp {"));
-        assert!(rust_code.contains("pub const NODE_COUNT: usize = 5;"));
-        assert!(rust_code.contains("GridLayout::<2, 3>::new"));
+        assert!(rust_code.contains("pub struct FullSuiteWidgets {"));
+        assert!(rust_code.contains("pub status_bar: WidgetId,"));
+        assert!(rust_code.contains("pub temp: WidgetId,"));
+        assert!(rust_code.contains("pub tach: WidgetId,"));
+        assert!(rust_code.contains("pub mode_select: WidgetId,"));
+        assert!(rust_code.contains("pub bpm_picker: WidgetId,"));
+        assert!(rust_code.contains("pub sweep: WidgetId,"));
+        assert!(rust_code.contains("pub save_btn: WidgetId,"));
+        assert!(rust_code.contains("pub eco_tog: WidgetId,"));
+        assert!(rust_code.contains("pub sync_chk: WidgetId,"));
+        assert!(rust_code.contains("pub struct FullSuiteApp {"));
+        assert!(rust_code.contains("pub const NODE_COUNT: usize = 10;"));
     }
 }
