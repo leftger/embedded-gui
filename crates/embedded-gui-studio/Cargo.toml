@@ -1,0 +1,19 @@
+[package]
+name = "embedded-gui-studio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "README.md"
+description = "Cross-platform interactive GUI studio for embedded-gui KDL live preview & code generation"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/embedded-gui-studio"
+keywords = ["gui", "embedded", "kdl", "codegen", "studio"]
+categories = ["embedded", "gui", "development-tools"]
+
+[dependencies]
+embedded-gui-codegen = { workspace = true }
+eframe = { version = "0.31", default-features = true }
+egui_extras = { version = "0.31", features = ["syntect"] }

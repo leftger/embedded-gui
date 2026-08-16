@@ -19,7 +19,7 @@ exclude = [
 ]
 
 [features]
-default = ["std", "rich-widgets"]
+default = ["std", "rich-widgets", "macros"]
 std = ["embedded-dsp?/std"]
 rich-widgets = []
 image-decode = ["std"]

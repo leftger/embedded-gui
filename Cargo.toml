@@ -4,6 +4,7 @@ members = [
     "crates/embedded-gui",
     "crates/embedded-gui-codegen",
     "crates/embedded-gui-macros",
+    "crates/embedded-gui-studio",
 ]
 exclude = [
     "size_harness",

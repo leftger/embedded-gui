@@ -133,6 +133,14 @@ gui.render(&mut display)?;
       <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/cinematic_transitions.gif" width="360" alt="Cinematic Transitions"><br/>
       <sub><b>Cinematic Motion:</b> Spatial <code>moook</code> easing, 3D card story transitions, daily fitness rings, and sleep stage bar charts.</sub>
     </td>
+  <tr>
+    <th colspan="2" align="center">Embedded GUI Studio: Live KDL Editor & 60 FPS Motion Previewer</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/embedded_gui_studio_preview.gif" width="700" alt="Embedded GUI Studio Preview"><br/>
+      <sub><b>Cross-Platform Studio IDE:</b> Real-time KDL code editing, 60 FPS motion playback timeline, dynamic simulated LCD display, and instant <code>no_std</code> Rust codegen preview.</sub>
+    </td>
   </tr>
 </table>
 
