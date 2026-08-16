@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Embedded GUI Sync</title>
+  <style>
+    :root {
+      --bg: #181a20;
+      --card-bg: #1e222b;
+      --border: #2e3442;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --success: #10b981;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge {
+      font-size: 11px;
+      background: #064e3b;
+      color: #34d399;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+    .meta-bar {
+      font-size: 12px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      margin-bottom: 12px;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      background: #111317;
+      color: #38bdf8;
+      font-family: "JetBrains Mono", Consolas, "Fira Code", monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      resize: none;
+      white-space: pre;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .footer {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+    button.copied {
+      background: var(--success) !important;
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ Embedded GUI Sync</h1>
+    <span class="badge" id="statusBadge">Ready</span>
+  </header>
+
+  <div class="meta-bar" id="metaBar">
+    <span id="nodeName">Select a frame...</span>
+    <span id="nodeDim">-- × -- px</span>
+  </div>
+
+  <div class="editor-container">
+    <textarea id="kdlOutput" readonly placeholder="// KDL declarative markup will appear here..."></textarea>
+  </div>
+
+  <div class="footer">
+    <button class="primary" id="copyBtn">📋 Copy KDL for Embedded GUI</button>
+    <div class="hint">
+      Paste directly into <b>embedded-gui-studio</b> or into your <code>.kdl</code> file with <code>include_gui!</code>.
+    </div>
+  </div>
+
+  <script>
+    const textarea = document.getElementById('kdlOutput');
+    const nodeNameEl = document.getElementById('nodeName');
+    const nodeDimEl = document.getElementById('nodeDim');
+    const copyBtn = document.getElementById('copyBtn');
+    const statusBadge = document.getElementById('statusBadge');
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'KDL_GENERATED') {
+        textarea.value = msg.kdl;
+        nodeNameEl.textContent = `🎯 ${msg.nodeName}`;
+        nodeDimEl.textContent = `${msg.width} × ${msg.height} px (${msg.childrenCount} nodes)`;
+        statusBadge.textContent = 'Synced';
+        statusBadge.style.background = '#064e3b';
+        statusBadge.style.color = '#34d399';
+      } else if (msg.type === 'NO_SELECTION') {
+        textarea.value = `// ${msg.message}`;
+        nodeNameEl.textContent = 'No selection';
+        nodeDimEl.textContent = '-- × -- px';
+        statusBadge.textContent = 'Idle';
+        statusBadge.style.background = '#334155';
+        statusBadge.style.color = '#94a3b8';
+      }
+    };
+
+    copyBtn.addEventListener('click', () => {
+      if (!textarea.value || textarea.value.startsWith('//')) return;
+
+      textarea.select();
+      document.execCommand('copy');
+
+      copyBtn.textContent = '✓ Copied to Clipboard!';
+      copyBtn.classList.add('copied');
+
+      parent.postMessage({ pluginMessage: { type: 'NOTIFY', message: 'KDL copied to clipboard!' } }, '*');
+
+      setTimeout(() => {
+        copyBtn.textContent = '📋 Copy KDL for Embedded GUI';
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

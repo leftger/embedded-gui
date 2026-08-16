@@ -1,10 +1,13 @@
 //! Embedded GUI Studio
-//! Cross-platform interactive designer, live animation previewer, and Rust code generator for embedded-gui.
+//! Cross-platform interactive designer, visual inspector, live animation previewer, and Rust code generator for embedded-gui.
 
 use core::f32::consts::PI;
-use eframe::egui::{self, Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2};
+use eframe::egui::{
+    self, Color32, CornerRadius, DragValue, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2,
+};
 use embedded_gui_codegen::{
-    GridTrackDef, ScreenDef, WidgetDef, generate_rust_code, parse_kdl_screen,
+    GridPlacementDef, GridTrackDef, ScreenDef, WidgetDef, generate_rust_code, parse_kdl_screen,
+    serialize_kdl_screen,
 };
 
 const SAMPLE_THERMOSTAT: &str = r#"screen id="Thermostat" width=320 height=240 theme="dark" {
@@ -71,6 +74,9 @@ struct EmbeddedGuiStudio {
     preview_zoom: f32,
     copied_toast_timer: f32,
 
+    // Selection & Inspector
+    selected_widget_idx: Option<usize>,
+
     // Animation playback state
     is_playing: bool,
     timeline_time: f32,
@@ -87,6 +93,7 @@ impl Default for EmbeddedGuiStudio {
             active_tab: StudioTab::VisualPreview,
             preview_zoom: 1.5,
             copied_toast_timer: 0.0,
+            selected_widget_idx: None,
             is_playing: true,
             timeline_time: 0.0,
             playback_speed: 1.0,
@@ -108,6 +115,13 @@ impl EmbeddedGuiStudio {
                 self.parsed_screen = Err(err.to_string());
             }
         }
+    }
+
+    /// Syncs inspector modifications back into the KDL source and Rust code.
+    fn sync_from_screen(&mut self, screen: &ScreenDef) {
+        self.kdl_source = serialize_kdl_screen(screen);
+        self.generated_rust = generate_rust_code(screen);
+        self.parsed_screen = Ok(screen.clone());
     }
 
     fn render_visual_preview(&mut self, ui: &mut egui::Ui, screen: &ScreenDef) {
@@ -163,10 +177,19 @@ impl EmbeddedGuiStudio {
         egui::ScrollArea::both().show(ui, |ui| {
             let (response, painter) = ui.allocate_painter(
                 Vec2::new(screen_w + 32.0, screen_h + 32.0),
-                egui::Sense::hover(),
+                egui::Sense::click(),
             );
             let origin = response.rect.min + Vec2::new(16.0, 16.0);
             let display_rect = Rect::from_min_size(origin, Vec2::new(screen_w, screen_h));
+
+            // Background canvas click deselects
+            if response.clicked() {
+                if let Some(pos) = response.interact_pointer_pos() {
+                    if !display_rect.contains(pos) {
+                        self.selected_widget_idx = None;
+                    }
+                }
+            }
 
             // Bezel / Hardware Chassis
             let bezel_rect = display_rect.expand(6.0);
@@ -215,9 +238,11 @@ impl EmbeddedGuiStudio {
             }
 
             let t = self.timeline_time;
+            let pointer_pos = ui.input(|i| i.pointer.interact_pos());
+            let mut newly_selected = None;
 
             // Draw each widget with live animation time passed in
-            for (placement, widget) in &screen.grid.children {
+            for (idx, (placement, widget)) in screen.grid.children.iter().enumerate() {
                 let c = placement.col.min(col_xs.len().saturating_sub(1));
                 let r = placement.row.min(row_ys.len().saturating_sub(1));
                 let c_span = placement.col_span.max(1);
@@ -247,9 +272,675 @@ impl EmbeddedGuiStudio {
                 }
 
                 let widget_rect = Rect::from_min_size(Pos2::new(x0, y0), Vec2::new(w, h));
+
+                // Click-to-select detection
+                if response.clicked() {
+                    if let Some(pos) = pointer_pos {
+                        if widget_rect.contains(pos) {
+                            newly_selected = Some(idx);
+                        }
+                    }
+                }
+
+                // Draw widget representation
                 draw_animated_widget(&painter, widget_rect, widget, t);
+
+                // Selection highlight & bounding box handles
+                if self.selected_widget_idx == Some(idx) {
+                    let select_stroke = Stroke::new(2.0f32, Color32::from_rgb(60, 160, 255));
+                    painter.rect_stroke(
+                        widget_rect.expand(2.0),
+                        CornerRadius::same(4),
+                        select_stroke,
+                        StrokeKind::Outside,
+                    );
+
+                    // Draw 4 corner handles
+                    let handle_size = 5.0;
+                    let corners = [
+                        widget_rect.left_top(),
+                        widget_rect.right_top(),
+                        widget_rect.left_bottom(),
+                        widget_rect.right_bottom(),
+                    ];
+                    for corner in corners {
+                        let h_rect = Rect::from_center_size(corner, Vec2::splat(handle_size));
+                        painter.rect_filled(
+                            h_rect,
+                            CornerRadius::same(1),
+                            Color32::from_rgb(60, 160, 255),
+                        );
+                    }
+
+                    // Floating selection badge
+                    let badge_text = format!(
+                        "🎯 {} [c:{}, r:{}]",
+                        widget.id().unwrap_or("widget"),
+                        placement.col,
+                        placement.row
+                    );
+                    let badge_pos = Pos2::new(widget_rect.min.x, widget_rect.min.y - 14.0);
+                    painter.rect_filled(
+                        Rect::from_min_size(badge_pos, Vec2::new(120.0, 14.0)),
+                        CornerRadius::same(3),
+                        Color32::from_rgb(30, 80, 180),
+                    );
+                    painter.text(
+                        Pos2::new(badge_pos.x + 4.0, badge_pos.y + 2.0),
+                        egui::Align2::LEFT_TOP,
+                        badge_text,
+                        FontId::proportional(9.0),
+                        Color32::WHITE,
+                    );
+                }
+            }
+
+            if let Some(sel) = newly_selected {
+                self.selected_widget_idx = Some(sel);
             }
         });
+    }
+
+    /// Renders the visual property inspector sidebar for the selected widget or screen.
+    fn render_inspector_panel(&mut self, ui: &mut egui::Ui) {
+        let mut screen = match &self.parsed_screen {
+            Ok(s) => s.clone(),
+            Err(_) => {
+                ui.label("Fix KDL syntax errors to use the Inspector.");
+                return;
+            }
+        };
+
+        let mut modified = false;
+
+        if let Some(idx) = self.selected_widget_idx {
+            if idx < screen.grid.children.len() {
+                let (placement, widget) = &mut screen.grid.children[idx];
+
+                ui.horizontal(|ui| {
+                    ui.heading("🔍 Widget Inspector");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("✕ Deselect").clicked() {
+                            self.selected_widget_idx = None;
+                        }
+                    });
+                });
+                ui.separator();
+
+                // 1. Grid Placement Section
+                ui.label(egui::RichText::new("📍 Grid Placement").strong());
+                ui.horizontal(|ui| {
+                    ui.label("Col:");
+                    let mut col = placement.col as i32;
+                    if ui.add(DragValue::new(&mut col).range(0..=16)).changed() {
+                        placement.col = col.max(0) as usize;
+                        modified = true;
+                    }
+                    ui.label("Row:");
+                    let mut row = placement.row as i32;
+                    if ui.add(DragValue::new(&mut row).range(0..=16)).changed() {
+                        placement.row = row.max(0) as usize;
+                        modified = true;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Col Span:");
+                    let mut c_span = placement.col_span as i32;
+                    if ui.add(DragValue::new(&mut c_span).range(1..=8)).changed() {
+                        placement.col_span = c_span.max(1) as usize;
+                        modified = true;
+                    }
+                    ui.label("Row Span:");
+                    let mut r_span = placement.row_span as i32;
+                    if ui.add(DragValue::new(&mut r_span).range(1..=8)).changed() {
+                        placement.row_span = r_span.max(1) as usize;
+                        modified = true;
+                    }
+                });
+
+                ui.separator();
+
+                // 2. Widget Specific Properties
+                ui.label(egui::RichText::new("⚙️ Properties").strong());
+
+                match widget {
+                    WidgetDef::Label { id, text, style } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Text:");
+                            if ui.text_edit_singleline(text).changed() {
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Style:");
+                            let mut style_str = style.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut style_str).changed() {
+                                *style = if style_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(style_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::Button {
+                        id,
+                        text,
+                        on_click,
+                        style,
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Text:");
+                            if ui.text_edit_singleline(text).changed() {
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Style:");
+                            let mut style_str = style.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut style_str).changed() {
+                                *style = if style_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(style_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("On Click:");
+                            let mut click_str = on_click.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut click_str).changed() {
+                                *on_click = if click_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(click_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::Toggle { id, label, checked }
+                    | WidgetDef::Checkbox { id, label, checked } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Label:");
+                            if ui.text_edit_singleline(label).changed() {
+                                modified = true;
+                            }
+                        });
+                        if ui.checkbox(checked, "Checked").changed() {
+                            modified = true;
+                        }
+                    }
+                    WidgetDef::Slider {
+                        id,
+                        min,
+                        max,
+                        value,
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Min:");
+                            if ui.add(DragValue::new(min)).changed() {
+                                modified = true;
+                            }
+                            ui.label("Max:");
+                            if ui.add(DragValue::new(max)).changed() {
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Value:");
+                            if ui.add(egui::Slider::new(value, *min..=*max)).changed() {
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::ProgressBar { id, value } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Progress:");
+                            if ui.add(egui::Slider::new(value, 0.0..=1.0)).changed() {
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::Scale {
+                        id,
+                        mode,
+                        min,
+                        max,
+                        value,
+                        major_ticks,
+                        ..
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Mode:");
+                            ui.selectable_value(mode, "radial".to_string(), "Radial");
+                            ui.selectable_value(mode, "linear".to_string(), "Linear");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Min:");
+                            if ui.add(DragValue::new(min)).changed() {
+                                modified = true;
+                            }
+                            ui.label("Max:");
+                            if ui.add(DragValue::new(max)).changed() {
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Value:");
+                            if ui.add(DragValue::new(value)).changed() {
+                                modified = true;
+                            }
+                            ui.label("Ticks:");
+                            if ui.add(DragValue::new(major_ticks).range(1..=12)).changed() {
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::Plotter { id, mode } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Mode:");
+                            if ui
+                                .selectable_value(mode, "sine".to_string(), "Sine")
+                                .clicked()
+                                || ui
+                                    .selectable_value(mode, "square".to_string(), "Square")
+                                    .clicked()
+                                || ui
+                                    .selectable_value(mode, "line".to_string(), "Line")
+                                    .clicked()
+                            {
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::BusyWheel { id, active } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        if ui.checkbox(active, "Active / Spinning").changed() {
+                            modified = true;
+                        }
+                    }
+                    WidgetDef::StatusBar { id, time } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Time:");
+                            if ui.text_edit_singleline(time).changed() {
+                                modified = true;
+                            }
+                        });
+                    }
+                    WidgetDef::Roller {
+                        id,
+                        options,
+                        selected,
+                    }
+                    | WidgetDef::Dropdown {
+                        id,
+                        options,
+                        selected,
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let mut id_str = id.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut id_str).changed() {
+                                *id = if id_str.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(id_str)
+                                };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Selected:");
+                            let mut sel = *selected as i32;
+                            if ui
+                                .add(
+                                    DragValue::new(&mut sel)
+                                        .range(0..=options.len().saturating_sub(1)),
+                                )
+                                .changed()
+                            {
+                                *selected = sel.max(0) as usize;
+                                modified = true;
+                            }
+                        });
+                        ui.label("Options:");
+                        let mut remove_idx = None;
+                        for (i, opt) in options.iter_mut().enumerate() {
+                            ui.horizontal(|ui| {
+                                if ui.text_edit_singleline(opt).changed() {
+                                    modified = true;
+                                }
+                                if ui.small_button("🗑").clicked() {
+                                    remove_idx = Some(i);
+                                }
+                            });
+                        }
+                        if let Some(i) = remove_idx {
+                            if options.len() > 1 {
+                                options.remove(i);
+                                *selected = (*selected).min(options.len() - 1);
+                                modified = true;
+                            }
+                        }
+                        if ui.button("➕ Add Option").clicked() {
+                            options.push(format!("Option {}", options.len() + 1));
+                            modified = true;
+                        }
+                    }
+                    _ => {
+                        ui.label(format!("Widget: {:?}", widget));
+                    }
+                }
+
+                ui.separator();
+
+                // 3. Widget Actions
+                let mut should_delete = false;
+                let mut should_duplicate = false;
+
+                ui.horizontal(|ui| {
+                    if ui.button("🗑 Delete Widget").clicked() {
+                        should_delete = true;
+                    }
+
+                    if ui.button("➕ Duplicate").clicked() {
+                        should_duplicate = true;
+                    }
+                });
+
+                if should_delete {
+                    screen.grid.children.remove(idx);
+                    self.selected_widget_idx = None;
+                    modified = true;
+                } else if should_duplicate {
+                    let (p, w) = &screen.grid.children[idx];
+                    let dup_placement = GridPlacementDef {
+                        col: p.col + 1,
+                        row: p.row,
+                        col_span: p.col_span,
+                        row_span: p.row_span,
+                    };
+                    let dup_widget = w.clone();
+                    screen.grid.children.push((dup_placement, dup_widget));
+                    self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                    modified = true;
+                }
+            } else {
+                self.selected_widget_idx = None;
+            }
+        } else {
+            // Screen & Global Grid Inspector
+            ui.heading("📐 Screen & Grid");
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.label("Screen ID:");
+                if ui.text_edit_singleline(&mut screen.id).changed() {
+                    modified = true;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Width:");
+                let mut w = screen.width as i32;
+                if ui.add(DragValue::new(&mut w).range(128..=1920)).changed() {
+                    screen.width = w.max(32) as u32;
+                    modified = true;
+                }
+                ui.label("Height:");
+                let mut h = screen.height as i32;
+                if ui.add(DragValue::new(&mut h).range(64..=1080)).changed() {
+                    screen.height = h.max(32) as u32;
+                    modified = true;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Gap:");
+                let mut gap = screen.grid.gap as i32;
+                if ui.add(DragValue::new(&mut gap).range(0..=32)).changed() {
+                    screen.grid.gap = gap.max(0) as u16;
+                    modified = true;
+                }
+                ui.label("Padding:");
+                let mut pad = screen.grid.padding as i32;
+                if ui.add(DragValue::new(&mut pad).range(0..=48)).changed() {
+                    screen.grid.padding = pad.max(0) as u16;
+                    modified = true;
+                }
+            });
+
+            ui.separator();
+
+            // Quick Add Widget Section
+            ui.label(egui::RichText::new("➕ Insert Widget").strong());
+            egui::Grid::new("insert_widget_grid")
+                .num_columns(2)
+                .spacing([8.0, 8.0])
+                .show(ui, |ui| {
+                    if ui.button("🔘 Button").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Button {
+                                id: Some("new_btn".into()),
+                                text: "Button".into(),
+                                on_click: None,
+                                style: Some("accent".into()),
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    if ui.button("🏷 Label").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Label {
+                                id: Some("new_label".into()),
+                                text: "New Label".into(),
+                                style: None,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    ui.end_row();
+
+                    if ui.button("🎚 Slider").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Slider {
+                                id: Some("new_slider".into()),
+                                min: 0,
+                                max: 100,
+                                value: 50,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    if ui.button("⏻ Toggle").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Toggle {
+                                id: Some("new_toggle".into()),
+                                label: "Power".into(),
+                                checked: true,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    ui.end_row();
+
+                    if ui.button("⏱ Gauge / Scale").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Scale {
+                                id: Some("new_gauge".into()),
+                                mode: "radial".into(),
+                                min: 0.0,
+                                max: 100.0,
+                                value: 25.0,
+                                major_ticks: 5,
+                                minor_ticks: 2,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    if ui.button("📊 Progress Bar").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::ProgressBar {
+                                id: Some("new_progress".into()),
+                                value: 0.75,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    ui.end_row();
+
+                    if ui.button("📈 Scope Plotter").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::Plotter {
+                                id: Some("new_plotter".into()),
+                                mode: "sine".into(),
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    if ui.button("⚙️ Busy Spinner").clicked() {
+                        screen.grid.children.push((
+                            GridPlacementDef::default(),
+                            WidgetDef::BusyWheel {
+                                id: Some("new_spinner".into()),
+                                active: true,
+                            },
+                        ));
+                        self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+                        modified = true;
+                    }
+                    ui.end_row();
+                });
+        }
+
+        if modified {
+            self.sync_from_screen(&screen);
+        }
     }
 }
 
@@ -395,7 +1086,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 Color32::from_rgb(45, 50, 60),
             );
 
-            // Dynamic oscillating progress pulse if animated
             let animated_val = if *value > 0.0 {
                 *value
             } else {
@@ -432,7 +1122,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 StrokeKind::Inside,
             );
 
-            // Dynamic oscillating gauge needle
             let dynamic_val = *value + ((*max - *min) * 0.2 * (time * 1.8).sin());
             let clamped_val = dynamic_val.clamp(*min, *max);
 
@@ -491,7 +1180,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
             let center = rect.center();
             let radius = (rect.width().min(rect.height()) / 2.0 - 10.0).max(8.0);
 
-            // Dynamic sweep pulse
             let pulse = (time * 2.5).sin() * 0.5 + 0.5;
             let sweep_end = *start_angle as f32 + (*end_angle - *start_angle) as f32 * pulse;
 
@@ -501,7 +1189,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 Stroke::new(2.0f32, Color32::from_rgb(50, 60, 75)),
             );
 
-            // Draw arc sample dots
             let mut a = *start_angle as f32;
             while a <= sweep_end {
                 let rad = a.to_radians();
@@ -527,7 +1214,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 StrokeKind::Inside,
             );
 
-            // Draw oscilloscope grid lines
             let grid_color = Color32::from_rgb(25, 35, 45);
             let num_v = 6;
             for i in 1..num_v {
@@ -546,7 +1232,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 );
             }
 
-            // Real-time animated waveform signal
             let center_y = rect.center().y;
             let amp = rect.height() * 0.35;
             let steps = (rect.width() as usize).max(20);
@@ -562,7 +1247,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                         center_y + amp
                     }
                 } else {
-                    // Sine with slight 2nd harmonic
                     center_y - (phase.sin() * amp * 0.8 + (phase * 2.0).sin() * amp * 0.2)
                 };
                 points.push(Pos2::new(x, y));
@@ -593,7 +1277,6 @@ fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef,
                 Color32::from_rgb(180, 190, 200),
             );
 
-            // Blinking colon indicator with animation clock
             let colon = if (time * 2.0).fract() > 0.5 { ":" } else { " " };
             let live_time = format!("12{}34", colon);
             let display_time = if time_str.is_empty() {
@@ -754,21 +1437,25 @@ impl eframe::App for EmbeddedGuiStudio {
                 ui.menu_button("📄 Presets", |ui| {
                     if ui.button("📈 Live Oscilloscope").clicked() {
                         self.kdl_source = SAMPLE_WAVEFORM.to_string();
+                        self.selected_widget_idx = None;
                         self.recompile();
                         ui.close_menu();
                     }
                     if ui.button("✨ Motion Kitchen Sink").clicked() {
                         self.kdl_source = SAMPLE_MOTION_KITCHEN_SINK.to_string();
+                        self.selected_widget_idx = None;
                         self.recompile();
                         ui.close_menu();
                     }
                     if ui.button("🌡 Smart Thermostat").clicked() {
                         self.kdl_source = SAMPLE_THERMOSTAT.to_string();
+                        self.selected_widget_idx = None;
                         self.recompile();
                         ui.close_menu();
                     }
                     if ui.button("📊 Sensor Dashboard").clicked() {
                         self.kdl_source = SAMPLE_DASHBOARD.to_string();
+                        self.selected_widget_idx = None;
                         self.recompile();
                         ui.close_menu();
                     }
@@ -802,14 +1489,15 @@ impl eframe::App for EmbeddedGuiStudio {
 
         // Left Panel: KDL Code Editor
         egui::SidePanel::left("editor_panel")
-            .min_width(380.0)
-            .default_width(440.0)
+            .min_width(340.0)
+            .default_width(380.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("KDL Screen Definition");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("Clear").clicked() {
                             self.kdl_source.clear();
+                            self.selected_widget_idx = None;
                             self.recompile();
                         }
                     });
@@ -837,7 +1525,15 @@ impl eframe::App for EmbeddedGuiStudio {
                 }
             });
 
-        // Right / Central Panel: Tabs
+        // Right Panel: Visual Property Inspector
+        egui::SidePanel::right("inspector_panel")
+            .min_width(260.0)
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                self.render_inspector_panel(ui);
+            });
+
+        // Center Panel: Tabs (Visual Preview / Rust Codegen / AST)
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(
@@ -888,11 +1584,29 @@ impl eframe::App for EmbeddedGuiStudio {
                             ));
                             ui.separator();
                             ui.heading("Widget Placements:");
-                            for (p, w) in &screen.grid.children {
-                                ui.label(format!(
-                                    "• [c:{}, r:{}, span:{}x{}] {:?}",
-                                    p.col, p.row, p.col_span, p.row_span, w
-                                ));
+                            for (idx, (p, w)) in screen.grid.children.iter().enumerate() {
+                                let label_str = format!(
+                                    "{} • [c:{}, r:{}, span:{}x{}] {:?}",
+                                    if self.selected_widget_idx == Some(idx) {
+                                        "👉"
+                                    } else {
+                                        " "
+                                    },
+                                    p.col,
+                                    p.row,
+                                    p.col_span,
+                                    p.row_span,
+                                    w
+                                );
+                                if ui
+                                    .selectable_label(
+                                        self.selected_widget_idx == Some(idx),
+                                        label_str,
+                                    )
+                                    .clicked()
+                                {
+                                    self.selected_widget_idx = Some(idx);
+                                }
                             }
                         });
                     } else {
@@ -907,9 +1621,9 @@ impl eframe::App for EmbeddedGuiStudio {
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1150.0, 750.0])
-            .with_min_inner_size([700.0, 480.0])
-            .with_title("Embedded GUI Studio - KDL Live Preview & Codegen"),
+            .with_inner_size([1280.0, 780.0])
+            .with_min_inner_size([800.0, 520.0])
+            .with_title("Embedded GUI Studio - Visual Inspector & KDL Codegen"),
         ..Default::default()
     };
 
