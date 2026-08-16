@@ -50,6 +50,9 @@ gui.render(&mut display)?;
 
 ## Visual Showcase
 
+### Grand Showcase: Rich Controls, 2D Grid Layout & Vector Bézier Curves
+![Grand showcase of rich controls, 2D GridLayout, tables, graduated scales, spinboxes, and Bézier curves](docs/screenshots/rich_controls_grid_showcase.gif)
+
 ### Accelerated Graphics Pipeline & Frosted Glass Blur
 ![Frosted glass and graphics pipeline showcase](docs/screenshots/frosted_glass_pipeline.gif)
 

@@ -81,7 +81,11 @@ fn render_showcase<D: DrawTarget<Color = Rgb565> + embedded_gui::PixelRead>(
     // Left Column: Spinbox (Top) + Linear Scale (Bottom)
     let left_area = cells[1];
     let spinbox_rect = Rect::new(left_area.x, left_area.y, left_area.w, 40);
-    spinbox.render(
+
+    let mut anim_spinbox = *spinbox;
+    anim_spinbox.focused_digit = ((frame / 20) % 4) as u8;
+    anim_spinbox.value = 2400 + ((frame as i32 * 7) % 600);
+    anim_spinbox.render(
         &mut ctx,
         spinbox_rect,
         Style::panel().into(),
@@ -89,7 +93,7 @@ fn render_showcase<D: DrawTarget<Color = Rgb565> + embedded_gui::PixelRead>(
     )?;
 
     let lin_scale_rect = Rect::new(left_area.x, left_area.y + 46, left_area.w, 54);
-    let needle_val = 20.0 + ((frame as f32 * 0.5).sin() * 20.0);
+    let needle_val = 25.0 + ((frame as f32 * 0.08).sin() * 20.0);
     let lin_scale = ScaleWidget::linear_horizontal(0.0, 50.0, needle_val)
         .with_ticks(4, 2)
         .with_needle(true, Rgb565::CSS_CYAN);
@@ -103,7 +107,12 @@ fn render_showcase<D: DrawTarget<Color = Rgb565> + embedded_gui::PixelRead>(
     // Right Column: Table (Top) + Radial Speedometer (Bottom)
     let right_area = cells[2];
     let table_rect = Rect::new(right_area.x, right_area.y, right_area.w, 60);
-    table.render(
+
+    let mut anim_table = *table;
+    let sel_row = ((frame / 25) % 2) as usize;
+    let sel_col = ((frame / 15) % 3) as usize;
+    anim_table.selected = Some((sel_row, sel_col));
+    anim_table.render(
         &mut ctx,
         table_rect,
         Style::panel().into(),
@@ -111,7 +120,7 @@ fn render_showcase<D: DrawTarget<Color = Rgb565> + embedded_gui::PixelRead>(
     )?;
 
     let radial_rect = Rect::new(right_area.x + 30, right_area.y + 64, 90, 44);
-    let speed_val = 60.0 + ((frame as f32 * 0.1).sin() * 40.0);
+    let speed_val = 60.0 + ((frame as f32 * 0.06).sin() * 45.0);
     let radial_scale = ScaleWidget::new(0.0, 120.0, speed_val)
         .with_ticks(6, 2)
         .with_angles(180, 0)
@@ -164,7 +173,53 @@ fn render_showcase<D: DrawTarget<Color = Rgb565> + embedded_gui::PixelRead>(
     Ok(())
 }
 
+fn record_frames() {
+    let out_dir = std::path::Path::new("target/controls_frames");
+    let _ = std::fs::create_dir_all(out_dir);
+
+    let mut fb = Framebuffer::<FB_SIZE>::new(W, H);
+    let data: &[&[&str]] = &[
+        &["Sensor 1", "24.5 C", "OK"],
+        &["Sensor 2", "58.2 %", "HIGH"],
+    ];
+    let headers: &[&str] = &["Device", "Value", "State"];
+    let table = TableWidget::new(data).with_headers(headers);
+    let spinbox = SpinboxWidget::new(0, 9999, 2500)
+        .with_digits(4)
+        .with_decimals(2);
+
+    let total_frames = 90;
+    println!(
+        "Recording {} frames to target/controls_frames...",
+        total_frames
+    );
+
+    for f in 0..total_frames {
+        render_showcase(&mut fb, f, &table, &spinbox).unwrap();
+
+        let mut rgb888 = Vec::with_capacity((W * H * 3) as usize);
+        for p in fb.pixels() {
+            let r = (p.r() << 3) | (p.r() >> 2);
+            let g = (p.g() << 2) | (p.g() >> 4);
+            let b = (p.b() << 3) | (p.b() >> 2);
+            rgb888.push(r);
+            rgb888.push(g);
+            rgb888.push(b);
+        }
+
+        let filename = out_dir.join(format!("frame_{:03}.raw", f));
+        std::fs::write(filename, &rgb888).unwrap();
+    }
+    println!("Frame recording complete!");
+}
+
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--record-gif") {
+        record_frames();
+        return;
+    }
+
     println!("=== embedded-gui: Rich Controls & Grid Layout Showcase ===");
 
     let res = std::panic::catch_unwind(|| {

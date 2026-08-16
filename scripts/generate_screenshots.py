@@ -10,21 +10,11 @@ from PIL import Image
 
 W, H = 320, 240
 REPO_ROOT = Path(__file__).resolve().parent.parent
-FRAMES_DIR = REPO_ROOT / "target" / "pipeline_frames"
-OUTPUT_GIF = REPO_ROOT / "docs" / "screenshots" / "frosted_glass_pipeline.gif"
 
-def main():
-    print("1. Running showcase in record-frames mode...")
-    subprocess.run(
-        ["cargo", "run", "--example", "graphics_pipeline_showcase", "--", "--record-gif"],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
-    print("2. Compiling raw frames into animated GIF...")
-    raw_files = sorted(FRAMES_DIR.glob("frame_*.raw"))
+def compile_gif(frames_dir: Path, output_gif: Path, duration_ms: int = 33):
+    raw_files = sorted(frames_dir.glob("frame_*.raw"))
     if not raw_files:
-        print("Error: No recorded frames found!")
+        print(f"Error: No recorded frames found in {frames_dir}!")
         return
 
     images = []
@@ -33,16 +23,41 @@ def main():
         img = Image.frombytes("RGB", (W, H), raw_bytes)
         images.append(img)
 
-    OUTPUT_GIF.parent.mkdir(parents=True, exist_ok=True)
+    output_gif.parent.mkdir(parents=True, exist_ok=True)
     images[0].save(
-        OUTPUT_GIF,
+        output_gif,
         save_all=True,
         append_images=images[1:],
-        duration=33,  # ~30 fps
+        duration=duration_ms,
         loop=0,
         optimize=True,
     )
-    print(f"-> Successfully generated {OUTPUT_GIF} ({len(images)} frames, {os.path.getsize(OUTPUT_GIF)} bytes)")
+    print(f"-> Successfully generated {output_gif} ({len(images)} frames, {os.path.getsize(output_gif)} bytes)")
+
+def main():
+    # 1. Pipeline & frosted glass showcase
+    print("1. Generating frosted glass & pipeline showcase GIF...")
+    subprocess.run(
+        ["cargo", "run", "--example", "graphics_pipeline_showcase", "--", "--record-gif"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    compile_gif(
+        REPO_ROOT / "target" / "pipeline_frames",
+        REPO_ROOT / "docs" / "screenshots" / "frosted_glass_pipeline.gif",
+    )
+
+    # 2. Rich controls & 2D GridLayout showcase
+    print("\n2. Generating rich controls, 2D GridLayout & Bézier showcase GIF...")
+    subprocess.run(
+        ["cargo", "run", "--example", "rich_controls_grid_showcase", "--", "--record-gif"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    compile_gif(
+        REPO_ROOT / "target" / "controls_frames",
+        REPO_ROOT / "docs" / "screenshots" / "rich_controls_grid_showcase.gif",
+    )
 
 if __name__ == "__main__":
     main()
