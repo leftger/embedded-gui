@@ -408,7 +408,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "criterion",
  "critical-section",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-codegen"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "kdl",
  "thiserror 2.0.20",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-macros"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "embedded-gui-codegen",
  "proc-macro2",

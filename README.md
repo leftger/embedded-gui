@@ -43,7 +43,7 @@ screen id="Dashboard" width=320 height=240 theme="dark" {
 ```
 
 <div align="center">
-  <img src="docs/screenshots/kdl_generated_screen.png" width="420" alt="Generated KDL Screen Render"><br/>
+  <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/kdl_generated_screen.png" width="420" alt="Generated KDL Screen Render"><br/>
   <sub><b>Zero-Allocation Result:</b> 2D Grid Layout, decimal spinbox, tachometer scale, button, and toggle compiled directly into pure <code>no_std</code> Rust.</sub>
 </div>
 <br/>
@@ -101,7 +101,7 @@ gui.render(&mut display)?;
 ### Grand Showcase: 2D Grid Layout, Rich Controls & Vector Béziers
 *Zero-allocation 2D `GridLayout` (fractional `fr` & fixed `px` tracks), radial tachometer & linear graduated scales, interactive table grid with cell navigation, precision decimal spinbox, and stroked Bézier vector paths.*
 
-<img src="docs/screenshots/rich_controls_grid_showcase.gif" width="640" alt="Grand Showcase: Rich Controls, 2D Grid, and Bézier Curves">
+<img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/rich_controls_grid_showcase.gif" width="640" alt="Grand Showcase: Rich Controls, 2D Grid, and Bézier Curves">
 
 <br/><br/>
 
@@ -112,11 +112,11 @@ gui.render(&mut display)?;
   </tr>
   <tr>
     <td align="center">
-      <img src="docs/screenshots/frosted_glass_pipeline.gif" width="360" alt="Frosted Glass Pipeline"><br/>
+      <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/frosted_glass_pipeline.gif" width="360" alt="Frosted Glass Pipeline"><br/>
       <sub><b>Hardware-accelerated 2D pipeline:</b> Moving IIR frosted glass blur overlays, alpha linear/radial gradients, and scanline blits.</sub>
     </td>
     <td align="center">
-      <img src="docs/screenshots/smart_home_dashboard.gif" width="360" alt="Smart Home Dashboard"><br/>
+      <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/smart_home_dashboard.gif" width="360" alt="Smart Home Dashboard"><br/>
       <sub><b>Glassmorphic IoT Dashboard:</b> HVAC radial gauges, color temperature sliders, live power sparkline curve with area fills.</sub>
     </td>
   </tr>
@@ -126,11 +126,11 @@ gui.render(&mut display)?;
   </tr>
   <tr>
     <td align="center">
-      <img src="docs/screenshots/wearable_suite_showcase.gif" width="360" alt="Wearable Suite"><br/>
+      <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/wearable_suite_showcase.gif" width="360" alt="Wearable Suite"><br/>
       <sub><b>Wearable OS:</b> Real-time status bar (charging battery, Bluetooth, clock), 12h/24h time picker, number roller, and action dialogs.</sub>
     </td>
     <td align="center">
-      <img src="docs/screenshots/cinematic_transitions.gif" width="360" alt="Cinematic Transitions"><br/>
+      <img src="https://raw.githubusercontent.com/leftger/embedded-gui/master/docs/screenshots/cinematic_transitions.gif" width="360" alt="Cinematic Transitions"><br/>
       <sub><b>Cinematic Motion:</b> Spatial <code>moook</code> easing, 3D card story transitions, daily fitness rings, and sleep stage bar charts.</sub>
     </td>
   </tr>
