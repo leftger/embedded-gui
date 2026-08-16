@@ -143,3 +143,8 @@ required-features = ["std"]
 name = "cinematic_transitions_showcase"
 path = "examples/basics/cinematic_transitions_showcase.rs"
 required-features = ["std"]
+
+[[example]]
+name = "generate_readme_screenshots"
+path = "examples/integrations/generate_readme_screenshots.rs"
+required-features = ["std", "macros"]

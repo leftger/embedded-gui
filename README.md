@@ -32,15 +32,21 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 Author your UI screen in declarative KDL (`ui/dashboard.kdl`):
 ```kdl
 screen id="Dashboard" width=320 height=240 theme="dark" {
-    grid cols="140px 1fr" rows="24px 1fr 40px" gap=6 padding=8 {
-        status_bar id="Header" col=0 row=0 col_span=2 time="10:42"
-        scale id="Tach" col=0 row=1 mode="radial" min=0.0 max=120.0 value=65.0
-        spinbox id="TargetTemp" col=1 row=1 min=150 max=350 value=225
-        button id="ApplyBtn" col=0 row=2 text="APPLY"
-        toggle id="EcoMode" col=1 row=2 label="ECO" checked=true
+    grid cols="140px 1fr" rows="24px 1fr 48px" gap=6 padding=8 {
+        banner col=0 row=0 col_span=2 text="Living Room Climate"
+        spinbox id="TempSetpoint" col=0 row=1 min=100 max=350 value=225 digits=4 decimals=1
+        scale id="RoomGauge" col=1 row=1 mode="radial" min=10.0 max=40.0 value=22.5
+        button id="FanBtn" col=0 row=2 text="FAN HIGH"
+        toggle id="EcoMode" col=1 row=2 checked=true
     }
 }
 ```
+
+<div align="center">
+  <img src="docs/screenshots/kdl_generated_screen.png" width="420" alt="Generated KDL Screen Render"><br/>
+  <sub><b>Zero-Allocation Result:</b> 2D Grid Layout, decimal spinbox, tachometer scale, button, and toggle compiled directly into pure <code>no_std</code> Rust.</sub>
+</div>
+<br/>
 
 Include and compile directly into zero-allocation `#![no_std]` Rust code:
 ```rust
@@ -54,9 +60,9 @@ fn main() {
     let app = DashboardApp::build(&mut gui).expect("failed to build UI");
 
     // Strongly-typed widget IDs generated automatically:
-    // app.widgets.tach
-    // app.widgets.target_temp
-    // app.widgets.apply_btn
+    // app.widgets.room_gauge
+    // app.widgets.temp_setpoint
+    // app.widgets.fan_btn
     // app.widgets.eco_mode
 }
 ```

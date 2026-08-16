@@ -49,7 +49,17 @@ screen id="ClimateControl" width=320 height=240 theme="dark" {
 }
 ```
 
-### 3. Include and Instantiate in Rust
+### 3. Generated Visual UI Output
+
+<div align="center">
+  <img src="../docs/screenshots/kdl_generated_screen.png" width="480" alt="Generated KDL Screen Render">
+  <br/>
+  <sub><b>Compiled KDL UI:</b> 2D Grid Layout, precision numeric spinbox, radial scale tachometer, action button, and stateful toggle.</sub>
+</div>
+
+<br/>
+
+### 4. Include and Instantiate in Rust
 ```rust
 use embedded_gui::prelude::*;
 

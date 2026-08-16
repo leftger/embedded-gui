@@ -5,6 +5,8 @@ use embedded_graphics_core::{
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay};
 use embedded_gui::prelude::*;
 
+embedded_gui::include_gui!("examples/ui/smart_thermostat.kdl");
+
 const DASHBOARD_W: u32 = 192;
 const DASHBOARD_H: u32 = 120;
 const FONT_W: u32 = 240;
@@ -70,8 +72,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .save_png(path)?;
     }
 
-    println!("wrote dashboard/fonts/motion/flipcard PNGs to docs/screenshots");
+    let mut kdl_display = SimulatorDisplay::<Rgb565>::new(Size::new(320, 240));
+    draw_kdl_screen_showcase(&mut kdl_display);
+    let kdl_settings = OutputSettingsBuilder::new().scale(2).build();
+    kdl_display
+        .to_rgb_output_image(&kdl_settings)
+        .save_png("docs/screenshots/kdl_generated_screen.png")?;
+
+    println!("wrote dashboard/fonts/motion/flipcard/kdl PNGs to docs/screenshots");
     Ok(())
+}
+
+fn draw_kdl_screen_showcase(display: &mut SimulatorDisplay<Rgb565>) {
+    let mut gui = GuiContext::<32, 16, 16>::new(Rect::new(0, 0, 320, 240));
+    let _app = SmartThermostatApp::build(&mut gui).expect("build kdl app");
+    gui.render(display).expect("render");
 }
 
 fn draw_dashboard_showcase(display: &mut SimulatorDisplay<Rgb565>) {
