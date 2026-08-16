@@ -11,7 +11,7 @@ embedded-graphics-core = "0.4.1"
 panic-halt = "0.2"
 
 [dependencies.embedded-gui]
-path = ".."
+path = "../crates/embedded-gui"
 default-features = false
 features = ["libm", "rich-widgets"]
 

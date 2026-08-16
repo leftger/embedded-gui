@@ -421,7 +421,6 @@ dependencies = [
  "embedded-graphics-core",
  "embedded-graphics-framebuf",
  "embedded-graphics-simulator",
- "embedded-gui-codegen",
  "embedded-gui-macros",
  "embedded-layout",
  "embedded-text",
@@ -433,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-codegen"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "kdl",
  "thiserror 2.0.20",
@@ -441,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-macros"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "embedded-gui-codegen",
  "proc-macro2",

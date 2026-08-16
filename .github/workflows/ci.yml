@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check ${{ env.CHECK_ARGS }}
+      - run: cargo check --workspace --all-targets --all-features
 
   check-no-std-matrix:
     name: "Check (no_std: ${{ matrix.target }})"
@@ -65,8 +65,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --lib --no-default-features --features libm --target ${{ matrix.target }}
-      - run: cargo check --lib --no-default-features --features rich-widgets,libm --target ${{ matrix.target }}
+      - run: cargo check -p embedded-gui --lib --no-default-features --features libm --target ${{ matrix.target }}
+      - run: cargo check -p embedded-gui --lib --no-default-features --features rich-widgets,libm --target ${{ matrix.target }}
 
   msrv:
     name: MSRV check
@@ -76,7 +76,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.MSRV }}
-      - run: cargo check --lib --no-default-features --features libm
+      - run: cargo check -p embedded-gui --lib --no-default-features --features libm
 
   clippy:
     name: Clippy
@@ -88,8 +88,8 @@ jobs:
           components: clippy
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy ${{ env.CLIPPY_ARGS }} -- -W clippy::all
-      - run: cargo clippy --lib --no-default-features --features rich-widgets,libm --target thumbv7em-none-eabihf -- -W clippy::all
+      - run: cargo clippy --workspace --all-targets --all-features -- -W clippy::all
+      - run: cargo clippy -p embedded-gui --lib --no-default-features --features rich-widgets,libm --target thumbv7em-none-eabihf -- -W clippy::all
 
   test:
     name: Test Suite
@@ -101,7 +101,7 @@ jobs:
       - name: Install SDL2
         if: ${{ env.NEEDS_SDL == 'true' }}
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
-      - run: cargo test --all-features
+      - run: cargo test --workspace --all-features
 
   bench-check:
     name: Benchmarks Check
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo bench --no-run --all-features
+      - run: cargo bench -p embedded-gui --no-run --all-features
 
   size-harness:
     name: Embedded Size Harness Footprint Budget
@@ -131,4 +131,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc ${{ env.DOCS_ARGS }}
+      - run: cargo doc --workspace --no-deps --all-features

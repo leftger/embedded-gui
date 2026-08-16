@@ -1,0 +1,145 @@
+[package]
+name = "embedded-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "no_std GUI and HUD primitives for embedded-graphics displays"
+keywords = ["embedded-graphics", "gui", "hud", "embedded", "no_std"]
+categories = ["embedded", "gui", "no-std"]
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+exclude = [
+    "../../docs/screenshots/*.gif",
+    "../../docs/screenshots/*.png",
+    "../../assets/",
+]
+
+[features]
+default = ["std", "rich-widgets"]
+std = ["embedded-dsp?/std"]
+rich-widgets = []
+image-decode = ["std"]
+libm = ["dep:libm", "embedded-dsp?/libm"]
+micromath = ["dep:micromath"]
+embedded-text = ["dep:embedded-text", "dep:embedded-graphics"]
+embedded-layout = ["dep:embedded-layout", "dep:embedded-graphics"]
+embedded-graphics = ["dep:embedded-graphics"]
+embedded-3dgfx = ["dep:embedded-3dgfx", "embedded-graphics", "dep:nalgebra"]
+embedded-dsp = ["dep:embedded-dsp", "embedded-dsp/filtering", "embedded-dsp/statistics"]
+triple-buffering = []
+embassy-time = ["dep:embassy-time"]
+embassy = ["embassy-time", "dep:embassy-sync"]
+macros = ["dep:embedded-gui-macros"]
+
+[dependencies]
+embedded-graphics-core.workspace = true
+embedded-draw-target.workspace = true
+embedded-graphics-framebuf.workspace = true
+critical-section.workspace = true
+heapless.workspace = true
+embassy-time = { workspace = true, optional = true }
+embassy-sync = { workspace = true, optional = true }
+libm = { workspace = true, optional = true }
+micromath = { workspace = true, optional = true }
+embedded-graphics = { workspace = true, optional = true }
+embedded-text = { workspace = true, optional = true }
+embedded-layout = { workspace = true, optional = true }
+embedded-dsp = { workspace = true, optional = true }
+embedded-3dgfx = { workspace = true, optional = true }
+nalgebra = { workspace = true, features = ["libm"], optional = true }
+embedded-gui-macros = { workspace = true, optional = true }
+
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }
+criterion.workspace = true
+embassy-time = { workspace = true, features = ["std"] }
+embassy-sync.workspace = true
+embedded-3dgfx.workspace = true
+embedded-graphics.workspace = true
+embedded-graphics-framebuf.workspace = true
+embedded-graphics-simulator.workspace = true
+embedded-gui-macros = { workspace = true }
+nalgebra = { workspace = true, features = ["std"] }
+
+[[bench]]
+name = "gui_benchmarks"
+harness = false
+
+[[example]]
+name = "interop_showcase"
+path = "examples/integrations/interop_showcase.rs"
+required-features = ["embedded-text", "embedded-layout"]
+
+[[example]]
+name = "completion_swapchain_sim"
+path = "examples/integrations/completion_swapchain_sim.rs"
+required-features = ["std"]
+
+[[example]]
+name = "embassy_gui_frame"
+path = "examples/integrations/embassy_gui_frame.rs"
+required-features = ["embassy", "std"]
+
+[[example]]
+name = "custom_font_showcase"
+path = "examples/basics/custom_font_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "embedded_3dgfx_overlay"
+path = "examples/integrations/embedded_3dgfx_overlay.rs"
+required-features = ["embedded-3dgfx", "std"]
+
+[[example]]
+name = "draw_task_band_buffer_showcase"
+path = "examples/basics/draw_task_band_buffer_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "vector_pdc_round_screen_showcase"
+path = "examples/basics/vector_pdc_round_screen_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "relative_anchors_and_flex_justify_showcase"
+path = "examples/basics/relative_anchors_and_flex_justify_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "wearable_os_subsystems_showcase"
+path = "examples/basics/wearable_os_subsystems_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "advanced_cinematic_motion_showcase"
+path = "examples/basics/advanced_cinematic_motion_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "wearable_dialogs_pickers_status_showcase"
+path = "examples/basics/wearable_dialogs_pickers_status_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "graphics_pipeline_showcase"
+path = "examples/basics/graphics_pipeline_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "rich_controls_grid_showcase"
+path = "examples/basics/rich_controls_grid_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "smart_home_dashboard"
+path = "examples/basics/smart_home_dashboard.rs"
+required-features = ["std"]
+
+[[example]]
+name = "cinematic_transitions_showcase"
+path = "examples/basics/cinematic_transitions_showcase.rs"
+required-features = ["std"]

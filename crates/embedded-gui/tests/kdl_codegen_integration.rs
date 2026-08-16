@@ -1,6 +1,5 @@
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
-use embedded_gui::{Framebuffer, GuiContext, Rect};
-use embedded_gui_macros::include_gui;
+use embedded_gui::{Framebuffer, GuiContext, Rect, include_gui};
 
 // 1. Compile the external KDL screen into typed Rust code at compile time
 include_gui!("examples/ui/smart_thermostat.kdl");

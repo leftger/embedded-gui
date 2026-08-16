@@ -214,4 +214,10 @@ pub mod prelude {
 
     #[cfg(all(feature = "std", not(feature = "image-decode")))]
     pub use crate::{LayerCanvas, TestBuffer};
+
+    #[cfg(feature = "macros")]
+    pub use embedded_gui_macros::{gui_kdl, include_gui};
 }
+
+#[cfg(feature = "macros")]
+pub use embedded_gui_macros::{gui_kdl, include_gui};

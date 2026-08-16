@@ -37,7 +37,7 @@ def compile_gif(frames_dir: Path, output_gif: Path, duration_ms: int = 33):
 def run_showcase(example_name: str, frames_dir: Path, output_gif: Path, duration_ms: int = 33):
     print(f"\n--- Generating {example_name} -> {output_gif.name} ---")
     subprocess.run(
-        ["cargo", "run", "--example", example_name, "--", "--record-gif"],
+        ["cargo", "run", "-p", "embedded-gui", "--example", example_name, "--", "--record-gif"],
         cwd=REPO_ROOT,
         check=True,
     )

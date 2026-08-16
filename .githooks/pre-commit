@@ -30,13 +30,13 @@ cargo fmt --all
 git add -- "${staged_rs[@]}"
 
 echo "pre-commit: cargo check (all-features)"
-RUSTFLAGS="-D warnings" cargo check --lib --all-features
+RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features
 
 echo "pre-commit: cargo check (no_std target)"
 rustup target add thumbv7em-none-eabihf 2>/dev/null || true
-cargo check --lib --no-default-features --features libm --target thumbv7em-none-eabihf
+cargo check -p embedded-gui --lib --no-default-features --features libm --target thumbv7em-none-eabihf
 
 echo "pre-commit: cargo clippy"
-cargo clippy --lib --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 echo "pre-commit: ok"

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Pre-push: thorough gate — fmt check, tests, and publish dry-run.
-# Heavier than pre-commit; runs on every push regardless of file types changed.
+# Pre-push: thorough gate — fmt check and tests.
 set -euo pipefail
 
 if ! command -v cargo >/dev/null 2>&1; then
@@ -15,11 +14,6 @@ echo "pre-push: cargo fmt check"
 cargo fmt --all --check
 
 echo "pre-push: cargo test"
-cargo test --all-features
-
-echo "pre-push: cargo publish dry-run"
-if ! cargo publish --dry-run --allow-dirty; then
-  echo "pre-push: warning: publish dry-run failed (unpublished optional deps are ok for now)" >&2
-fi
+cargo test --workspace --all-features
 
 echo "pre-push: ok"

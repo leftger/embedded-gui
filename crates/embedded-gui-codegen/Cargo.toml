@@ -1,14 +1,13 @@
 [package]
 name = "embedded-gui-codegen"
-version = "0.1.0"
-edition = "2024"
-authors = ["Gerzain Mata <leftger@gmail.com>"]
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "KDL markup parser and Rust code generator for embedded-gui"
-repository = "https://github.com/leftger/embedded-gui"
 
 [dependencies]
-kdl = "4.6"
-thiserror = "2.0"
-
-[dev-dependencies]
+kdl.workspace = true
+thiserror.workspace = true
