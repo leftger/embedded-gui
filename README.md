@@ -50,6 +50,9 @@ gui.render(&mut display)?;
 
 ## Visual Showcase
 
+### Accelerated Graphics Pipeline & Frosted Glass Blur
+![Frosted glass and graphics pipeline showcase](docs/screenshots/frosted_glass_pipeline.gif)
+
 ### Tactile Cinematic Motion & Transitions
 ![Animation and transition showcase](docs/screenshots/motion.gif)
 

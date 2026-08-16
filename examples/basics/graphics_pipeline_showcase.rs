@@ -133,6 +133,11 @@ fn render_scene<D: DrawTarget<Color = Rgb565> + PixelRead>(
 fn main() {
     println!("=== embedded-gui: Graphics Pipeline Showcase ===");
 
+    if std::env::args().any(|a| a == "--record-gif") || std::env::var("RECORD_GIF").is_ok() {
+        record_frames();
+        return;
+    }
+
     let res = std::panic::catch_unwind(|| {
         run_interactive();
     });
@@ -142,6 +147,37 @@ fn main() {
         println!("[Running headless pipeline performance verification...]\n");
         run_headless();
     }
+}
+
+fn record_frames() {
+    let out_dir = std::path::Path::new("target/pipeline_frames");
+    let _ = std::fs::create_dir_all(out_dir);
+
+    let mut fb = Framebuffer::<FB_SIZE>::new(W, H);
+    let total_frames = 80;
+    println!(
+        "Recording {} frames to target/pipeline_frames...",
+        total_frames
+    );
+
+    for f in 0..total_frames {
+        render_scene(&mut fb, f, 160).unwrap();
+
+        // Convert RGB565 to RGB888 bytes
+        let mut rgb888 = Vec::with_capacity((W * H * 3) as usize);
+        for p in fb.pixels() {
+            let r = (p.r() << 3) | (p.r() >> 2);
+            let g = (p.g() << 2) | (p.g() >> 4);
+            let b = (p.b() << 3) | (p.b() >> 2);
+            rgb888.push(r);
+            rgb888.push(g);
+            rgb888.push(b);
+        }
+
+        let filename = out_dir.join(format!("frame_{:03}.raw", f));
+        std::fs::write(filename, &rgb888).unwrap();
+    }
+    println!("Frame recording complete!");
 }
 
 fn run_interactive() {
