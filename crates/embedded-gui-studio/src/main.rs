@@ -2,6 +2,7 @@
 //! Cross-platform interactive designer, visual inspector, live animation previewer, and Rust code generator for embedded-gui.
 
 mod app;
+mod curve_visualizer;
 mod inspector;
 mod layout;
 mod presets;

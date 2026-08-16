@@ -1,53 +1,140 @@
-//! 2D simulated LCD canvas widget renderer.
+//! 2D simulated LCD canvas widget renderer with display theme shaders and active touch feedback.
 
+use crate::types::DisplayTheme;
 use core::f32::consts::PI;
 use eframe::egui::{self, Color32, CornerRadius, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2};
 use embedded_gui_codegen::WidgetDef;
 
+/// Theme color mapping token palette.
+pub struct ThemePalette {
+    pub display_bg: Color32,
+    pub card_bg: Color32,
+    pub border: Color32,
+    pub text_primary: Color32,
+    pub text_dim: Color32,
+    pub accent: Color32,
+    pub success: Color32,
+    pub danger: Color32,
+}
+
+impl ThemePalette {
+    pub fn for_theme(theme: DisplayTheme) -> Self {
+        match theme {
+            DisplayTheme::DarkTft => Self {
+                display_bg: Color32::from_rgb(18, 20, 24),
+                card_bg: Color32::from_rgb(30, 33, 40),
+                border: Color32::from_rgb(55, 62, 75),
+                text_primary: Color32::from_rgb(230, 235, 245),
+                text_dim: Color32::from_rgb(140, 150, 165),
+                accent: Color32::from_rgb(45, 110, 220),
+                success: Color32::from_rgb(40, 190, 110),
+                danger: Color32::from_rgb(220, 50, 50),
+            },
+            DisplayTheme::LightTft => Self {
+                display_bg: Color32::from_rgb(240, 244, 248),
+                card_bg: Color32::from_rgb(255, 255, 255),
+                border: Color32::from_rgb(205, 215, 225),
+                text_primary: Color32::from_rgb(20, 25, 35),
+                text_dim: Color32::from_rgb(90, 100, 115),
+                accent: Color32::from_rgb(25, 95, 210),
+                success: Color32::from_rgb(30, 160, 90),
+                danger: Color32::from_rgb(210, 40, 40),
+            },
+            DisplayTheme::AmberPhosphor => Self {
+                display_bg: Color32::from_rgb(15, 10, 4),
+                card_bg: Color32::from_rgb(30, 20, 6),
+                border: Color32::from_rgb(140, 95, 20),
+                text_primary: Color32::from_rgb(255, 180, 40),
+                text_dim: Color32::from_rgb(180, 125, 25),
+                accent: Color32::from_rgb(255, 160, 20),
+                success: Color32::from_rgb(255, 195, 50),
+                danger: Color32::from_rgb(255, 90, 20),
+            },
+            DisplayTheme::EmeraldGreen => Self {
+                display_bg: Color32::from_rgb(4, 15, 8),
+                card_bg: Color32::from_rgb(8, 30, 15),
+                border: Color32::from_rgb(25, 120, 55),
+                text_primary: Color32::from_rgb(50, 255, 120),
+                text_dim: Color32::from_rgb(35, 175, 80),
+                accent: Color32::from_rgb(40, 230, 100),
+                success: Color32::from_rgb(80, 255, 140),
+                danger: Color32::from_rgb(255, 140, 40),
+            },
+            DisplayTheme::MonochromeOled => Self {
+                display_bg: Color32::BLACK,
+                card_bg: Color32::from_rgb(16, 16, 16),
+                border: Color32::WHITE,
+                text_primary: Color32::WHITE,
+                text_dim: Color32::from_rgb(180, 180, 180),
+                accent: Color32::WHITE,
+                success: Color32::WHITE,
+                danger: Color32::WHITE,
+            },
+        }
+    }
+}
+
 /// Draws an animated 2D preview representation of an embedded-gui widget.
-pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &WidgetDef, time: f32) {
+pub fn draw_animated_widget(
+    painter: &egui::Painter,
+    rect: Rect,
+    widget: &WidgetDef,
+    time: f32,
+    theme: DisplayTheme,
+    is_pressed: bool,
+) {
+    let p = ThemePalette::for_theme(theme);
+
     match widget {
         WidgetDef::Label { text, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(26, 28, 34));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 text,
                 FontId::proportional(12.0),
-                Color32::from_rgb(220, 225, 235),
+                p.text_primary,
             );
         }
         WidgetDef::Button { text, style, .. } => {
-            let bg = if style.as_deref() == Some("accent") {
-                Color32::from_rgb(45, 110, 220)
+            let mut bg = if is_pressed {
+                Color32::from_rgb(70, 150, 255)
+            } else if style.as_deref() == Some("accent") {
+                p.accent
             } else if style.as_deref() == Some("danger") {
-                Color32::from_rgb(220, 45, 45)
+                p.danger
             } else {
-                Color32::from_rgb(50, 56, 68)
+                p.card_bg
             };
-            painter.rect_filled(rect, CornerRadius::same(4), bg);
+
+            if is_pressed {
+                bg = Color32::from_rgb(90, 170, 255);
+            }
+
+            let btn_rect = if is_pressed { rect.shrink(1.5) } else { rect };
+            painter.rect_filled(btn_rect, CornerRadius::same(4), bg);
             painter.rect_stroke(
-                rect,
+                btn_rect,
                 CornerRadius::same(4),
-                Stroke::new(1.0f32, Color32::from_rgb(90, 100, 120)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
             painter.text(
-                rect.center(),
+                btn_rect.center(),
                 egui::Align2::CENTER_CENTER,
                 format!("🔘 {}", text),
                 FontId::proportional(12.0),
-                Color32::WHITE,
+                if is_pressed {
+                    Color32::WHITE
+                } else {
+                    p.text_primary
+                },
             );
         }
         WidgetDef::Toggle { label, checked, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(32, 35, 42));
+            painter.rect_filled(rect, CornerRadius::same(4), p.card_bg);
             let check_icon = if *checked { " [ON]" } else { " [OFF]" };
-            let text_color = if *checked {
-                Color32::from_rgb(80, 220, 120)
-            } else {
-                Color32::from_rgb(160, 165, 175)
-            };
+            let text_color = if *checked { p.success } else { p.text_dim };
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
@@ -57,20 +144,20 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
             );
         }
         WidgetDef::Checkbox { label, checked, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(30, 33, 40));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             let mark = if *checked { "☑" } else { "☐" };
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 format!("{} {}", mark, label),
                 FontId::proportional(11.0),
-                Color32::from_rgb(200, 205, 215),
+                p.text_primary,
             );
         }
         WidgetDef::Slider {
             min, max, value, ..
         } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(28, 30, 36));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             let pct = if max > min {
                 ((*value - *min) as f32 / (*max - *min) as f32).clamp(0.0, 1.0)
             } else {
@@ -90,22 +177,22 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
 
             let fill_w = track_rect.width() * pct;
             let fill_rect = Rect::from_min_size(track_rect.min, Vec2::new(fill_w, track_h));
-            painter.rect_filled(
-                fill_rect,
-                CornerRadius::same(3),
-                Color32::from_rgb(60, 140, 240),
-            );
+            painter.rect_filled(fill_rect, CornerRadius::same(3), p.accent);
+
+            // Slider thumb handle knob
+            let thumb_x = track_rect.min.x + fill_w;
+            painter.circle_filled(Pos2::new(thumb_x, rect.center().y), 5.0, Color32::WHITE);
 
             painter.text(
                 Pos2::new(rect.center().x, rect.min.y + 7.0),
                 egui::Align2::CENTER_CENTER,
                 format!("Slider: {}", value),
                 FontId::proportional(10.0),
-                Color32::from_rgb(180, 185, 195),
+                p.text_dim,
             );
         }
         WidgetDef::ProgressBar { value, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(24, 26, 32));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             let track_rect = rect.shrink2(Vec2::new(6.0, 6.0));
             painter.rect_filled(
                 track_rect,
@@ -121,17 +208,13 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
             let fill_w = track_rect.width() * animated_val.clamp(0.0, 1.0);
             let fill_rect =
                 Rect::from_min_size(track_rect.min, Vec2::new(fill_w, track_rect.height()));
-            painter.rect_filled(
-                fill_rect,
-                CornerRadius::same(3),
-                Color32::from_rgb(40, 180, 120),
-            );
+            painter.rect_filled(fill_rect, CornerRadius::same(3), p.success);
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.0}%", animated_val * 100.0),
                 FontId::proportional(11.0),
-                Color32::WHITE,
+                p.text_primary,
             );
         }
         WidgetDef::Scale {
@@ -141,15 +224,15 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
             value,
             ..
         } => {
-            painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(26, 30, 38));
+            painter.rect_filled(rect, CornerRadius::same(4), p.card_bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(4),
-                Stroke::new(1.0f32, Color32::from_rgb(60, 70, 85)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
 
-            let dynamic_val = *value + ((*max - *min) * 0.2 * (time * 1.8).sin());
+            let dynamic_val = *value + ((*max - *min) * 0.15 * (time * 1.8).sin());
             let clamped_val = dynamic_val.clamp(*min, *max);
 
             painter.text(
@@ -157,22 +240,22 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::CENTER_CENTER,
                 format!("⏱ Scale ({})", mode),
                 FontId::proportional(11.0),
-                Color32::from_rgb(140, 180, 240),
+                p.accent,
             );
             painter.text(
                 Pos2::new(rect.center().x, rect.center().y + 8.0),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.1} [{:.0}..{:.0}]", clamped_val, min, max),
                 FontId::proportional(12.0),
-                Color32::from_rgb(230, 235, 245),
+                p.text_primary,
             );
         }
         WidgetDef::BusyWheel { active, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(20, 24, 32));
+            painter.rect_filled(rect, CornerRadius::same(4), p.card_bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(4),
-                Stroke::new(1.0f32, Color32::from_rgb(45, 52, 68)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
 
@@ -186,7 +269,12 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 let dot_pos = center + Vec2::new(angle.cos() * radius, angle.sin() * radius);
                 let alpha = (i as f32 + 1.0) / (num_dots as f32);
                 let dot_radius = 2.0 + alpha * 2.0;
-                let color = Color32::from_rgba_unmultiplied(60, 160, 255, (alpha * 255.0) as u8);
+                let color = Color32::from_rgba_unmultiplied(
+                    p.accent.r(),
+                    p.accent.g(),
+                    p.accent.b(),
+                    (alpha * 255.0) as u8,
+                );
                 painter.circle_filled(dot_pos, dot_radius, color);
             }
 
@@ -195,7 +283,7 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::CENTER_CENTER,
                 "Busy Spinner",
                 FontId::proportional(9.0),
-                Color32::from_rgb(140, 150, 165),
+                p.text_dim,
             );
         }
         WidgetDef::SweepingArc {
@@ -203,24 +291,20 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
             end_angle,
             ..
         } => {
-            painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(20, 24, 32));
+            painter.rect_filled(rect, CornerRadius::same(4), p.card_bg);
             let center = rect.center();
             let radius = (rect.width().min(rect.height()) / 2.0 - 10.0).max(8.0);
 
             let pulse = (time * 2.5).sin() * 0.5 + 0.5;
             let sweep_end = *start_angle as f32 + (*end_angle - *start_angle) as f32 * pulse;
 
-            painter.circle_stroke(
-                center,
-                radius,
-                Stroke::new(2.0f32, Color32::from_rgb(50, 60, 75)),
-            );
+            painter.circle_stroke(center, radius, Stroke::new(2.0f32, p.border));
 
             let mut a = *start_angle as f32;
             while a <= sweep_end {
                 let rad = a.to_radians();
-                let p = center + Vec2::new(rad.cos() * radius, rad.sin() * radius);
-                painter.circle_filled(p, 2.5, Color32::from_rgb(80, 200, 255));
+                let pt = center + Vec2::new(rad.cos() * radius, rad.sin() * radius);
+                painter.circle_filled(pt, 2.5, p.accent);
                 a += 15.0;
             }
 
@@ -229,25 +313,24 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::CENTER_CENTER,
                 format!("{:.0}°", sweep_end),
                 FontId::proportional(11.0),
-                Color32::WHITE,
+                p.text_primary,
             );
         }
         WidgetDef::Plotter { mode, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(10, 14, 20));
+            painter.rect_filled(rect, CornerRadius::same(3), p.display_bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(3),
-                Stroke::new(1.0f32, Color32::from_rgb(35, 45, 60)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
 
-            let grid_color = Color32::from_rgb(25, 35, 45);
             let num_v = 6;
             for i in 1..num_v {
                 let x = rect.min.x + (rect.width() * i as f32 / num_v as f32);
                 painter.line_segment(
                     [Pos2::new(x, rect.min.y), Pos2::new(x, rect.max.y)],
-                    Stroke::new(0.8f32, grid_color),
+                    Stroke::new(0.8f32, p.border),
                 );
             }
             let num_h = 4;
@@ -255,7 +338,7 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 let y = rect.min.y + (rect.height() * i as f32 / num_h as f32);
                 painter.line_segment(
                     [Pos2::new(rect.min.x, y), Pos2::new(rect.max.x, y)],
-                    Stroke::new(0.8f32, grid_color),
+                    Stroke::new(0.8f32, p.border),
                 );
             }
 
@@ -288,10 +371,7 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
             }
 
             for win in points.windows(2) {
-                painter.line_segment(
-                    [win[0], win[1]],
-                    Stroke::new(1.8f32, Color32::from_rgb(60, 230, 180)),
-                );
+                painter.line_segment([win[0], win[1]], Stroke::new(1.8f32, p.success));
             }
 
             painter.text(
@@ -299,17 +379,17 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::LEFT_TOP,
                 "CH1: 1.00kHz (Live Scope)",
                 FontId::proportional(9.0),
-                Color32::from_rgb(60, 230, 180),
+                p.success,
             );
         }
         WidgetDef::StatusBar { time: time_str, .. } => {
-            painter.rect_filled(rect, CornerRadius::ZERO, Color32::from_rgb(35, 38, 48));
+            painter.rect_filled(rect, CornerRadius::ZERO, p.card_bg);
             painter.text(
                 Pos2::new(rect.min.x + 8.0, rect.center().y),
                 egui::Align2::LEFT_CENTER,
                 "📶  🔋 98%",
                 FontId::proportional(10.0),
-                Color32::from_rgb(180, 190, 200),
+                p.text_dim,
             );
 
             let colon = if (time * 2.0).fract() > 0.5 { ":" } else { " " };
@@ -325,20 +405,20 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::RIGHT_CENTER,
                 display_time,
                 FontId::proportional(11.0),
-                Color32::from_rgb(220, 225, 235),
+                p.text_primary,
             );
         }
         WidgetDef::Panel { style, .. } => {
             let bg = if style.as_deref() == Some("card") {
-                Color32::from_rgb(32, 36, 44)
+                p.card_bg
             } else {
-                Color32::from_rgb(25, 28, 35)
+                p.display_bg
             };
             painter.rect_filled(rect, CornerRadius::same(4), bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(4),
-                Stroke::new(1.0f32, Color32::from_rgb(55, 60, 72)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
             painter.text(
@@ -346,17 +426,17 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::CENTER_CENTER,
                 "Card Panel",
                 FontId::proportional(11.0),
-                Color32::from_rgb(120, 130, 145),
+                p.text_dim,
             );
         }
         WidgetDef::Dropdown {
             options, selected, ..
         } => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(38, 42, 52));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(3),
-                Stroke::new(1.0f32, Color32::from_rgb(70, 80, 95)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
             let item = options
@@ -368,17 +448,17 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                 egui::Align2::CENTER_CENTER,
                 format!("▼ {}", item),
                 FontId::proportional(11.0),
-                Color32::from_rgb(210, 215, 225),
+                p.text_primary,
             );
         }
         WidgetDef::Roller {
             options, selected, ..
         } => {
-            painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(25, 28, 35));
+            painter.rect_filled(rect, CornerRadius::same(4), p.display_bg);
             painter.rect_stroke(
                 rect,
                 CornerRadius::same(4),
-                Stroke::new(1.0f32, Color32::from_rgb(60, 68, 82)),
+                Stroke::new(1.0f32, p.border),
                 StrokeKind::Inside,
             );
 
@@ -397,7 +477,7 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                     egui::Align2::CENTER_CENTER,
                     &options[prev_idx],
                     FontId::proportional(9.5),
-                    Color32::from_rgb(110, 118, 130),
+                    p.text_dim,
                 );
 
                 // Active / selected option (highlighted center row)
@@ -405,11 +485,7 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                     Pos2::new(rect.min.x + 2.0, rect.min.y + row_h),
                     Vec2::new(rect.width() - 4.0, row_h),
                 );
-                painter.rect_filled(
-                    cur_rect,
-                    CornerRadius::same(2),
-                    Color32::from_rgb(45, 105, 205),
-                );
+                painter.rect_filled(cur_rect, CornerRadius::same(2), p.accent);
                 painter.text(
                     cur_rect.center(),
                     egui::Align2::CENTER_CENTER,
@@ -428,19 +504,19 @@ pub fn draw_animated_widget(painter: &egui::Painter, rect: Rect, widget: &Widget
                     egui::Align2::CENTER_CENTER,
                     &options[next_idx],
                     FontId::proportional(9.5),
-                    Color32::from_rgb(110, 118, 130),
+                    p.text_dim,
                 );
             }
         }
         WidgetDef::Spacer => {}
         _ => {
-            painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(28, 30, 36));
+            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 widget.id().unwrap_or("widget"),
                 FontId::proportional(10.0),
-                Color32::from_rgb(160, 170, 180),
+                p.text_dim,
             );
         }
     }
