@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[workspace]
+
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"

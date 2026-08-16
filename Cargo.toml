@@ -5,6 +5,9 @@ members = [
     "crates/embedded-gui-codegen",
     "crates/embedded-gui-macros",
 ]
+exclude = [
+    "size_harness",
+]
 
 [workspace.package]
 version = "0.2.1"
