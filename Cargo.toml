@@ -1,3 +1,10 @@
+[workspace]
+members = [
+    ".",
+    "crates/embedded-gui-codegen",
+    "crates/embedded-gui-macros",
+]
+
 [package]
 name = "embedded-gui"
 version = "0.2.1"
@@ -76,6 +83,8 @@ embedded-3dgfx = "0.5.5"
 embedded-graphics = "0.8"
 embedded-graphics-framebuf = "0.3"
 embedded-graphics-simulator = "0.8"
+embedded-gui-codegen = { path = "crates/embedded-gui-codegen" }
+embedded-gui-macros = { path = "crates/embedded-gui-macros" }
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 [[bench]]

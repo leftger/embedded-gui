@@ -1,0 +1,9 @@
+screen id="SmartThermostat" width=320 height=240 theme="dark" {
+    grid cols="140px 1fr" rows="24px 1fr 48px" gap=6 padding=8 {
+        banner col=0 row=0 col_span=2 text="Living Room Climate"
+        spinbox id="TempSetpoint" col=0 row=1 min=100 max=350 value=225 digits=4 decimals=1
+        scale id="RoomGauge" col=1 row=1 mode="radial" min=10.0 max=40.0 value=22.5
+        button id="FanBtn" col=0 row=2 text="FAN HIGH"
+        toggle id="EcoMode" col=1 row=2 checked=true
+    }
+}

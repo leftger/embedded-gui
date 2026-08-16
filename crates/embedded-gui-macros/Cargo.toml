@@ -1,0 +1,17 @@
+[package]
+name = "embedded-gui-macros"
+version = "0.1.0"
+edition = "2024"
+authors = ["Gerzain Mata <leftger@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Procedural macros for compiling KDL UI layouts into no_std Rust code for embedded-gui"
+repository = "https://github.com/leftger/embedded-gui"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+embedded-gui-codegen = { path = "../embedded-gui-codegen" }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
