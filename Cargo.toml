@@ -137,3 +137,8 @@ name = "wearable_dialogs_pickers_status_showcase"
 path = "examples/basics/wearable_dialogs_pickers_status_showcase.rs"
 required-features = ["std"]
 
+[[example]]
+name = "graphics_pipeline_showcase"
+path = "examples/basics/graphics_pipeline_showcase.rs"
+required-features = ["std"]
+
