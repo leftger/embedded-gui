@@ -1328,6 +1328,7 @@ version = "0.2.4"
 dependencies = [
  "eframe",
  "egui_extras",
+ "embedded-gui",
  "embedded-gui-codegen",
 ]
 

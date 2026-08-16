@@ -195,6 +195,107 @@ fn ease_table_sample(t: f32, table: &[u16]) -> f32 {
     v as f32 / NORMALIZED_MAX as f32
 }
 
+/// Standard animation easing curves for embedded UI transitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EasingCurve {
+    #[default]
+    Linear,
+    EaseInQuad,
+    EaseOutQuad,
+    EaseInOutQuad,
+    EaseInCubic,
+    EaseOutCubic,
+    EaseInOutCubic,
+    EaseOutBack,
+    EaseOutBounce,
+    Moook,
+    CubicBezier,
+}
+
+/// Evaluates standard or custom easing curve at normalized progress `t` in `[0.0, 1.0]`.
+pub fn evaluate_easing(curve: EasingCurve, t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    match curve {
+        EasingCurve::Linear => t,
+        EasingCurve::EaseInQuad => t * t,
+        EasingCurve::EaseOutQuad => t * (2.0 - t),
+        EasingCurve::EaseInOutQuad => {
+            if t < 0.5 {
+                2.0 * t * t
+            } else {
+                -1.0 + (4.0 - 2.0 * t) * t
+            }
+        }
+        EasingCurve::EaseInCubic => t * t * t,
+        EasingCurve::EaseOutCubic => {
+            let p = t - 1.0;
+            p * p * p + 1.0
+        }
+        EasingCurve::EaseInOutCubic => {
+            if t < 0.5 {
+                4.0 * t * t * t
+            } else {
+                let p = 2.0 * t - 2.0;
+                0.5 * p * p * p + 1.0
+            }
+        }
+        EasingCurve::EaseOutBack => {
+            const C1: f32 = 1.70158;
+            const C3: f32 = C1 + 1.0;
+            let p = t - 1.0;
+            1.0 + C3 * p * p * p + C1 * p * p
+        }
+        EasingCurve::EaseOutBounce => ease_out_bounce(t),
+        EasingCurve::Moook => moook_curve(t),
+        EasingCurve::CubicBezier => solve_cubic_bezier(0.25, 0.1, 0.25, 1.0, t),
+    }
+}
+
+/// Physics-based bounce easing out.
+pub fn ease_out_bounce(t: f32) -> f32 {
+    const N1: f32 = 7.5625;
+    const D1: f32 = 2.75;
+
+    if t < 1.0 / D1 {
+        N1 * t * t
+    } else if t < 2.0 / D1 {
+        let p = t - 1.5 / D1;
+        N1 * p * p + 0.75
+    } else if t < 2.5 / D1 {
+        let p = t - 2.25 / D1;
+        N1 * p * p + 0.9375
+    } else {
+        let p = t - 2.625 / D1;
+        N1 * p * p + 0.984375
+    }
+}
+
+/// Fast numerical parametric Cubic-Bezier evaluator (CSS `cubic-bezier(p1x, p1y, p2x, p2y)`).
+pub fn solve_cubic_bezier(p1x: f32, p1y: f32, p2x: f32, p2y: f32, x: f32) -> f32 {
+    if x <= 0.0 {
+        return 0.0;
+    }
+    if x >= 1.0 {
+        return 1.0;
+    }
+
+    let mut t = x;
+    for _ in 0..5 {
+        let current_x =
+            3.0 * (1.0 - t) * (1.0 - t) * t * p1x + 3.0 * (1.0 - t) * t * t * p2x + t * t * t;
+        let dx = 3.0 * (1.0 - t) * (1.0 - t) * p1x
+            + 6.0 * (1.0 - t) * t * (p2x - p1x)
+            + 3.0 * t * t * (1.0 - p2x);
+        if dx.abs() < 1e-5 {
+            break;
+        }
+        t -= (current_x - x) / dx;
+        t = t.clamp(0.0, 1.0);
+    }
+
+    3.0 * (1.0 - t) * (1.0 - t) * t * p1y + 3.0 * (1.0 - t) * t * t * p2y + t * t * t
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +318,37 @@ mod tests {
         let b = moook_curve(1.0);
         assert!((a - 0.0).abs() < 0.01);
         assert!((b - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_easing_curves_boundaries() {
+        let curves = [
+            EasingCurve::Linear,
+            EasingCurve::EaseInQuad,
+            EasingCurve::EaseOutQuad,
+            EasingCurve::EaseInOutQuad,
+            EasingCurve::EaseInCubic,
+            EasingCurve::EaseOutCubic,
+            EasingCurve::EaseInOutCubic,
+            EasingCurve::EaseOutBounce,
+            EasingCurve::Moook,
+            EasingCurve::CubicBezier,
+        ];
+        for c in curves {
+            assert!(
+                (evaluate_easing(c, 0.0) - 0.0).abs() < 0.01,
+                "{c:?} start failed"
+            );
+            assert!(
+                (evaluate_easing(c, 1.0) - 1.0).abs() < 0.01,
+                "{c:?} end failed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cubic_bezier_solver() {
+        let res_mid = solve_cubic_bezier(0.25, 0.1, 0.25, 1.0, 0.5);
+        assert!(res_mid > 0.0 && res_mid < 1.0);
     }
 }

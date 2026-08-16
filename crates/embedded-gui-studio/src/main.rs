@@ -5,10 +5,74 @@ use core::f32::consts::PI;
 use eframe::egui::{
     self, Color32, CornerRadius, DragValue, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2,
 };
+use embedded_gui::motion::timing::{EasingCurve, evaluate_easing};
 use embedded_gui_codegen::{
     GridPlacementDef, GridTrackDef, ScreenDef, WidgetDef, generate_rust_code, parse_kdl_screen,
     serialize_kdl_screen,
 };
+
+const SAMPLE_AUTOMOTIVE_CLUSTER: &str = r#"screen id="AutoCluster" width=480 height=272 theme="dark" {
+    grid cols="1fr 120px 1fr" rows="32px 1fr 40px" gap=6 padding=8 {
+        status_bar id="top_bar" time="10:42" col=0 row=0 col_span=3
+        scale id="tachometer" mode="radial" min=0.0 max=8000.0 value=4500.0 major_ticks=8 col=0 row=1
+        label id="gear_speed" text="D4 68 MPH" style="bold" col=1 row=1
+        scale id="speedometer" mode="radial" min=0.0 max=160.0 value=68.0 major_ticks=8 col=2 row=1
+        progress id="fuel_level" value=0.72 col=0 row=2
+        toggle id="sport_mode" label="SPORT" checked=true col=1 row=2
+        progress id="temp_gauge" value=0.48 col=2 row=2
+    }
+}
+"#;
+
+const SAMPLE_HVAC_CLIMATE: &str = r#"screen id="HvacClimate" width=320 height=240 theme="dark" {
+    grid cols="1fr 1fr" rows="32px 1fr 48px" gap=6 padding=6 {
+        status_bar id="hvac_status" time="15:30" col=0 row=0 col_span=2
+        scale id="ambient_temp" mode="radial" min=15.0 max=35.0 value=21.5 major_ticks=4 col=0 row=1
+        slider id="target_slider" min=16 max=30 value=22 col=1 row=1
+        roller id="mode_picker" selected=2 col=0 row=2 {
+            option "OFF"
+            option "ECO"
+            option "AUTO"
+            option "COOL"
+            option "HEAT"
+        }
+        busy_wheel id="fan_spinner" active=true col=1 row=2
+    }
+}
+"#;
+
+const SAMPLE_PATIENT_MONITOR: &str = r#"screen id="PatientMonitor" width=480 height=272 theme="dark" {
+    grid cols="1fr 140px" rows="32px 1fr 1fr" gap=6 padding=6 {
+        status_bar id="bed_header" time="08:15" col=0 row=0 col_span=2
+        plotter id="ecg_lead_ii" mode="sine" col=0 row=1
+        label id="hr_readout" text="HR: 72 BPM" style="accent" col=1 row=1
+        plotter id="spo2_pleth" mode="triangle" col=0 row=2
+        label id="bp_readout" text="BP: 120/80" style="bold" col=1 row=2
+    }
+}
+"#;
+
+const SAMPLE_CNC_CONTROLLER: &str = r#"screen id="CncController" width=320 height=240 theme="dark" {
+    grid cols="1fr 1fr" rows="30px 1fr 40px" gap=4 padding=6 {
+        label id="cnc_title" text="CNC MILLING AXIS CONTROLLER" style="bold" col=0 row=0 col_span=2
+        scale id="spindle_rpm" mode="radial" min=0.0 max=24000.0 value=12000.0 major_ticks=6 col=0 row=1
+        slider id="feed_override" min=10 max=150 value=100 col=1 row=1
+        button id="btn_estop" text="EMERGENCY STOP" style="danger" col=0 row=2
+        toggle id="cycle_start" label="CYCLE RUN" checked=true col=1 row=2
+    }
+}
+"#;
+
+const SAMPLE_SMARTWATCH_FITNESS: &str = r#"screen id="FitnessTracker" width=240 height=240 theme="dark" {
+    grid cols="1fr 1fr" rows="28px 1fr 42px" gap=4 padding=6 {
+        status_bar id="watch_bar" time="17:45" col=0 row=0 col_span=2
+        scale id="move_ring" mode="radial" min=0.0 max=600.0 value=480.0 major_ticks=6 col=0 row=1
+        plotter id="live_heart" mode="sine" col=1 row=1
+        progress id="daily_goal" value=0.80 col=0 row=2
+        button id="btn_workout" text="START WORKOUT" style="accent" col=1 row=2
+    }
+}
+"#;
 
 const SAMPLE_THERMOSTAT: &str = r#"screen id="Thermostat" width=320 height=240 theme="dark" {
     grid cols="1fr 1fr" rows="36px 1fr 48px" gap=6 padding=8 {
@@ -92,12 +156,13 @@ struct EmbeddedGuiStudio {
     timeline_time: f32,
     playback_speed: f32,
     loop_duration: f32,
+    selected_easing: EasingCurve,
 }
 
 impl Default for EmbeddedGuiStudio {
     fn default() -> Self {
         let mut app = Self {
-            kdl_source: SAMPLE_WAVEFORM.to_string(),
+            kdl_source: SAMPLE_AUTOMOTIVE_CLUSTER.to_string(),
             parsed_screen: Err("Not parsed".to_string()),
             generated_rust: String::new(),
             active_tab: StudioTab::VisualPreview,
@@ -109,6 +174,7 @@ impl Default for EmbeddedGuiStudio {
             timeline_time: 0.0,
             playback_speed: 1.0,
             loop_duration: 4.0,
+            selected_easing: EasingCurve::EaseInOutCubic,
         };
         app.recompile();
         app
@@ -179,6 +245,46 @@ impl EmbeddedGuiStudio {
             ui.selectable_value(&mut self.playback_speed, 0.5, "0.5x");
             ui.selectable_value(&mut self.playback_speed, 1.0, "1.0x");
             ui.selectable_value(&mut self.playback_speed, 2.0, "2.0x");
+
+            ui.separator();
+
+            // Easing Curve selector
+            ui.label("Curve:");
+            egui::ComboBox::from_id_salt("easing_curve_combo")
+                .selected_text(format!("{:?}", self.selected_easing))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.selected_easing, EasingCurve::Linear, "Linear");
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::EaseInOutQuad,
+                        "EaseInOutQuad",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::EaseInOutCubic,
+                        "EaseInOutCubic",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::EaseOutBack,
+                        "EaseOutBack (Overshoot)",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::EaseOutBounce,
+                        "EaseOutBounce (Physics)",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::Moook,
+                        "Moook (Pebble UI)",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_easing,
+                        EasingCurve::CubicBezier,
+                        "Cubic Bezier (Custom)",
+                    );
+                });
         });
         ui.separator();
 
@@ -239,7 +345,13 @@ impl EmbeddedGuiStudio {
                 cur_y += *h + gap;
             }
 
-            let t = self.timeline_time;
+            let norm_t = if self.loop_duration > 0.0 {
+                (self.timeline_time / self.loop_duration).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let eased_progress = evaluate_easing(self.selected_easing, norm_t);
+            let t = eased_progress * self.loop_duration;
             let pointer_pos = ui.input(|i| i.pointer.interact_pos());
             let primary_down = ui.input(|i| i.pointer.primary_down());
             let primary_pressed = ui.input(|i| i.pointer.primary_pressed());
@@ -1747,6 +1859,37 @@ impl eframe::App for EmbeddedGuiStudio {
                 ui.separator();
 
                 ui.menu_button("📄 Presets", |ui| {
+                    if ui.button("🚗 Automotive Digital Cluster").clicked() {
+                        self.kdl_source = SAMPLE_AUTOMOTIVE_CLUSTER.to_string();
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    if ui.button("❄️ HVAC Smart Climate").clicked() {
+                        self.kdl_source = SAMPLE_HVAC_CLIMATE.to_string();
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    if ui.button("🩺 Patient Vital Monitor").clicked() {
+                        self.kdl_source = SAMPLE_PATIENT_MONITOR.to_string();
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    if ui.button("⚙️ Industrial CNC Controller").clicked() {
+                        self.kdl_source = SAMPLE_CNC_CONTROLLER.to_string();
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    if ui.button("⌚ Smartwatch Activity Tracker").clicked() {
+                        self.kdl_source = SAMPLE_SMARTWATCH_FITNESS.to_string();
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("📈 Live Oscilloscope").clicked() {
                         self.kdl_source = SAMPLE_WAVEFORM.to_string();
                         self.selected_widget_idx = None;
