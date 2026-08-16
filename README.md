@@ -50,25 +50,47 @@ gui.render(&mut display)?;
 
 ## Visual Showcase
 
-### 1. Grand Showcase: Rich Controls, 2D Grid Layout & Vector Bézier Curves
-2D CSS-style `GridLayout` with fractional (`fr`) and fixed (`px`) tracks, radial tachometer scale, linear graduated scale, interactive table grid with cell selection navigation, precision decimal spinbox, and stroked multi-stop quadratic/cubic Bézier wave paths.
-![Grand showcase of rich controls, 2D GridLayout, tables, graduated scales, spinboxes, and Bézier curves](docs/screenshots/rich_controls_grid_showcase.gif)
+<div align="center">
 
-### 2. Accelerated Graphics Pipeline & Frosted Glass Blur
-Zero-allocation 2D pipeline rendering box IIR blurs (frosted glass overlays), alpha linear/radial gradients, 1:1 row slice image blits, 2x texture scaling, and solid scanline fills.
-![Frosted glass and graphics pipeline showcase](docs/screenshots/frosted_glass_pipeline.gif)
+### Grand Showcase: 2D Grid Layout, Rich Controls & Vector Béziers
+*Zero-allocation 2D `GridLayout` (fractional `fr` & fixed `px` tracks), radial tachometer & linear graduated scales, interactive table grid with cell navigation, precision decimal spinbox, and stroked Bézier vector paths.*
 
-### 3. Smart Home & Industrial IoT Telemetry Dashboard
-Multi-card ambient glassmorphism dashboard with HVAC radial temperature gauges, smooth warm/cool color temperature sliders, live power sparkline curves with area fills, and interactive scene preset buttons.
-![Smart home and industrial IoT telemetry dashboard](docs/screenshots/smart_home_dashboard.gif)
+<img src="docs/screenshots/rich_controls_grid_showcase.gif" width="640" alt="Grand Showcase: Rich Controls, 2D Grid, and Bézier Curves">
 
-### 4. Smartwatch & Wearable UI Subsystems
-Real-time status bar (animated charging battery, Bluetooth beacon, DND, clock), 12h/24h time pickers with focus glow halos, numeric range rollers with units, step goal progress meters, and actionable alert dialogs.
-![Wearable status bar, pickers, and actionable dialogs](docs/screenshots/wearable_suite_showcase.gif)
+<br/><br/>
 
-### 5. Fluid Cinematic Card Transitions & Navigation
-Spatial easing curves (`moook`), 3D card story deck transitions, daily fitness progress rings, sleep stage bar charts, and ambient glance widgets.
-![Cinematic card transitions and motion showcase](docs/screenshots/cinematic_transitions.gif)
+<table>
+  <tr>
+    <th width="50%" align="center">Accelerated Graphics Pipeline & Frosted Glass</th>
+    <th width="50%" align="center">Smart Home & Industrial IoT Telemetry Dashboard</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/frosted_glass_pipeline.gif" width="360" alt="Frosted Glass Pipeline"><br/>
+      <sub><b>Hardware-accelerated 2D pipeline:</b> Moving IIR frosted glass blur overlays, alpha linear/radial gradients, and scanline blits.</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/smart_home_dashboard.gif" width="360" alt="Smart Home Dashboard"><br/>
+      <sub><b>Glassmorphic IoT Dashboard:</b> HVAC radial gauges, color temperature sliders, live power sparkline curve with area fills.</sub>
+    </td>
+  </tr>
+  <tr>
+    <th align="center">Wearable Subsystems, Pickers & Status Bar</th>
+    <th align="center">Fluid Cinematic Transitions & Card Story Deck</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/wearable_suite_showcase.gif" width="360" alt="Wearable Suite"><br/>
+      <sub><b>Wearable OS:</b> Real-time status bar (charging battery, Bluetooth, clock), 12h/24h time picker, number roller, and action dialogs.</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/cinematic_transitions.gif" width="360" alt="Cinematic Transitions"><br/>
+      <sub><b>Cinematic Motion:</b> Spatial <code>moook</code> easing, 3D card story transitions, daily fitness rings, and sleep stage bar charts.</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ---
 
