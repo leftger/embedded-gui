@@ -46,6 +46,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - run: cargo check --workspace --all-targets --all-features
 
   check-no-std-matrix:
@@ -88,6 +90,8 @@ jobs:
           components: clippy
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - run: cargo clippy --workspace --all-targets --all-features -- -W clippy::all
       - run: cargo clippy -p embedded-gui --lib --no-default-features --features rich-widgets,libm --target thumbv7em-none-eabihf -- -W clippy::all
 

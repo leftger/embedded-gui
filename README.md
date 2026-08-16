@@ -14,6 +14,8 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 ## Key Capabilities
 
 - **Zero-Allocation (`no_std`)**: Built entirely on fixed-capacity data structures (`heapless`) with strict memory bounds and deterministic execution times.
+- **Declarative KDL GUI Markup & Codegen**: Author complex UI screens in clean [KDL markup](https://kdl.dev) and compile directly into zero-allocation `#![no_std]` Rust code at build time with `include_gui!` or `gui_kdl!`.
+- **2D Grid Layout Engine**: CSS-style track resolution (`"140px 1fr 2fr auto"`), cell placement, and multi-track spans (`col_span`, `row_span`).
 - **Rich Built-in Widgets**: Buttons, Sliders, Dropdowns, Toggles, Checkboxes, Gauges, Meters, Sweeping Arcs, Plotters/Charts, TextAreas, On-Screen Keyboards, and Circular Lists.
 - **Native Custom Widgets**: Extensible third-party widget support via type-erased `WidgetStorage<'a>` and object-safe `Widget` trait contracts.
 - **Unified Motion Engine**: Tactile spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
@@ -24,6 +26,44 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 ---
 
 ## Quick Start
+
+### 1. Declarative KDL Markup (New in v0.2.1)
+
+Author your UI screen in declarative KDL (`ui/dashboard.kdl`):
+```kdl
+screen id="Dashboard" width=320 height=240 theme="dark" {
+    grid cols="140px 1fr" rows="24px 1fr 40px" gap=6 padding=8 {
+        status_bar id="Header" col=0 row=0 col_span=2 time="10:42"
+        scale id="Tach" col=0 row=1 mode="radial" min=0.0 max=120.0 value=65.0
+        spinbox id="TargetTemp" col=1 row=1 min=150 max=350 value=225
+        button id="ApplyBtn" col=0 row=2 text="APPLY"
+        toggle id="EcoMode" col=1 row=2 label="ECO" checked=true
+    }
+}
+```
+
+Include and compile directly into zero-allocation `#![no_std]` Rust code:
+```rust
+use embedded_gui::prelude::*;
+
+// Embeds and compiles the KDL file at build time into DashboardApp and DashboardWidgets
+include_gui!("ui/dashboard.kdl");
+
+fn main() {
+    let mut gui = GuiContext::<64, 32, 16>::new(Rect::new(0, 0, 320, 240));
+    let app = DashboardApp::build(&mut gui).expect("failed to build UI");
+
+    // Strongly-typed widget IDs generated automatically:
+    // app.widgets.tach
+    // app.widgets.target_temp
+    // app.widgets.apply_btn
+    // app.widgets.eco_mode
+}
+```
+
+*For complete syntax, full widget catalog, and styling options, see the [Declarative KDL GUI Codegen Guide](./docs/kdl-gui-codegen-guide.md).*
+
+### 2. Programmatic Fluent Builder API
 
 ```rust
 use embedded_graphics::pixelcolor::Rgb565;
@@ -121,6 +161,7 @@ gui.render(&mut display)?;
 
 Detailed architecture specifications and integration guides are available in [`docs/`](./docs/):
 
+- 📐 **[Declarative KDL GUI Markup & Codegen Guide](./docs/kdl-gui-codegen-guide.md)**: Complete reference manual for KDL screen syntax, 2D grid layouts, full widget catalog, vector Bézier paths, and zero-allocation Rust codegen.
 - 🔤 **[Custom Font Abstraction & Interop Guide](./docs/custom-fonts-abstraction.md)**: Drop-in custom bitmap fonts (`BitmapFont`), `Font` trait abstraction, and `embedded-graphics` `MonoFont` interop.
 - 🎬 **[Animation Presets Guide](./docs/animation-presets.md)**: Easing curves, spring physics, and timeline keyframing specifications.
 - 🔀 **[Transition Presets Guide](./docs/transition-presets.md)**: Screen stack slide, fade, portal, and flip-card transition rules.
