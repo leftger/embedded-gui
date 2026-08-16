@@ -177,7 +177,7 @@ impl EmbeddedGuiStudio {
         egui::ScrollArea::both().show(ui, |ui| {
             let (response, painter) = ui.allocate_painter(
                 Vec2::new(screen_w + 32.0, screen_h + 32.0),
-                egui::Sense::click(),
+                egui::Sense::click_and_drag(),
             );
             let origin = response.rect.min + Vec2::new(16.0, 16.0);
             let display_rect = Rect::from_min_size(origin, Vec2::new(screen_w, screen_h));
@@ -239,9 +239,83 @@ impl EmbeddedGuiStudio {
 
             let t = self.timeline_time;
             let pointer_pos = ui.input(|i| i.pointer.interact_pos());
+            let is_dragging = ui.input(|i| i.pointer.is_decidedly_dragging());
             let mut newly_selected = None;
+            let mut mutated_screen = screen.clone();
+            let mut did_mutate = false;
 
-            // Draw each widget with live animation time passed in
+            // 1. Draw subtle interactive grid guideline dividers
+            for (ci, &cx) in col_xs.iter().enumerate().skip(1) {
+                let div_x = cx - gap / 2.0;
+                painter.line_segment(
+                    [
+                        Pos2::new(div_x, inner_rect.min.y),
+                        Pos2::new(div_x, inner_rect.max.y),
+                    ],
+                    Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(60, 80, 110, 80)),
+                );
+
+                // Interactive column divider dragging
+                if let Some(pos) = pointer_pos {
+                    if (pos.x - div_x).abs() <= 6.0
+                        && pos.y >= inner_rect.min.y
+                        && pos.y <= inner_rect.max.y
+                    {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                        painter.line_segment(
+                            [
+                                Pos2::new(div_x, inner_rect.min.y),
+                                Pos2::new(div_x, inner_rect.max.y),
+                            ],
+                            Stroke::new(2.0f32, Color32::from_rgb(80, 180, 255)),
+                        );
+                        if is_dragging && ci > 0 && ci - 1 < mutated_screen.grid.cols.len() {
+                            let new_px = ((pos.x - col_xs[ci - 1]) / self.preview_zoom)
+                                .max(20.0)
+                                .round() as u32;
+                            mutated_screen.grid.cols[ci - 1] = GridTrackDef::Px(new_px);
+                            did_mutate = true;
+                        }
+                    }
+                }
+            }
+
+            for (ri, &ry) in row_ys.iter().enumerate().skip(1) {
+                let div_y = ry - gap / 2.0;
+                painter.line_segment(
+                    [
+                        Pos2::new(inner_rect.min.x, div_y),
+                        Pos2::new(inner_rect.max.x, div_y),
+                    ],
+                    Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(60, 80, 110, 80)),
+                );
+
+                // Interactive row divider dragging
+                if let Some(pos) = pointer_pos {
+                    if (pos.y - div_y).abs() <= 6.0
+                        && pos.x >= inner_rect.min.x
+                        && pos.x <= inner_rect.max.x
+                    {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
+                        painter.line_segment(
+                            [
+                                Pos2::new(inner_rect.min.x, div_y),
+                                Pos2::new(inner_rect.max.x, div_y),
+                            ],
+                            Stroke::new(2.0f32, Color32::from_rgb(80, 180, 255)),
+                        );
+                        if is_dragging && ri > 0 && ri - 1 < mutated_screen.grid.rows.len() {
+                            let new_px = ((pos.y - row_ys[ri - 1]) / self.preview_zoom)
+                                .max(16.0)
+                                .round() as u32;
+                            mutated_screen.grid.rows[ri - 1] = GridTrackDef::Px(new_px);
+                            did_mutate = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Draw each widget & handle selection / dragging
             for (idx, (placement, widget)) in screen.grid.children.iter().enumerate() {
                 let c = placement.col.min(col_xs.len().saturating_sub(1));
                 let r = placement.row.min(row_ys.len().saturating_sub(1));
@@ -285,7 +359,7 @@ impl EmbeddedGuiStudio {
                 // Draw widget representation
                 draw_animated_widget(&painter, widget_rect, widget, t);
 
-                // Selection highlight & bounding box handles
+                // Selection highlight, bounding box, and live drag-and-drop
                 if self.selected_widget_idx == Some(idx) {
                     let select_stroke = Stroke::new(2.0f32, Color32::from_rgb(60, 160, 255));
                     painter.rect_stroke(
@@ -295,15 +369,18 @@ impl EmbeddedGuiStudio {
                         StrokeKind::Outside,
                     );
 
-                    // Draw 4 corner handles
-                    let handle_size = 5.0;
-                    let corners = [
+                    // Corner resize handles
+                    let handle_size = 6.0;
+                    let br_corner = widget_rect.right_bottom();
+                    let br_handle_rect =
+                        Rect::from_center_size(br_corner, Vec2::splat(handle_size + 4.0));
+
+                    // Other corner handles
+                    for corner in [
                         widget_rect.left_top(),
                         widget_rect.right_top(),
                         widget_rect.left_bottom(),
-                        widget_rect.right_bottom(),
-                    ];
-                    for corner in corners {
+                    ] {
                         let h_rect = Rect::from_center_size(corner, Vec2::splat(handle_size));
                         painter.rect_filled(
                             h_rect,
@@ -312,16 +389,82 @@ impl EmbeddedGuiStudio {
                         );
                     }
 
+                    // Bottom-right handle (drag to span)
+                    painter.rect_filled(
+                        Rect::from_center_size(br_corner, Vec2::splat(handle_size)),
+                        CornerRadius::same(1),
+                        Color32::from_rgb(80, 220, 120),
+                    );
+
+                    // Interactive handle resizing / drag moving
+                    if let Some(pos) = pointer_pos {
+                        if br_handle_rect.contains(pos) {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
+                            if is_dragging {
+                                // Compute target col and row spans
+                                let mut target_c = c;
+                                for (ci, &cx) in col_xs.iter().enumerate() {
+                                    if pos.x >= cx {
+                                        target_c = ci;
+                                    }
+                                }
+                                let mut target_r = r;
+                                for (ri, &ry) in row_ys.iter().enumerate() {
+                                    if pos.y >= ry {
+                                        target_r = ri;
+                                    }
+                                }
+                                let new_c_span = (target_c.saturating_sub(c) + 1).max(1);
+                                let new_r_span = (target_r.saturating_sub(r) + 1).max(1);
+                                if new_c_span != placement.col_span
+                                    || new_r_span != placement.row_span
+                                {
+                                    mutated_screen.grid.children[idx].0.col_span = new_c_span;
+                                    mutated_screen.grid.children[idx].0.row_span = new_r_span;
+                                    did_mutate = true;
+                                }
+                            }
+                        } else if widget_rect.contains(pos) {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                            if is_dragging {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                                // Drag-to-move widget to target cell
+                                let mut target_c = 0;
+                                for (ci, &cx) in col_xs.iter().enumerate() {
+                                    if pos.x >= cx {
+                                        target_c = ci;
+                                    }
+                                }
+                                let mut target_r = 0;
+                                for (ri, &ry) in row_ys.iter().enumerate() {
+                                    if pos.y >= ry {
+                                        target_r = ri;
+                                    }
+                                }
+                                target_c = target_c.min(col_xs.len().saturating_sub(1));
+                                target_r = target_r.min(row_ys.len().saturating_sub(1));
+
+                                if target_c != placement.col || target_r != placement.row {
+                                    mutated_screen.grid.children[idx].0.col = target_c;
+                                    mutated_screen.grid.children[idx].0.row = target_r;
+                                    did_mutate = true;
+                                }
+                            }
+                        }
+                    }
+
                     // Floating selection badge
                     let badge_text = format!(
-                        "🎯 {} [c:{}, r:{}]",
+                        "🎯 {} [c:{}, r:{}, span:{}x{}]",
                         widget.id().unwrap_or("widget"),
                         placement.col,
-                        placement.row
+                        placement.row,
+                        placement.col_span,
+                        placement.row_span
                     );
                     let badge_pos = Pos2::new(widget_rect.min.x, widget_rect.min.y - 14.0);
                     painter.rect_filled(
-                        Rect::from_min_size(badge_pos, Vec2::new(120.0, 14.0)),
+                        Rect::from_min_size(badge_pos, Vec2::new(160.0, 14.0)),
                         CornerRadius::same(3),
                         Color32::from_rgb(30, 80, 180),
                     );
@@ -337,6 +480,10 @@ impl EmbeddedGuiStudio {
 
             if let Some(sel) = newly_selected {
                 self.selected_widget_idx = Some(sel);
+            }
+
+            if did_mutate {
+                self.sync_from_screen(&mutated_screen);
             }
         });
     }
