@@ -3,6 +3,7 @@
 
 mod app;
 mod curve_visualizer;
+mod exporter;
 mod inspector;
 mod layout;
 mod presets;

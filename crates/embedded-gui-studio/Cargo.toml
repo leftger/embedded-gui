@@ -18,3 +18,4 @@ embedded-gui = { workspace = true }
 embedded-gui-codegen = { workspace = true }
 eframe = { version = "0.31", default-features = true }
 egui_extras = { version = "0.31", features = ["syntect"] }
+rfd = "0.15"

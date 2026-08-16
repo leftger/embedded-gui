@@ -948,6 +948,56 @@ impl eframe::App for EmbeddedGuiStudio {
             if i.key_pressed(Key::Space) {
                 self.is_playing = !self.is_playing;
             }
+            // File Shortcuts
+            if i.modifiers.command && i.key_pressed(Key::O) {
+                if let Some((path, content)) = crate::exporter::open_kdl_file_dialog() {
+                    self.push_undo_snapshot();
+                    self.kdl_source = content;
+                    self.selected_widget_idx = None;
+                    self.recompile();
+                    self.action_toast = Some((
+                        format!("Opened {:?}", path.file_name().unwrap_or_default()),
+                        2.0,
+                    ));
+                }
+            }
+            if i.modifiers.command && i.key_pressed(Key::S) {
+                let def_name = self
+                    .parsed_screen
+                    .as_ref()
+                    .map(|s| s.id.as_str())
+                    .unwrap_or("screen");
+                if let Some(path) =
+                    crate::exporter::save_kdl_file_dialog(&self.kdl_source, def_name)
+                {
+                    self.action_toast = Some((
+                        format!("Saved to {:?}", path.file_name().unwrap_or_default()),
+                        2.0,
+                    ));
+                }
+            }
+            if i.modifiers.command && i.key_pressed(Key::E) {
+                if let Ok(screen) = &self.parsed_screen {
+                    match crate::exporter::export_standalone_crate_dialog(
+                        screen,
+                        &self.kdl_source,
+                        &self.generated_rust,
+                    ) {
+                        Ok(path) => {
+                            self.action_toast = Some((
+                                format!(
+                                    "✓ Crate exported to {:?}",
+                                    path.file_name().unwrap_or_default()
+                                ),
+                                3.0,
+                            ));
+                        }
+                        Err(err) => {
+                            self.action_toast = Some((format!("Export: {}", err), 2.5));
+                        }
+                    }
+                }
+            }
             // Tab: Toggle Design / Interactive Mode
             if i.key_pressed(Key::Tab) && !i.modifiers.command {
                 self.mode = match self.mode {
@@ -1028,6 +1078,65 @@ impl eframe::App for EmbeddedGuiStudio {
             egui::menu::bar(ui, |ui| {
                 ui.label(egui::RichText::new("⚡ Embedded GUI Studio").strong());
                 ui.separator();
+
+                ui.menu_button("📁 File", |ui| {
+                    if ui.button("📂 Open .kdl File... (Ctrl+O)").clicked() {
+                        if let Some((path, content)) = crate::exporter::open_kdl_file_dialog() {
+                            self.push_undo_snapshot();
+                            self.kdl_source = content;
+                            self.selected_widget_idx = None;
+                            self.recompile();
+                            self.action_toast = Some((
+                                format!("Opened {:?}", path.file_name().unwrap_or_default()),
+                                2.0,
+                            ));
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("💾 Save .kdl File... (Ctrl+S)").clicked() {
+                        let def_name = self
+                            .parsed_screen
+                            .as_ref()
+                            .map(|s| s.id.as_str())
+                            .unwrap_or("screen");
+                        if let Some(path) =
+                            crate::exporter::save_kdl_file_dialog(&self.kdl_source, def_name)
+                        {
+                            self.action_toast = Some((
+                                format!("Saved to {:?}", path.file_name().unwrap_or_default()),
+                                2.0,
+                            ));
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui
+                        .button("📦 Export Standalone Crate... (Ctrl+E)")
+                        .clicked()
+                    {
+                        if let Ok(screen) = &self.parsed_screen {
+                            match crate::exporter::export_standalone_crate_dialog(
+                                screen,
+                                &self.kdl_source,
+                                &self.generated_rust,
+                            ) {
+                                Ok(path) => {
+                                    self.action_toast = Some((
+                                        format!(
+                                            "✓ Crate exported to {:?}",
+                                            path.file_name().unwrap_or_default()
+                                        ),
+                                        3.0,
+                                    ));
+                                }
+                                Err(err) => {
+                                    self.action_toast = Some((format!("Export: {}", err), 2.5));
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                });
 
                 ui.menu_button("📄 Presets", |ui| {
                     if ui.button("🚗 Automotive Digital Cluster").clicked() {
