@@ -509,6 +509,125 @@ pub fn draw_animated_widget(
             }
         }
         WidgetDef::Spacer => {}
+        WidgetDef::RectShape {
+            radius,
+            stroke_width,
+            fill_color,
+            stroke_color,
+            ..
+        } => {
+            let fill = fill_color
+                .as_deref()
+                .and_then(parse_color_hex)
+                .unwrap_or(p.card_bg);
+            let stroke_c = stroke_color
+                .as_deref()
+                .and_then(parse_color_hex)
+                .unwrap_or(p.border);
+            let cr = CornerRadius::same(*radius);
+            if *stroke_width > 0 {
+                painter.rect(
+                    rect,
+                    cr,
+                    fill,
+                    Stroke::new(*stroke_width as f32, stroke_c),
+                    StrokeKind::Inside,
+                );
+            } else {
+                painter.rect_filled(rect, cr, fill);
+            }
+        }
+        WidgetDef::LineShape {
+            stroke_width,
+            color,
+            ..
+        } => {
+            let col = color
+                .as_deref()
+                .and_then(parse_color_hex)
+                .unwrap_or(p.border);
+            painter.line_segment(
+                [
+                    Pos2::new(rect.min.x, rect.center().y),
+                    Pos2::new(rect.max.x, rect.center().y),
+                ],
+                Stroke::new(*stroke_width as f32, col),
+            );
+        }
+        WidgetDef::CircleShape {
+            stroke_width,
+            fill_color,
+            stroke_color,
+            ..
+        } => {
+            let fill = fill_color
+                .as_deref()
+                .and_then(parse_color_hex)
+                .unwrap_or(p.card_bg);
+            let stroke_c = stroke_color
+                .as_deref()
+                .and_then(parse_color_hex)
+                .unwrap_or(p.border);
+            let r = rect.width().min(rect.height()) / 2.0;
+            if *stroke_width > 0 {
+                painter.circle(
+                    rect.center(),
+                    r,
+                    fill,
+                    Stroke::new(*stroke_width as f32, stroke_c),
+                );
+            } else {
+                painter.circle_filled(rect.center(), r, fill);
+            }
+        }
+        WidgetDef::VectorPath {
+            stroke_width,
+            verbs,
+            ..
+        } => {
+            let stroke = Stroke::new(*stroke_width as f32, p.accent);
+            let mut current_pos = rect.min;
+            for v in verbs {
+                match v {
+                    embedded_gui_codegen::PathVerbDef::MoveTo(x, y) => {
+                        current_pos = Pos2::new(rect.min.x + *x as f32, rect.min.y + *y as f32);
+                    }
+                    embedded_gui_codegen::PathVerbDef::LineTo(x, y) => {
+                        let next_pos = Pos2::new(rect.min.x + *x as f32, rect.min.y + *y as f32);
+                        painter.line_segment([current_pos, next_pos], stroke);
+                        current_pos = next_pos;
+                    }
+                    embedded_gui_codegen::PathVerbDef::QuadTo(cx, cy, x, y) => {
+                        let cp = Pos2::new(rect.min.x + *cx as f32, rect.min.y + *cy as f32);
+                        let ep = Pos2::new(rect.min.x + *x as f32, rect.min.y + *y as f32);
+                        painter.add(egui::Shape::QuadraticBezier(
+                            egui::epaint::QuadraticBezierShape::from_points_stroke(
+                                [current_pos, cp, ep],
+                                false,
+                                Color32::TRANSPARENT,
+                                stroke,
+                            ),
+                        ));
+                        current_pos = ep;
+                    }
+                    embedded_gui_codegen::PathVerbDef::CubicTo(c1x, c1y, c2x, c2y, x, y) => {
+                        let c1 = Pos2::new(rect.min.x + *c1x as f32, rect.min.y + *c1y as f32);
+                        let c2 = Pos2::new(rect.min.x + *c2x as f32, rect.min.y + *c2y as f32);
+                        let ep = Pos2::new(rect.min.x + *x as f32, rect.min.y + *y as f32);
+                        painter.add(egui::Shape::CubicBezier(
+                            egui::epaint::CubicBezierShape::from_points_stroke(
+                                [current_pos, c1, c2, ep],
+                                false,
+                                Color32::TRANSPARENT,
+                                stroke,
+                            ),
+                        ));
+                        current_pos = ep;
+                    }
+                    embedded_gui_codegen::PathVerbDef::Close => {}
+                }
+            }
+        }
         _ => {
             painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
             painter.text(
@@ -519,5 +638,17 @@ pub fn draw_animated_widget(
                 p.text_dim,
             );
         }
+    }
+}
+
+fn parse_color_hex(hex: &str) -> Option<Color32> {
+    let clean = hex.trim().trim_start_matches('#');
+    if clean.len() == 6 {
+        let r = u8::from_str_radix(&clean[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&clean[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&clean[4..6], 16).ok()?;
+        Some(Color32::from_rgb(r, g, b))
+    } else {
+        None
     }
 }

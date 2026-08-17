@@ -178,6 +178,25 @@ pub enum WidgetDef {
         stroke_width: u8,
         verbs: Vec<PathVerbDef>,
     },
+    RectShape {
+        id: Option<String>,
+        radius: u8,
+        stroke_width: u8,
+        fill_color: Option<String>,
+        stroke_color: Option<String>,
+    },
+    LineShape {
+        id: Option<String>,
+        stroke_width: u8,
+        color: Option<String>,
+    },
+    CircleShape {
+        id: Option<String>,
+        radius: u16,
+        stroke_width: u8,
+        fill_color: Option<String>,
+        stroke_color: Option<String>,
+    },
 }
 
 impl WidgetDef {
@@ -204,7 +223,10 @@ impl WidgetDef {
             | WidgetDef::ContentIndicator { id, .. }
             | WidgetDef::CrumbsIndicator { id, .. }
             | WidgetDef::Panel { id, .. }
-            | WidgetDef::VectorPath { id, .. } => id.as_deref(),
+            | WidgetDef::VectorPath { id, .. }
+            | WidgetDef::RectShape { id, .. }
+            | WidgetDef::LineShape { id, .. }
+            | WidgetDef::CircleShape { id, .. } => id.as_deref(),
             WidgetDef::Spacer => None,
         }
     }
@@ -566,6 +588,41 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
                 id,
                 stroke_width,
                 verbs,
+            }
+        }
+        "rect" | "rectangle" => {
+            let radius = get_i64_prop(node, "radius").unwrap_or(0).max(0) as u8;
+            let stroke_width = get_i64_prop(node, "stroke_width").unwrap_or(1).max(0) as u8;
+            let fill_color = get_string_prop(node, "fill").map(|s| s.to_string());
+            let stroke_color = get_string_prop(node, "stroke").map(|s| s.to_string());
+            WidgetDef::RectShape {
+                id,
+                radius,
+                stroke_width,
+                fill_color,
+                stroke_color,
+            }
+        }
+        "line" => {
+            let stroke_width = get_i64_prop(node, "stroke_width").unwrap_or(1).max(1) as u8;
+            let color = get_string_prop(node, "color").map(|s| s.to_string());
+            WidgetDef::LineShape {
+                id,
+                stroke_width,
+                color,
+            }
+        }
+        "circle" => {
+            let radius = get_i64_prop(node, "radius").unwrap_or(10).max(1) as u16;
+            let stroke_width = get_i64_prop(node, "stroke_width").unwrap_or(1).max(0) as u8;
+            let fill_color = get_string_prop(node, "fill").map(|s| s.to_string());
+            let stroke_color = get_string_prop(node, "stroke").map(|s| s.to_string());
+            WidgetDef::CircleShape {
+                id,
+                radius,
+                stroke_width,
+                fill_color,
+                stroke_color,
             }
         }
         "table" => {
@@ -1094,6 +1151,35 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     var_name, stroke_width
                 );
             }
+            WidgetDef::RectShape {
+                radius,
+                stroke_width,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_panel(cells[{}], Style::panel())?; // rect r={} sw={}",
+                    var_name, idx, radius, stroke_width
+                );
+            }
+            WidgetDef::LineShape { stroke_width, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_spacer(cells[{}])?; // line sw={}",
+                    var_name, idx, stroke_width
+                );
+            }
+            WidgetDef::CircleShape {
+                radius,
+                stroke_width,
+                ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_panel(cells[{}], Style::panel())?; // circle r={} sw={}",
+                    var_name, idx, radius, stroke_width
+                );
+            }
             WidgetDef::Table { .. } => {
                 let _ = writeln!(
                     &mut out,
@@ -1534,6 +1620,75 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
                     }
                 }
                 let _ = writeln!(&mut out, "        }}");
+            }
+            WidgetDef::RectShape {
+                id,
+                radius,
+                stroke_width,
+                fill_color,
+                stroke_color,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let fill_attr = fill_color
+                    .as_ref()
+                    .map(|s| format!(" fill=\"{}\"", s))
+                    .unwrap_or_default();
+                let stroke_attr = stroke_color
+                    .as_ref()
+                    .map(|s| format!(" stroke=\"{}\"", s))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    &mut out,
+                    "        rect{} radius={} stroke_width={}{}{}{} col={} row={}",
+                    id_attr, radius, stroke_width, fill_attr, stroke_attr, span_attrs, p.col, p.row
+                );
+            }
+            WidgetDef::LineShape {
+                id,
+                stroke_width,
+                color,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let col_attr = color
+                    .as_ref()
+                    .map(|s| format!(" color=\"{}\"", s))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    &mut out,
+                    "        line{} stroke_width={}{}{} col={} row={}",
+                    id_attr, stroke_width, col_attr, span_attrs, p.col, p.row
+                );
+            }
+            WidgetDef::CircleShape {
+                id,
+                radius,
+                stroke_width,
+                fill_color,
+                stroke_color,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let fill_attr = fill_color
+                    .as_ref()
+                    .map(|s| format!(" fill=\"{}\"", s))
+                    .unwrap_or_default();
+                let stroke_attr = stroke_color
+                    .as_ref()
+                    .map(|s| format!(" stroke=\"{}\"", s))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    &mut out,
+                    "        circle{} radius={} stroke_width={}{}{}{} col={} row={}",
+                    id_attr, radius, stroke_width, fill_attr, stroke_attr, span_attrs, p.col, p.row
+                );
             }
             WidgetDef::Table { id, headers, rows } => {
                 let id_attr = id

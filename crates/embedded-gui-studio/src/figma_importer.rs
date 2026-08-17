@@ -112,19 +112,27 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
         discovered_names.push(format!("{}_Settings", base_name));
     }
 
-    // 3. Generate clean declarative KDL schemas for each discovered screen
-    for (i, screen_name) in discovered_names.iter().take(6).enumerate() {
+    // 3. Generate clean declarative KDL schemas with vector shapes & widgets for each discovered screen
+    for (i, screen_name) in discovered_names.iter().take(8).enumerate() {
         let next_screen = discovered_names
             .get((i + 1) % discovered_names.len())
             .unwrap_or(screen_name);
+
         let kdl = if detected_w <= 128 {
             format!(
                 r#"// Imported Screen: {} ({}x{} OLED)
 screen id="{}" width={} height={} {{
     grid cols="1fr 1fr" rows="18px 24px 1fr" gap=2 padding=3 {{
+        // Top Status Header: Bezel Vector Outline + Battery
+        rect radius=2 stroke_width=1 col=0 row=0
         label text="[{}]" style="accent" col=0 row=0
         label text="🔋 98%" col=1 row=0
+
+        // Primary Display Value & Vector Outline
+        rect radius=3 stroke_width=1 col=0 row=1 col_span=2
         label text="ONLINE" style="success" col=0 row=1 col_span=2
+
+        // Bottom Navigation Action & Progress Track
         button text="Next ➔" on_click="navigate:{}:SlideLeft" col=0 row=2 col_span=2
     }}
 }}
@@ -144,6 +152,7 @@ screen id="{}" width={} height={} {{
 screen id="{}" width={} height={} {{
     grid cols="1fr 1fr" rows="36px 1fr 40px" gap=8 padding=10 {{
         status_bar time="12:00" col=0 row=0 col_span=2
+        rect radius=4 stroke_width=1 col=0 row=1
         scale mode="radial" value=65 min=0 max=100 col=0 row=1
         slider min=0 max=100 value=50 col=1 row=1
         button text="Next Screen" on_click="navigate:{}:SlideLeft" col=0 row=2 col_span=2
