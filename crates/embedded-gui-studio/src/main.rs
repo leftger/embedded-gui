@@ -6,6 +6,7 @@ mod assets;
 mod bridge;
 mod curve_visualizer;
 mod exporter;
+mod figma_importer;
 mod inspector;
 mod layout;
 mod presets;

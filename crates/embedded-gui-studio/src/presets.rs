@@ -111,3 +111,14 @@ pub const SAMPLE_MOTION_KITCHEN_SINK: &str = r#"screen id="MotionShowcase" width
     }
 }
 "#;
+
+pub const SAMPLE_SSD1306_OLED: &str = r#"// Monochrome OLED Display (128x64 / 96x64)
+screen id="OledScreen" width=128 height=64 {
+    grid cols="1fr 1fr" rows="18px 24px 1fr" gap=2 padding=3 {
+        label id="mode" text="[ACTIVE]" style="accent" col=0 row=0
+        label id="batt" text="🔋 98%" col=1 row=0
+        label id="status" text="READY" style="success" col=0 row=1 col_span=2
+        progress id="metric" value=100 max=100 col=0 row=2 col_span=2
+    }
+}
+"#;

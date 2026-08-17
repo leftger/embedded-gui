@@ -19,3 +19,6 @@ embedded-gui-codegen = { workspace = true }
 eframe = { version = "0.31", default-features = true }
 egui_extras = { version = "0.31", features = ["syntect"] }
 rfd = "0.15"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+zstd = "0.13"
+flate2 = "1.0"

@@ -1,6 +1,6 @@
-//! Host demo of the `SweepingArc` widget: a `WidgetAnimator` drives its
-//! `progress` 0 → 1 on a loop, rendered into a 96×64 SDL window (the Nitro
-//! Revolver panel size). Proves the crate-side widget in isolation — no
+//! SweepingArc widget showcase.
+//! `progress` 0 → 1 on a loop, rendered into a 96×64 SDL window (monochrome OLED display)
+//! to show how partial-fill arcs look at tiny resolutions. — no
 //! Markham font/overlay, just the arc sweep + rounded "window".
 //!
 //! Run: `cargo run --example sweeping_arc_widget_showcase`

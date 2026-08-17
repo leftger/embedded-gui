@@ -1106,6 +1106,21 @@ impl eframe::App for EmbeddedGuiStudio {
                     ));
                 }
             }
+            if i.modifiers.command && i.key_pressed(Key::I) {
+                if let Some((path, screens)) = crate::figma_importer::import_figma_dialog() {
+                    let count = screens.len();
+                    self.project_screens.extend(screens);
+                    self.switch_to_screen(self.project_screens.len() - count);
+                    self.action_toast = Some((
+                        format!(
+                            "✓ Imported {} screen(s) from {:?}",
+                            count,
+                            path.file_name().unwrap_or_default()
+                        ),
+                        3.0,
+                    ));
+                }
+            }
             if i.modifiers.command && i.key_pressed(Key::E) {
                 if let Ok(screen) = &self.parsed_screen {
                     match crate::exporter::export_standalone_crate_dialog(
@@ -1240,6 +1255,24 @@ impl eframe::App for EmbeddedGuiStudio {
                         ui.close_menu();
                     }
                     ui.separator();
+                    if ui.button("🎨 Import Figma (.fig)... (Ctrl+I)").clicked() {
+                        if let Some((path, screens)) = crate::figma_importer::import_figma_dialog()
+                        {
+                            let count = screens.len();
+                            self.project_screens.extend(screens);
+                            self.switch_to_screen(self.project_screens.len() - count);
+                            self.action_toast = Some((
+                                format!(
+                                    "✓ Imported {} screen(s) from {:?}",
+                                    count,
+                                    path.file_name().unwrap_or_default()
+                                ),
+                                3.0,
+                            ));
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui
                         .button("📦 Export Standalone Crate... (Ctrl+E)")
                         .clicked()
@@ -1269,6 +1302,16 @@ impl eframe::App for EmbeddedGuiStudio {
                 });
 
                 ui.menu_button("📄 Presets", |ui| {
+                    if ui.button("📟 Monochrome OLED Display (128×64)").clicked() {
+                        self.push_undo_snapshot();
+                        self.kdl_source = SAMPLE_SSD1306_OLED.to_string();
+                        self.display_theme = DisplayTheme::MonochromeOled;
+                        self.hardware_profile = HardwareProfile::Ssd1306Oled;
+                        self.selected_widget_idx = None;
+                        self.recompile();
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("🚗 Automotive Digital Cluster").clicked() {
                         self.push_undo_snapshot();
                         self.kdl_source = SAMPLE_AUTOMOTIVE_CLUSTER.to_string();
