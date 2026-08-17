@@ -1457,10 +1457,15 @@ impl eframe::App for EmbeddedGuiStudio {
                     crate::assets::render_asset_browser(ui, &mut self.action_toast);
                 }
                 StudioTab::RustCodegen => {
+                    let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+                        let mut job = crate::syntax::highlight_rust(ui.ctx(), string);
+                        job.wrap.max_width = wrap_width;
+                        ui.fonts(|f| f.layout_job(job))
+                    };
                     egui::ScrollArea::both().show(ui, |ui| {
                         ui.add(
                             egui::TextEdit::multiline(&mut self.generated_rust.as_str())
-                                .font(egui::TextStyle::Monospace)
+                                .layouter(&mut layouter)
                                 .desired_width(f32::INFINITY),
                         );
                     });
