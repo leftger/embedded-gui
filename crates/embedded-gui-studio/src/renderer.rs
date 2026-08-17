@@ -86,15 +86,44 @@ pub fn draw_animated_widget(
     let p = ThemePalette::for_theme(theme);
 
     match widget {
-        WidgetDef::Label { text, .. } => {
-            painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                text,
-                FontId::proportional(12.0),
-                p.text_primary,
-            );
+        WidgetDef::Label { text, style, .. } => {
+            if style.as_deref() == Some("inverted") || style.as_deref() == Some("xor") {
+                painter.rect_filled(rect, CornerRadius::same(2), p.text_primary);
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    FontId::proportional(11.0),
+                    p.display_bg,
+                );
+            } else if style.as_deref() == Some("accent") {
+                painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    FontId::proportional(12.0),
+                    p.accent,
+                );
+            } else if style.as_deref() == Some("success") {
+                painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    FontId::proportional(12.0),
+                    p.success,
+                );
+            } else {
+                painter.rect_filled(rect, CornerRadius::same(3), p.card_bg);
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    FontId::proportional(12.0),
+                    p.text_primary,
+                );
+            }
         }
         WidgetDef::Button { text, style, .. } => {
             let mut bg = if is_pressed {
@@ -103,6 +132,8 @@ pub fn draw_animated_widget(
                 p.accent
             } else if style.as_deref() == Some("danger") {
                 p.danger
+            } else if style.as_deref() == Some("inverted") {
+                p.text_primary
             } else {
                 p.card_bg
             };
@@ -525,6 +556,13 @@ pub fn draw_animated_widget(
                 .and_then(parse_color_hex)
                 .unwrap_or(p.border);
             let cr = CornerRadius::same(*radius);
+
+            // Emulated 1-bit stipple / drop shadow underneath rounded cards
+            if *radius > 1 && rect.width() > 20.0 && rect.height() > 14.0 {
+                let shadow_rect = rect.translate(Vec2::new(1.5, 1.5));
+                painter.rect_filled(shadow_rect, cr, Color32::from_black_alpha(40));
+            }
+
             if *stroke_width > 0 {
                 painter.rect(
                     rect,
