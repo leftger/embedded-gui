@@ -14,7 +14,10 @@ use crate::inspector::render_inspector_panel;
 use crate::layout::compute_track_sizes;
 use crate::presets::*;
 use crate::renderer::{ThemePalette, draw_animated_widget};
-use crate::types::{ActiveDrag, DisplayTheme, HardwareProfile, StudioMode, StudioTab};
+use crate::types::{
+    ActiveDrag, DisplayTheme, HardwareProfile, ScreenTransition, StudioMode, StudioTab,
+    TransitionStyle,
+};
 
 pub struct EmbeddedGuiStudio {
     pub kdl_source: String,
@@ -25,6 +28,11 @@ pub struct EmbeddedGuiStudio {
     pub preview_zoom: f32,
     pub copied_toast_timer: f32,
     pub action_toast: Option<(String, f32)>,
+
+    // Multi-Screen Project Management & Live Transitions
+    pub project_screens: Vec<(String, String)>,
+    pub active_screen_idx: usize,
+    pub transition_state: Option<ScreenTransition>,
 
     // Hardware Bridge
     pub hardware_bridge: crate::bridge::HardwareBridge,
@@ -52,8 +60,29 @@ pub struct EmbeddedGuiStudio {
 
 impl Default for EmbeddedGuiStudio {
     fn default() -> Self {
+        let project_screens = vec![
+            (
+                "AutoCluster".to_string(),
+                SAMPLE_AUTOMOTIVE_CLUSTER.to_string(),
+            ),
+            ("HvacClimate".to_string(), SAMPLE_HVAC_CLIMATE.to_string()),
+            (
+                "PatientMonitor".to_string(),
+                SAMPLE_PATIENT_MONITOR.to_string(),
+            ),
+            (
+                "CncController".to_string(),
+                SAMPLE_CNC_CONTROLLER.to_string(),
+            ),
+            (
+                "FitnessTracker".to_string(),
+                SAMPLE_SMARTWATCH_FITNESS.to_string(),
+            ),
+        ];
+        let initial_kdl = project_screens[0].1.clone();
+
         let mut app = Self {
-            kdl_source: SAMPLE_AUTOMOTIVE_CLUSTER.to_string(),
+            kdl_source: initial_kdl,
             parsed_screen: Err("Not parsed".to_string()),
             generated_rust: String::new(),
             active_tab: StudioTab::VisualPreview,
@@ -61,6 +90,9 @@ impl Default for EmbeddedGuiStudio {
             preview_zoom: 1.5,
             copied_toast_timer: 0.0,
             action_toast: None,
+            project_screens,
+            active_screen_idx: 0,
+            transition_state: None,
             hardware_bridge: crate::bridge::HardwareBridge::new(9080),
             display_theme: DisplayTheme::DarkTft,
             hardware_profile: HardwareProfile::Esp32S3Box,
@@ -81,6 +113,18 @@ impl Default for EmbeddedGuiStudio {
 }
 
 impl EmbeddedGuiStudio {
+    pub fn switch_to_screen(&mut self, idx: usize) {
+        if idx < self.project_screens.len() {
+            if self.active_screen_idx < self.project_screens.len() {
+                self.project_screens[self.active_screen_idx].1 = self.kdl_source.clone();
+            }
+            self.push_undo_snapshot();
+            self.active_screen_idx = idx;
+            self.kdl_source = self.project_screens[idx].1.clone();
+            self.selected_widget_idx = None;
+            self.recompile();
+        }
+    }
     pub fn push_undo_snapshot(&mut self) {
         if self.undo_stack.last() != Some(&self.kdl_source) {
             self.undo_stack.push(self.kdl_source.clone());
@@ -317,6 +361,48 @@ impl EmbeddedGuiStudio {
                 ui.colored_label(Color32::from_rgb(100, 230, 150), msg);
             }
         });
+        // 📱 Persistent Multi-Screen Tabs Bar
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("📱 Screens:").strong());
+            let mut to_switch = None;
+            let mut to_remove = None;
+            for (i, (name, _)) in self.project_screens.iter().enumerate() {
+                let is_active = i == self.active_screen_idx;
+                let tab_text = match name.as_str() {
+                    "AutoCluster" => "🚗 AutoCluster",
+                    "HvacClimate" => "❄️ HvacClimate",
+                    "PatientMonitor" => "🩺 PatientMonitor",
+                    "CncController" => "⚙️ CncController",
+                    "FitnessTracker" => "⌚ FitnessTracker",
+                    _ => name.as_str(),
+                };
+                if ui.selectable_label(is_active, tab_text).clicked() {
+                    to_switch = Some(i);
+                }
+                if self.project_screens.len() > 1 && is_active && ui.small_button("✕").clicked() {
+                    to_remove = Some(i);
+                }
+            }
+            if let Some(i) = to_switch {
+                self.switch_to_screen(i);
+            }
+            if let Some(i) = to_remove {
+                self.project_screens.remove(i);
+                self.active_screen_idx = self.active_screen_idx.min(self.project_screens.len().saturating_sub(1));
+                self.kdl_source = self.project_screens[self.active_screen_idx].1.clone();
+                self.recompile();
+            }
+            if ui.button("➕ New Screen").clicked() {
+                let count = self.project_screens.len() + 1;
+                let new_name = format!("Screen{}", count);
+                let new_kdl = format!(
+                    "screen id=\"{}\" width=320 height=240 {{\n    grid cols=\"1fr\" rows=\"1fr\" gap=8 padding=8 {{\n        label text=\"Hello {}\"\n    }}\n}}\n",
+                    new_name, new_name
+                );
+                self.project_screens.push((new_name, new_kdl));
+                self.switch_to_screen(self.project_screens.len() - 1);
+            }
+        });
         ui.separator();
 
         let screen_w = screen.width as f32 * self.preview_zoom;
@@ -329,7 +415,19 @@ impl EmbeddedGuiStudio {
                 Vec2::new(screen_w + 32.0, screen_h + 32.0),
                 egui::Sense::click_and_drag(),
             );
-            let origin = response.rect.min + Vec2::new(16.0, 16.0);
+            let mut canvas_offset = Vec2::ZERO;
+            if let Some(trans) = &self.transition_state {
+                match trans.style {
+                    TransitionStyle::SlideLeft => {
+                        canvas_offset.x = -screen_w * trans.progress;
+                    }
+                    TransitionStyle::SlideRight => {
+                        canvas_offset.x = screen_w * trans.progress;
+                    }
+                    _ => {}
+                }
+            }
+            let origin = response.rect.min + Vec2::new(16.0, 16.0) + canvas_offset;
             let display_rect = Rect::from_min_size(origin, Vec2::new(screen_w, screen_h));
 
             // Bezel / Hardware Chassis
@@ -437,12 +535,29 @@ impl EmbeddedGuiStudio {
                                     } => {
                                         if primary_pressed {
                                             self.pressed_widget = Some(idx);
-                                            let action_name =
-                                                on_click.as_deref().unwrap_or("Triggered");
-                                            self.action_toast = Some((
-                                                format!("🔘 Button '{}' -> {}", text, action_name),
-                                                2.0,
-                                            ));
+                                            if let Some(act) = on_click {
+                                                if act.starts_with("navigate:") {
+                                                    let parts: Vec<&str> = act.split(':').collect();
+                                                    if let Some(target_name) = parts.get(1) {
+                                                        let trans_style = parts.get(2).map(|s| TransitionStyle::from_code(s)).unwrap_or(TransitionStyle::SlideLeft);
+                                                        if let Some(target_idx) = self.project_screens.iter().position(|(n, _)| n == *target_name) {
+                                                            self.transition_state = Some(ScreenTransition {
+                                                                target_screen_idx: target_idx,
+                                                                progress: 0.0,
+                                                                duration: if trans_style == TransitionStyle::Fade { 0.2 } else if trans_style == TransitionStyle::Instant { 0.001 } else { 0.3 },
+                                                                style: trans_style,
+                                                            });
+                                                            self.action_toast = Some((format!("🔀 Navigating to '{}' ({})", target_name, trans_style.name()), 2.0));
+                                                        } else {
+                                                            self.action_toast = Some((format!("🔘 Button '{}' -> Target '{}' not found", text, target_name), 2.0));
+                                                        }
+                                                    }
+                                                } else {
+                                                    self.action_toast = Some((format!("🔘 Button '{}' -> {}", text, act), 2.0));
+                                                }
+                                            } else {
+                                                self.action_toast = Some((format!("🔘 Button '{}' pressed", text), 2.0));
+                                            }
                                         }
                                     }
                                     embedded_gui_codegen::WidgetDef::Toggle {
@@ -936,6 +1051,17 @@ impl eframe::App for EmbeddedGuiStudio {
             }
         }
 
+        // Advance Screen Transition animation
+        if let Some(mut trans) = self.transition_state.take() {
+            trans.progress += dt / trans.duration.max(0.001);
+            if trans.progress >= 1.0 {
+                self.switch_to_screen(trans.target_screen_idx);
+            } else {
+                self.transition_state = Some(trans);
+                ctx.request_repaint();
+            }
+        }
+
         // Handle Keyboard Shortcuts
         ctx.input(|i| {
             // Undo: Ctrl+Z / Cmd+Z
@@ -1394,63 +1520,88 @@ impl eframe::App for EmbeddedGuiStudio {
                 StudioTab::ScreenFlow => {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.heading("🗺️ Multi-Screen Flow & Navigation State Machine");
-                        ui.label(egui::RichText::new("Interactive navigation routing and transition pipeline for multi-screen embedded applications.").weak());
+                        ui.label(egui::RichText::new("Interactive navigation routing and transition pipeline for multi-screen embedded applications. Click any screen card to select it.").weak());
                         ui.separator();
 
-                        ui.horizontal(|ui| {
-                            ui.label("Quick Switch Screen:");
-                            if ui.button("🚗 AutoCluster").clicked() {
-                                self.push_undo_snapshot();
-                                self.kdl_source = SAMPLE_AUTOMOTIVE_CLUSTER.to_string();
-                                self.recompile();
-                            }
-                            if ui.button("❄️ HvacClimate").clicked() {
-                                self.push_undo_snapshot();
-                                self.kdl_source = SAMPLE_HVAC_CLIMATE.to_string();
-                                self.recompile();
-                            }
-                            if ui.button("🩺 PatientMonitor").clicked() {
-                                self.push_undo_snapshot();
-                                self.kdl_source = SAMPLE_PATIENT_MONITOR.to_string();
-                                self.recompile();
-                            }
-                            if ui.button("⚙️ CncController").clicked() {
-                                self.push_undo_snapshot();
-                                self.kdl_source = SAMPLE_CNC_CONTROLLER.to_string();
-                                self.recompile();
-                            }
-                            if ui.button("⌚ FitnessTracker").clicked() {
-                                self.push_undo_snapshot();
-                                self.kdl_source = SAMPLE_SMARTWATCH_FITNESS.to_string();
-                                self.recompile();
-                            }
-                        });
-                        ui.separator();
+                        let mut to_switch = None;
 
-                        // Visual State Diagram of Screen Transitions
-                        let (response, painter) = ui.allocate_painter(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
-                        let rect = response.rect;
-                        painter.rect_filled(rect, CornerRadius::same(6), Color32::from_rgb(18, 22, 28));
-                        painter.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0f32, Color32::from_rgb(45, 55, 70)), StrokeKind::Inside);
+                        // Visual Interactive Screen Nodes Grid
+                        egui::Grid::new("screen_flow_grid")
+                            .num_columns(3)
+                            .spacing([16.0, 16.0])
+                            .show(ui, |ui| {
+                                for (i, (name, kdl)) in self.project_screens.iter().enumerate() {
+                                    let is_active = i == self.active_screen_idx;
+                                    let icon = match name.as_str() {
+                                        "AutoCluster" => "🚗",
+                                        "HvacClimate" => "❄️",
+                                        "PatientMonitor" => "🩺",
+                                        "CncController" => "⚙️",
+                                        "FitnessTracker" => "⌚",
+                                        _ => "📱",
+                                    };
 
-                        let node_w = 110.0;
-                        let node_h = 44.0;
-                        let cur_id = self.parsed_screen.as_ref().map(|s| s.id.as_str()).unwrap_or("Active");
+                                    let parsed = parse_kdl_screen(kdl);
+                                    let widget_count = parsed.as_ref().map(|s| s.grid.children.len()).unwrap_or(0);
+                                    let (w, h) = parsed.as_ref().map(|s| (s.width, s.height)).unwrap_or((320, 240));
 
-                        let n1_rect = Rect::from_min_size(Pos2::new(rect.min.x + 30.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
-                        let n2_rect = Rect::from_min_size(Pos2::new(rect.min.x + 200.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
-                        let n3_rect = Rect::from_min_size(Pos2::new(rect.min.x + 370.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
+                                    ui.group(|ui| {
+                                        ui.set_width(180.0);
+                                        ui.vertical_centered(|ui| {
+                                            ui.label(egui::RichText::new(icon).size(32.0));
+                                            ui.label(egui::RichText::new(name).strong().size(13.0));
+                                            ui.label(format!("{}×{} px • {} widgets", w, h, widget_count));
 
-                        for (r, name, desc) in [(n1_rect, cur_id, "Active Screen"), (n2_rect, "SettingsScreen", "SlideLeft (300ms)"), (n3_rect, "DiagnosticsScreen", "FadeInOut (200ms)")] {
-                            painter.rect_filled(r, CornerRadius::same(4), Color32::from_rgb(32, 38, 48));
-                            painter.rect_stroke(r, CornerRadius::same(4), Stroke::new(1.5f32, if name == cur_id { Color32::from_rgb(60, 180, 255) } else { Color32::from_rgb(60, 70, 85) }), StrokeKind::Inside);
-                            painter.text(Pos2::new(r.center().x, r.center().y - 6.0), egui::Align2::CENTER_CENTER, name, FontId::proportional(11.0), Color32::WHITE);
-                            painter.text(Pos2::new(r.center().x, r.center().y + 8.0), egui::Align2::CENTER_CENTER, desc, FontId::proportional(8.5), Color32::from_rgb(140, 160, 180));
+                                            if is_active {
+                                                ui.colored_label(Color32::from_rgb(80, 220, 120), "● Active Screen");
+                                            } else if ui.button("Select Screen").clicked() {
+                                                to_switch = Some(i);
+                                            }
+                                        });
+                                    });
+
+                                    if (i + 1) % 3 == 0 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
+
+                        if let Some(idx) = to_switch {
+                            self.switch_to_screen(idx);
                         }
 
-                        // Connect transitions
-                        painter.line_segment([Pos2::new(n1_rect.max.x, n1_rect.center().y), Pos2::new(n2_rect.min.x, n2_rect.center().y)], Stroke::new(2.0f32, Color32::from_rgb(80, 220, 120)));
-                        painter.line_segment([Pos2::new(n2_rect.max.x, n2_rect.center().y), Pos2::new(n3_rect.min.x, n3_rect.center().y)], Stroke::new(2.0f32, Color32::from_rgb(80, 220, 120)));
+                        ui.add_space(16.0);
+                        ui.heading("🔗 Connected Screen Transitions");
+                        ui.separator();
+
+                        if let Ok(screen) = &self.parsed_screen {
+                            let mut nav_buttons = Vec::new();
+                            for (p, w) in &screen.grid.children {
+                                if let embedded_gui_codegen::WidgetDef::Button { text, on_click: Some(act), .. } = w {
+                                    if act.starts_with("navigate:") {
+                                        let parts: Vec<&str> = act.split(':').collect();
+                                        let target = parts.get(1).copied().unwrap_or("?");
+                                        let effect = parts.get(2).copied().unwrap_or("SlideLeft");
+                                        nav_buttons.push((text.as_str(), target, effect, p.col, p.row));
+                                    }
+                                }
+                            }
+
+                            if nav_buttons.is_empty() {
+                                ui.label(egui::RichText::new("No navigation buttons defined on this screen yet. Select a Button in Design Mode and set its Action Trigger to 'Navigate to Screen'!").weak());
+                            } else {
+                                for (btn_text, target, effect, c, r) in nav_buttons {
+                                    ui.group(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(format!("🔘 Button '{}' (c:{}, r:{})", btn_text, c, r));
+                                            ui.colored_label(Color32::from_rgb(80, 220, 120), "➔");
+                                            ui.label(egui::RichText::new(target).strong());
+                                            ui.label(format!("via {}", effect));
+                                        });
+                                    });
+                                }
+                            }
+                        }
                     });
                 }
                 StudioTab::AssetBrowser => {

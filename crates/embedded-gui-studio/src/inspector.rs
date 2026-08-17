@@ -131,16 +131,146 @@ pub fn render_inspector_panel(
                             modified = true;
                         }
                     });
-                    ui.horizontal(|ui| {
-                        ui.label("On Click:");
-                        let mut click_str = on_click.clone().unwrap_or_default();
-                        if ui.text_edit_singleline(&mut click_str).changed() {
-                            *on_click = if click_str.trim().is_empty() {
-                                None
-                            } else {
-                                Some(click_str)
-                            };
-                            modified = true;
+
+                    // 1-Click Action Trigger & Screen Navigation Selector
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("⚡ Action Trigger").strong());
+                        let cur_action = on_click.clone().unwrap_or_default();
+                        let is_nav = cur_action.starts_with("navigate:");
+
+                        let mut action_type = if cur_action.is_empty() {
+                            "None"
+                        } else if is_nav {
+                            "Navigate to Screen"
+                        } else {
+                            "Custom Action"
+                        };
+
+                        ui.horizontal(|ui| {
+                            ui.label("Type:");
+                            egui::ComboBox::from_id_salt("btn_action_type")
+                                .selected_text(action_type)
+                                .show_ui(ui, |ui| {
+                                    if ui
+                                        .selectable_value(&mut action_type, "None", "None")
+                                        .clicked()
+                                    {
+                                        *on_click = None;
+                                        modified = true;
+                                    }
+                                    if ui
+                                        .selectable_value(
+                                            &mut action_type,
+                                            "Navigate to Screen",
+                                            "🔀 Navigate to Screen",
+                                        )
+                                        .clicked()
+                                    {
+                                        *on_click = Some("navigate:HvacClimate:SlideLeft".into());
+                                        modified = true;
+                                    }
+                                    if ui
+                                        .selectable_value(
+                                            &mut action_type,
+                                            "Custom Action",
+                                            "⚙ Custom Handler",
+                                        )
+                                        .clicked()
+                                    {
+                                        *on_click = Some("on_button_click".into());
+                                        modified = true;
+                                    }
+                                });
+                        });
+
+                        if is_nav {
+                            let parts: Vec<&str> = cur_action.split(':').collect();
+                            let target_screen = parts.get(1).copied().unwrap_or("HvacClimate");
+                            let trans_code = parts.get(2).copied().unwrap_or("SlideLeft");
+
+                            let known_targets = [
+                                "AutoCluster",
+                                "HvacClimate",
+                                "PatientMonitor",
+                                "CncController",
+                                "FitnessTracker",
+                            ];
+                            let mut selected_target = target_screen.to_string();
+
+                            ui.horizontal(|ui| {
+                                ui.label("Target:");
+                                egui::ComboBox::from_id_salt("btn_nav_target")
+                                    .selected_text(&selected_target)
+                                    .show_ui(ui, |ui| {
+                                        for t in known_targets {
+                                            if ui
+                                                .selectable_value(
+                                                    &mut selected_target,
+                                                    t.to_string(),
+                                                    t,
+                                                )
+                                                .clicked()
+                                            {
+                                                *on_click = Some(format!(
+                                                    "navigate:{}:{}",
+                                                    selected_target, trans_code
+                                                ));
+                                                modified = true;
+                                            }
+                                        }
+                                    });
+                            });
+
+                            let transitions = [
+                                ("SlideLeft", "➡️ Slide Left (300ms)"),
+                                ("SlideRight", "⬅️ Slide Right (300ms)"),
+                                ("Fade", "✨ Fade (200ms)"),
+                                ("Instant", "⚡ Instant"),
+                            ];
+                            let mut selected_trans = trans_code.to_string();
+
+                            ui.horizontal(|ui| {
+                                ui.label("Effect:");
+                                egui::ComboBox::from_id_salt("btn_nav_trans")
+                                    .selected_text(
+                                        transitions
+                                            .iter()
+                                            .find(|(c, _)| *c == trans_code)
+                                            .map(|(_, n)| *n)
+                                            .unwrap_or("Slide Left"),
+                                    )
+                                    .show_ui(ui, |ui| {
+                                        for (c, label) in transitions {
+                                            if ui
+                                                .selectable_value(
+                                                    &mut selected_trans,
+                                                    c.to_string(),
+                                                    label,
+                                                )
+                                                .clicked()
+                                            {
+                                                *on_click = Some(format!(
+                                                    "navigate:{}:{}",
+                                                    target_screen, selected_trans
+                                                ));
+                                                modified = true;
+                                            }
+                                        }
+                                    });
+                            });
+                        } else if action_type == "Custom Action" {
+                            ui.horizontal(|ui| {
+                                ui.label("Handler:");
+                                let mut click_str = on_click.clone().unwrap_or_default();
+                                if ui.text_edit_singleline(&mut click_str).changed() {
+                                    *on_click = if click_str.trim().is_empty() {
+                                        None
+                                    } else {
+                                        Some(click_str)
+                                    };
+                                    modified = true;
+                                }
+                            });
                         }
                     });
                 }

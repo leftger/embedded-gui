@@ -1,4 +1,4 @@
-//! Studio types, hardware profiles, display themes, and drag state definitions.
+//! Studio types, hardware profiles, display themes, screen transitions, and drag state definitions.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StudioTab {
@@ -63,6 +63,52 @@ impl HardwareProfile {
             Self::Ssd1306Oled => "SSD1306 OLED (128×64 Mono 1-bit)",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitionStyle {
+    SlideLeft,
+    SlideRight,
+    Fade,
+    Instant,
+}
+
+impl TransitionStyle {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::SlideLeft => "Slide Left (300ms)",
+            Self::SlideRight => "Slide Right (300ms)",
+            Self::Fade => "Fade (200ms)",
+            Self::Instant => "Instant",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::SlideLeft => "SlideLeft",
+            Self::SlideRight => "SlideRight",
+            Self::Fade => "Fade",
+            Self::Instant => "Instant",
+        }
+    }
+
+    pub fn from_code(s: &str) -> Self {
+        match s {
+            "SlideLeft" => Self::SlideLeft,
+            "SlideRight" => Self::SlideRight,
+            "Fade" => Self::Fade,
+            _ => Self::Instant,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScreenTransition {
+    pub target_screen_idx: usize,
+    pub progress: f32,
+    pub duration: f32,
+    pub style: TransitionStyle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
