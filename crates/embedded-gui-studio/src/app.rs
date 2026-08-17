@@ -26,6 +26,9 @@ pub struct EmbeddedGuiStudio {
     pub copied_toast_timer: f32,
     pub action_toast: Option<(String, f32)>,
 
+    // Hardware Bridge
+    pub hardware_bridge: crate::bridge::HardwareBridge,
+
     // Theme & Hardware
     pub display_theme: DisplayTheme,
     pub hardware_profile: HardwareProfile,
@@ -58,6 +61,7 @@ impl Default for EmbeddedGuiStudio {
             preview_zoom: 1.5,
             copied_toast_timer: 0.0,
             action_toast: None,
+            hardware_bridge: crate::bridge::HardwareBridge::new(9080),
             display_theme: DisplayTheme::DarkTft,
             hardware_profile: HardwareProfile::Esp32S3Box,
             selected_widget_idx: None,
@@ -1238,7 +1242,7 @@ impl eframe::App for EmbeddedGuiStudio {
             });
         });
 
-        // Bottom Hardware Profiler Bar
+        // Bottom Hardware Profiler Bar & Silicon Bridge
         egui::TopBottomPanel::bottom("bottom_hardware_profiler").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if let Ok(screen) = &self.parsed_screen {
@@ -1248,28 +1252,42 @@ impl eframe::App for EmbeddedGuiStudio {
                     let static_ram_kb = (screen.grid.children.len() * 96) as f32 / 1024.0;
                     let spi_mb_sec = (fb_bytes as f32 * 60.0) / 1_000_000.0;
 
-                    ui.label(egui::RichText::new("📊 Hardware Budget:").strong());
-                    ui.label(format!("Resolution: {}×{} px", screen.width, screen.height));
+                    ui.label(egui::RichText::new("📊 Budget:").strong());
+                    ui.label(format!("FB: {:.1}KB", fb_kb));
                     ui.separator();
-                    ui.label(format!("Framebuffer: {:.1} KB ({} bpp)", fb_kb, bpp));
+                    ui.label(format!("Nodes: {:.2}KB", static_ram_kb));
                     ui.separator();
-                    ui.label(format!(
-                        "Static Nodes: {:.2} KB ({} widgets)",
-                        static_ram_kb,
-                        screen.grid.children.len()
-                    ));
+                    ui.label(format!("SPI 60FPS: {:.2}MB/s", spi_mb_sec));
                     ui.separator();
-                    ui.label(format!("60 FPS Bandwidth: {:.2} MB/s", spi_mb_sec));
-                    ui.separator();
-                    ui.colored_label(
-                        Color32::from_rgb(80, 220, 120),
-                        "✓ Real-time 60 FPS Capable",
-                    );
+
+                    // Hardware Bridge controls
+                    if self.hardware_bridge.is_running {
+                        let count = self
+                            .hardware_bridge
+                            .client_count
+                            .lock()
+                            .map(|c| *c)
+                            .unwrap_or(0);
+                        ui.colored_label(
+                            Color32::from_rgb(80, 220, 120),
+                            format!("🔌 Bridge (9080): {} dev", count),
+                        );
+                        if ui.button("⚡ Hot Reload").clicked() {
+                            let sent = self.hardware_bridge.broadcast_kdl(&self.kdl_source);
+                            self.action_toast =
+                                Some((format!("Hot-reloaded {} device(s)", sent), 2.0));
+                        }
+                    } else if ui.button("🔌 Start Hardware Bridge").clicked()
+                        && self.hardware_bridge.start().is_ok()
+                    {
+                        self.action_toast =
+                            Some(("Bridge listening on 127.0.0.1:9080".into(), 2.0));
+                    }
                 }
             });
         });
 
-        // Left Panel: KDL Code Editor
+        // Left Panel: KDL Code Editor with Syntax Highlighting
         egui::SidePanel::left("editor_panel")
             .min_width(340.0)
             .default_width(380.0)
@@ -1287,18 +1305,27 @@ impl eframe::App for EmbeddedGuiStudio {
                 });
                 ui.separator();
 
+                let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+                    let mut job = crate::syntax::highlight_kdl(ui.ctx(), string);
+                    job.wrap.max_width = wrap_width;
+                    ui.fonts(|f| f.layout_job(job))
+                };
+
                 egui::ScrollArea::vertical()
                     .max_height(ui.available_height() - 70.0)
                     .show(ui, |ui| {
                         let response = ui.add(
                             egui::TextEdit::multiline(&mut self.kdl_source)
-                                .font(egui::TextStyle::Monospace)
+                                .layouter(&mut layouter)
                                 .desired_rows(24)
                                 .desired_width(f32::INFINITY)
                                 .lock_focus(true),
                         );
                         if response.changed() {
                             self.recompile();
+                            if self.hardware_bridge.is_running {
+                                self.hardware_bridge.broadcast_kdl(&self.kdl_source);
+                            }
                         }
                     });
 
@@ -1325,13 +1352,23 @@ impl eframe::App for EmbeddedGuiStudio {
                 }
             });
 
-        // Center Panel: Tabs (Visual Preview / Rust Codegen / AST)
+        // Center Panel: Tabs (Visual Preview / Rust Codegen / AST / Assets / Flow)
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(
                     &mut self.active_tab,
                     StudioTab::VisualPreview,
                     "🖥 Visual Preview",
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    StudioTab::ScreenFlow,
+                    "🗺 Screen Flow",
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    StudioTab::AssetBrowser,
+                    "🔤 Fonts & Assets",
                 );
                 ui.selectable_value(
                     &mut self.active_tab,
@@ -1353,6 +1390,71 @@ impl eframe::App for EmbeddedGuiStudio {
                     } else {
                         ui.label("Fix KDL syntax errors to display preview.");
                     }
+                }
+                StudioTab::ScreenFlow => {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.heading("🗺️ Multi-Screen Flow & Navigation State Machine");
+                        ui.label(egui::RichText::new("Interactive navigation routing and transition pipeline for multi-screen embedded applications.").weak());
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            ui.label("Quick Switch Screen:");
+                            if ui.button("🚗 AutoCluster").clicked() {
+                                self.push_undo_snapshot();
+                                self.kdl_source = SAMPLE_AUTOMOTIVE_CLUSTER.to_string();
+                                self.recompile();
+                            }
+                            if ui.button("❄️ HvacClimate").clicked() {
+                                self.push_undo_snapshot();
+                                self.kdl_source = SAMPLE_HVAC_CLIMATE.to_string();
+                                self.recompile();
+                            }
+                            if ui.button("🩺 PatientMonitor").clicked() {
+                                self.push_undo_snapshot();
+                                self.kdl_source = SAMPLE_PATIENT_MONITOR.to_string();
+                                self.recompile();
+                            }
+                            if ui.button("⚙️ CncController").clicked() {
+                                self.push_undo_snapshot();
+                                self.kdl_source = SAMPLE_CNC_CONTROLLER.to_string();
+                                self.recompile();
+                            }
+                            if ui.button("⌚ FitnessTracker").clicked() {
+                                self.push_undo_snapshot();
+                                self.kdl_source = SAMPLE_SMARTWATCH_FITNESS.to_string();
+                                self.recompile();
+                            }
+                        });
+                        ui.separator();
+
+                        // Visual State Diagram of Screen Transitions
+                        let (response, painter) = ui.allocate_painter(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
+                        let rect = response.rect;
+                        painter.rect_filled(rect, CornerRadius::same(6), Color32::from_rgb(18, 22, 28));
+                        painter.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0f32, Color32::from_rgb(45, 55, 70)), StrokeKind::Inside);
+
+                        let node_w = 110.0;
+                        let node_h = 44.0;
+                        let cur_id = self.parsed_screen.as_ref().map(|s| s.id.as_str()).unwrap_or("Active");
+
+                        let n1_rect = Rect::from_min_size(Pos2::new(rect.min.x + 30.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
+                        let n2_rect = Rect::from_min_size(Pos2::new(rect.min.x + 200.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
+                        let n3_rect = Rect::from_min_size(Pos2::new(rect.min.x + 370.0, rect.center().y - node_h / 2.0), Vec2::new(node_w, node_h));
+
+                        for (r, name, desc) in [(n1_rect, cur_id, "Active Screen"), (n2_rect, "SettingsScreen", "SlideLeft (300ms)"), (n3_rect, "DiagnosticsScreen", "FadeInOut (200ms)")] {
+                            painter.rect_filled(r, CornerRadius::same(4), Color32::from_rgb(32, 38, 48));
+                            painter.rect_stroke(r, CornerRadius::same(4), Stroke::new(1.5f32, if name == cur_id { Color32::from_rgb(60, 180, 255) } else { Color32::from_rgb(60, 70, 85) }), StrokeKind::Inside);
+                            painter.text(Pos2::new(r.center().x, r.center().y - 6.0), egui::Align2::CENTER_CENTER, name, FontId::proportional(11.0), Color32::WHITE);
+                            painter.text(Pos2::new(r.center().x, r.center().y + 8.0), egui::Align2::CENTER_CENTER, desc, FontId::proportional(8.5), Color32::from_rgb(140, 160, 180));
+                        }
+
+                        // Connect transitions
+                        painter.line_segment([Pos2::new(n1_rect.max.x, n1_rect.center().y), Pos2::new(n2_rect.min.x, n2_rect.center().y)], Stroke::new(2.0f32, Color32::from_rgb(80, 220, 120)));
+                        painter.line_segment([Pos2::new(n2_rect.max.x, n2_rect.center().y), Pos2::new(n3_rect.min.x, n3_rect.center().y)], Stroke::new(2.0f32, Color32::from_rgb(80, 220, 120)));
+                    });
+                }
+                StudioTab::AssetBrowser => {
+                    crate::assets::render_asset_browser(ui, &mut self.action_toast);
                 }
                 StudioTab::RustCodegen => {
                     egui::ScrollArea::both().show(ui, |ui| {

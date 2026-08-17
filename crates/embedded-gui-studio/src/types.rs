@@ -5,6 +5,8 @@ pub enum StudioTab {
     VisualPreview,
     RustCodegen,
     AstHierarchy,
+    AssetBrowser,
+    ScreenFlow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

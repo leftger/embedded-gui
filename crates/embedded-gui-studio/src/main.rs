@@ -2,12 +2,15 @@
 //! Cross-platform interactive designer, visual inspector, live animation previewer, and Rust code generator for embedded-gui.
 
 mod app;
+mod assets;
+mod bridge;
 mod curve_visualizer;
 mod exporter;
 mod inspector;
 mod layout;
 mod presets;
 mod renderer;
+mod syntax;
 mod types;
 
 use app::EmbeddedGuiStudio;
