@@ -322,7 +322,190 @@ fn get_bool_prop(node: &KdlNode, name: &str) -> Option<bool> {
     })
 }
 
+/// Parses an SVG path definition string (e.g. `M 10 20 C 15 25 30 40 50 20 Z` or `M0,0 L20,20 Z`) into PathVerbDefs.
+pub fn parse_svg_path_d(d: &str) -> Vec<PathVerbDef> {
+    let mut verbs = Vec::new();
+    let mut cur_x = 0i32;
+    let mut cur_y = 0i32;
+    let mut chars = d.chars().peekable();
+
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() || c == ',' {
+            chars.next();
+            continue;
+        }
+
+        if c.is_ascii_alphabetic() {
+            let cmd = chars.next().unwrap();
+            let is_relative = cmd.is_ascii_lowercase();
+
+            // Extract numeric coordinates following the command
+            let mut numbers = Vec::new();
+            while let Some(&next_c) = chars.peek() {
+                if next_c.is_whitespace() || next_c == ',' {
+                    chars.next();
+                    continue;
+                }
+                if next_c.is_ascii_digit() || next_c == '-' || next_c == '+' || next_c == '.' {
+                    let mut num_str = String::new();
+                    while let Some(&nc) = chars.peek() {
+                        if nc.is_ascii_digit() || nc == '-' || nc == '+' || nc == '.' {
+                            num_str.push(chars.next().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                    if let Ok(val) = num_str.parse::<f32>() {
+                        numbers.push(val.round() as i32);
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            match cmd.to_ascii_uppercase() {
+                'M' => {
+                    let mut idx = 0;
+                    while idx + 1 < numbers.len() {
+                        let nx = if is_relative {
+                            cur_x + numbers[idx]
+                        } else {
+                            numbers[idx]
+                        };
+                        let ny = if is_relative {
+                            cur_y + numbers[idx + 1]
+                        } else {
+                            numbers[idx + 1]
+                        };
+                        cur_x = nx;
+                        cur_y = ny;
+                        if idx == 0 {
+                            verbs.push(PathVerbDef::MoveTo(cur_x, cur_y));
+                        } else {
+                            verbs.push(PathVerbDef::LineTo(cur_x, cur_y));
+                        }
+                        idx += 2;
+                    }
+                }
+                'L' => {
+                    let mut idx = 0;
+                    while idx + 1 < numbers.len() {
+                        let nx = if is_relative {
+                            cur_x + numbers[idx]
+                        } else {
+                            numbers[idx]
+                        };
+                        let ny = if is_relative {
+                            cur_y + numbers[idx + 1]
+                        } else {
+                            numbers[idx + 1]
+                        };
+                        cur_x = nx;
+                        cur_y = ny;
+                        verbs.push(PathVerbDef::LineTo(cur_x, cur_y));
+                        idx += 2;
+                    }
+                }
+                'H' => {
+                    for x in numbers {
+                        let nx = if is_relative { cur_x + x } else { x };
+                        cur_x = nx;
+                        verbs.push(PathVerbDef::LineTo(cur_x, cur_y));
+                    }
+                }
+                'V' => {
+                    for y in numbers {
+                        let ny = if is_relative { cur_y + y } else { y };
+                        cur_y = ny;
+                        verbs.push(PathVerbDef::LineTo(cur_x, cur_y));
+                    }
+                }
+                'Q' => {
+                    let mut idx = 0;
+                    while idx + 3 < numbers.len() {
+                        let cx = if is_relative {
+                            cur_x + numbers[idx]
+                        } else {
+                            numbers[idx]
+                        };
+                        let cy = if is_relative {
+                            cur_y + numbers[idx + 1]
+                        } else {
+                            numbers[idx + 1]
+                        };
+                        let ex = if is_relative {
+                            cur_x + numbers[idx + 2]
+                        } else {
+                            numbers[idx + 2]
+                        };
+                        let ey = if is_relative {
+                            cur_y + numbers[idx + 3]
+                        } else {
+                            numbers[idx + 3]
+                        };
+                        verbs.push(PathVerbDef::QuadTo(cx, cy, ex, ey));
+                        cur_x = ex;
+                        cur_y = ey;
+                        idx += 4;
+                    }
+                }
+                'C' => {
+                    let mut idx = 0;
+                    while idx + 5 < numbers.len() {
+                        let c1x = if is_relative {
+                            cur_x + numbers[idx]
+                        } else {
+                            numbers[idx]
+                        };
+                        let c1y = if is_relative {
+                            cur_y + numbers[idx + 1]
+                        } else {
+                            numbers[idx + 1]
+                        };
+                        let c2x = if is_relative {
+                            cur_x + numbers[idx + 2]
+                        } else {
+                            numbers[idx + 2]
+                        };
+                        let c2y = if is_relative {
+                            cur_y + numbers[idx + 3]
+                        } else {
+                            numbers[idx + 3]
+                        };
+                        let ex = if is_relative {
+                            cur_x + numbers[idx + 4]
+                        } else {
+                            numbers[idx + 4]
+                        };
+                        let ey = if is_relative {
+                            cur_y + numbers[idx + 5]
+                        } else {
+                            numbers[idx + 5]
+                        };
+                        verbs.push(PathVerbDef::CubicTo(c1x, c1y, c2x, c2y, ex, ey));
+                        cur_x = ex;
+                        cur_y = ey;
+                        idx += 6;
+                    }
+                }
+                'Z' => {
+                    verbs.push(PathVerbDef::Close);
+                }
+                _ => {}
+            }
+        } else {
+            chars.next();
+        }
+    }
+
+    verbs
+}
+
 fn parse_path_verbs(node: &KdlNode) -> Vec<PathVerbDef> {
+    if let Some(d_str) = get_string_prop(node, "d").or_else(|| get_string_prop(node, "data")) {
+        return parse_svg_path_d(d_str);
+    }
+
     let mut verbs = Vec::new();
     if let Some(children) = node.children() {
         for child in children.nodes() {
@@ -1797,5 +1980,27 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         let serialized = serialize_kdl_screen(&screen);
         let parsed_again = parse_kdl_screen(&serialized).unwrap();
         assert_eq!(screen, parsed_again);
+    }
+
+    #[test]
+    fn test_svg_path_d_parsing_and_codegen() {
+        let svg_d = "M 10 20 L 30 40 Q 50 60 70 80 C 10 20 30 40 50 60 Z";
+        let verbs = parse_svg_path_d(svg_d);
+        assert_eq!(verbs.len(), 5);
+        assert_eq!(verbs[0], PathVerbDef::MoveTo(10, 20));
+        assert_eq!(verbs[1], PathVerbDef::LineTo(30, 40));
+        assert_eq!(verbs[2], PathVerbDef::QuadTo(50, 60, 70, 80));
+        assert_eq!(verbs[3], PathVerbDef::CubicTo(10, 20, 30, 40, 50, 60));
+        assert_eq!(verbs[4], PathVerbDef::Close);
+
+        let kdl = r#"screen id="VectorApp" width=320 height=240 {
+    grid cols="1fr" rows="1fr" {
+        path id="my_curve" d="M 0 10 C 20 0, 40 40, 60 10 Z" stroke_width=2 col=0 row=0
+    }
+}"#;
+        let rust_code = compile_kdl_to_rust(kdl).unwrap();
+        assert!(rust_code.contains("pub struct VectorAppWidgets {"));
+        assert!(rust_code.contains("pub my_curve: WidgetId,"));
+        assert!(rust_code.contains("let mut _path_my_curve = VectorPath::<3>::new();"));
     }
 }

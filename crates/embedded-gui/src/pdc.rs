@@ -108,6 +108,65 @@ impl<const MAX_POINTS: usize> PdcCommand<MAX_POINTS> {
             .map_err(|_| PdcError)
     }
 
+    /// Adds a quadratic Bézier curve segment flattened into subpixel points.
+    pub fn add_bezier_quad(
+        &mut self,
+        p0: Point,
+        p1: Point,
+        p2: Point,
+        steps: usize,
+    ) -> Result<(), PdcError> {
+        let n = steps.max(2);
+        for i in 1..=n {
+            let t = i as f32 / n as f32;
+            let one_minus_t = 1.0 - t;
+            let x = one_minus_t * one_minus_t * p0.x as f32
+                + 2.0 * one_minus_t * t * p1.x as f32
+                + t * t * p2.x as f32;
+            let y = one_minus_t * one_minus_t * p0.y as f32
+                + 2.0 * one_minus_t * t * p1.y as f32
+                + t * t * p2.y as f32;
+            let x_scaled = x * 8.0;
+            let y_scaled = y * 8.0;
+            let x_sub = (x_scaled + if x_scaled >= 0.0 { 0.5 } else { -0.5 }) as i16;
+            let y_sub = (y_scaled + if y_scaled >= 0.0 { 0.5 } else { -0.5 }) as i16;
+            self.add_subpixel_point(x_sub, y_sub)?;
+        }
+        Ok(())
+    }
+
+    /// Adds a cubic Bézier curve segment flattened into subpixel points.
+    pub fn add_bezier_cubic(
+        &mut self,
+        p0: Point,
+        p1: Point,
+        p2: Point,
+        p3: Point,
+        steps: usize,
+    ) -> Result<(), PdcError> {
+        let n = steps.max(3);
+        for i in 1..=n {
+            let t = i as f32 / n as f32;
+            let one_minus_t = 1.0 - t;
+            let t_sq = t * t;
+            let omt_sq = one_minus_t * one_minus_t;
+            let x = omt_sq * one_minus_t * p0.x as f32
+                + 3.0 * omt_sq * t * p1.x as f32
+                + 3.0 * one_minus_t * t_sq * p2.x as f32
+                + t_sq * t * p3.x as f32;
+            let y = omt_sq * one_minus_t * p0.y as f32
+                + 3.0 * omt_sq * t * p1.y as f32
+                + 3.0 * one_minus_t * t_sq * p2.y as f32
+                + t_sq * t * p3.y as f32;
+            let x_scaled = x * 8.0;
+            let y_scaled = y * 8.0;
+            let x_sub = (x_scaled + if x_scaled >= 0.0 { 0.5 } else { -0.5 }) as i16;
+            let y_sub = (y_scaled + if y_scaled >= 0.0 { 0.5 } else { -0.5 }) as i16;
+            self.add_subpixel_point(x_sub, y_sub)?;
+        }
+        Ok(())
+    }
+
     /// Renders this vector command into the provided [`RenderCtx`].
     pub fn render<D, C>(&self, ctx: &mut RenderCtx<'_, D, C>, offset: Point) -> Result<(), D::Error>
     where
