@@ -261,40 +261,64 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
         } else {
             (320, 240)
         };
-
-    // 2. Build Symbol Library for Master Components (Battery icons, Status Glyphs, Gauges)
+    // 2. Build Generic Symbol Library for Standard Micro-Display Widgets
     let mut symbol_library = HashMap::new();
     symbol_library.insert(
         "Battery".to_string(),
-        "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z".to_string(),
+        "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 10 2 L 10 4 L 2 4 Z"
+            .to_string(),
     );
     symbol_library.insert(
-        "Laser".to_string(),
-        "M 0 3 L 6 0 L 6 6 Z M 6 3 L 12 3".to_string(),
+        "Gauge".to_string(),
+        "M 0 6 C 0 2.7, 2.7 0, 6 0 C 9.3 0, 12 2.7, 12 6 L 0 6 Z M 6 6 L 9 2".to_string(),
+    );
+    symbol_library.insert(
+        "Signal".to_string(),
+        "M 1 6 L 3 6 L 3 8 L 1 8 Z M 5 4 L 7 4 L 7 8 L 5 8 Z M 9 2 L 11 2 L 11 8 L 9 8 Z"
+            .to_string(),
+    );
+    symbol_library.insert(
+        "Warning".to_string(),
+        "M 6 1 L 12 11 L 0 11 Z M 6 4 L 6 7 M 6 9 L 6 10".to_string(),
     );
     symbol_library.insert(
         "Timer".to_string(),
         "M 6 0 C 9.3 0, 12 2.7, 12 6 C 12 9.3, 9.3 12, 6 12 C 2.7 12, 0 9.3, 0 6 C 0 2.7, 2.7 0, 6 0 Z M 6 2 L 6 6 L 9 6".to_string(),
     );
 
-    // 3. Extract dynamic frame names matching 'Screen/' or 'Frame/'
+    // 3. Extract dynamic frame names matching 'Screen/' or 'Mode/' or 'Frame/'
     let mut discovered_names = Vec::new();
-    let screen_prefix = b"Screen/";
+    let screen_prefixes = [
+        b"Screen/".as_slice(),
+        b"Mode/".as_slice(),
+        b"Frame/".as_slice(),
+    ];
     let mut pos = 0;
-    while pos + screen_prefix.len() < doc_bytes.len() {
-        if &doc_bytes[pos..pos + screen_prefix.len()] == screen_prefix {
-            let start = pos + screen_prefix.len();
+    while pos + 7 < doc_bytes.len() {
+        let mut matched_len = 0;
+        for p in &screen_prefixes {
+            if doc_bytes[pos..].starts_with(p) {
+                matched_len = p.len();
+                break;
+            }
+        }
+
+        if matched_len > 0 {
+            let start = pos + matched_len;
             let mut end = start;
             while end < doc_bytes.len()
-                && (doc_bytes[end].is_ascii_alphanumeric() || doc_bytes[end] == b'_')
-                && end - start < 30
+                && (doc_bytes[end].is_ascii_alphanumeric()
+                    || doc_bytes[end] == b'_'
+                    || doc_bytes[end] == b'/')
+                && end - start < 35
             {
                 end += 1;
             }
             if end > start {
                 if let Ok(name) = std::str::from_utf8(&doc_bytes[start..end]) {
-                    if !discovered_names.contains(&name.to_string()) && !name.is_empty() {
-                        discovered_names.push(name.to_string());
+                    let clean_name = name.replace('/', "_");
+                    if !discovered_names.contains(&clean_name) && !clean_name.is_empty() {
+                        discovered_names.push(clean_name);
                     }
                 }
             }
@@ -310,12 +334,13 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
             .and_then(|s| s.to_str())
             .unwrap_or("Screen");
         let base_name = file_stem.replace([' ', '-'], "_");
-        discovered_names.push(format!("{}_Main", base_name));
+        discovered_names.push(format!("{}_Primary", base_name));
+        discovered_names.push(format!("{}_Telemetry", base_name));
         discovered_names.push(format!("{}_Settings", base_name));
     }
 
     // 4. Generate clean, vector-accurate declarative KDL schemas
-    for (i, screen_name) in discovered_names.iter().take(8).enumerate() {
+    for (i, screen_name) in discovered_names.iter().enumerate() {
         let next_screen = discovered_names
             .get((i + 1) % discovered_names.len())
             .unwrap_or(screen_name);
@@ -324,17 +349,16 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
             format!(
                 r##"// Imported Screen: {} ({}x{} OLED)
 screen id="{}" width={} height={} {{
-    grid cols="1fr 1fr" rows="18px 24px 1fr" gap=2 padding=3 {{
-        // Top Status Header: Bezel Vector Outline + Battery Vector Symbol
-        rect radius=2 stroke_width=1 stroke="#FFFFFF" fill="#000000" col=0 row=0
-        label text="[{}]" style="accent" col=0 row=0
-        path id="batt_icon" d="{}" stroke_width=1 col=1 row=0
+    grid cols="1fr 1fr" rows="16px 28px 1fr" gap=2 padding=2 {{
+        // Top Header: Signal/Gauge + Battery
+        path id="sig_icon" d="{}" stroke_width=1 stroke="#FFFFFF" col=0 row=0
+        path id="batt_icon" d="{}" stroke_width=1 stroke="#FFFFFF" col=1 row=0
 
         // Primary Display Value & Vector Outline
-        rect radius=3 stroke_width=1 stroke="#FFFFFF" col=0 row=1 col_span=2
-        label text="ONLINE" style="success" col=0 row=1 col_span=2
+        rect radius=1 stroke_width=1 stroke="#FFFFFF" fill="#000000" col=0 row=1 col_span=2
+        label text="[{}]" style="accent" col=0 row=1 col_span=2
 
-        // Bottom Navigation Action & Progress Track
+        // Action Navigation
         button text="Next ➔" on_click="navigate:{}:SlideLeft" col=0 row=2 col_span=2
     }}
 }}
@@ -345,8 +369,9 @@ screen id="{}" width={} height={} {{
                 screen_name,
                 detected_w,
                 detected_h,
-                screen_name,
+                symbol_library.get("Gauge").unwrap(),
                 symbol_library.get("Battery").unwrap(),
+                screen_name,
                 next_screen
             )
         } else {
