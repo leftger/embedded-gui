@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 #[cfg(not(feature = "std"))]
 use crate::math::F32Ext as _;
 use crate::{
@@ -21,154 +23,154 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     pub fn handle_input(&mut self, event: InputEvent) -> Result<(), GuiError> {
         match event {
             InputEvent::Home => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.set_textarea_cursor_line_home(id)?;
+                        self.set_textarea_cursor_line_home(_id)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::End => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.set_textarea_cursor_line_end(id)?;
+                        self.set_textarea_cursor_line_end(_id)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::WordLeft => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_word(id, -1)?;
+                        self.move_textarea_cursor_word(_id, -1)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::WordRight => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_word(id, 1)?;
+                        self.move_textarea_cursor_word(_id, 1)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::Undo => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.textarea_undo(id)?;
+                        self.textarea_undo(_id)?;
                     }
                 }
                 Ok(())
             }
             InputEvent::Redo => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.textarea_redo(id)?;
+                        self.textarea_redo(_id)?;
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectLeft => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_select(id, -1)?;
+                        self.move_textarea_cursor_select(_id, -1)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectRight => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_select(id, 1)?;
+                        self.move_textarea_cursor_select(_id, 1)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectHome => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.set_textarea_cursor_line_home_select(id)?;
+                        self.set_textarea_cursor_line_home_select(_id)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectEnd => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.set_textarea_cursor_line_end_select(id)?;
+                        self.set_textarea_cursor_line_end_select(_id)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectWordLeft => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_word_select(id, -1)?;
+                        self.move_textarea_cursor_word_select(_id, -1)?;
                         return Ok(());
                     }
                 }
                 Ok(())
             }
             InputEvent::SelectWordRight => {
-                if let Some(id) = self.focus {
+                if let Some(_id) = self.focus {
                     #[cfg(feature = "rich-widgets")]
                     if matches!(
-                        self.node(id).map(|n| n.kind),
+                        self.node(_id).map(|n| n.kind),
                         Some(WidgetKind::TextArea { .. })
                     ) {
-                        self.move_textarea_cursor_word_select(id, 1)?;
+                        self.move_textarea_cursor_word_select(_id, 1)?;
                         return Ok(());
                     }
                 }
@@ -1148,6 +1150,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             return Ok(());
         };
         self.update_dial_value_at_pointer(pressed.id, x, y)?;
+        #[allow(unused_variables)]
         let dy = y - pressed.last_y;
         pressed.last_x = x;
         pressed.last_y = y;

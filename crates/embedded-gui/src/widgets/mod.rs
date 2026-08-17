@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use core::fmt::Write;
 
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};

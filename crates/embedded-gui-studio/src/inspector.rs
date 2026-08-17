@@ -3,6 +3,47 @@
 use eframe::egui::{self, DragValue};
 use embedded_gui_codegen::{GridPlacementDef, ScreenDef, WidgetDef};
 
+fn push_new_widget(
+    screen: &mut ScreenDef,
+    widget: WidgetDef,
+    selected_widget_idx: &mut Option<usize>,
+) {
+    let max_cols = screen.grid.cols.len().max(1);
+    let (next_col, next_row) = if let Some((last_p, _)) = screen.grid.children.last() {
+        let nc = (last_p.col + last_p.col_span) % max_cols;
+        let nr = last_p.row + if nc == 0 { last_p.row_span } else { 0 };
+        (nc, nr)
+    } else {
+        (0, 0)
+    };
+    let placement = GridPlacementDef {
+        col: next_col,
+        row: next_row,
+        col_span: 1,
+        row_span: 1,
+    };
+    screen.grid.children.push((placement, widget));
+    *selected_widget_idx = Some(screen.grid.children.len() - 1);
+}
+
+fn push_vector_asset(
+    screen: &mut ScreenDef,
+    name: &str,
+    d: &str,
+    selected_widget_idx: &mut Option<usize>,
+) {
+    let verbs = embedded_gui_codegen::parse_svg_path_d(d);
+    push_new_widget(
+        screen,
+        WidgetDef::VectorPath {
+            id: Some(name.to_lowercase()),
+            stroke_width: 1,
+            verbs,
+        },
+        selected_widget_idx,
+    );
+}
+
 /// Renders the visual property inspector sidebar for the selected widget or screen.
 pub fn render_inspector_panel(
     ui: &mut egui::Ui,
@@ -610,118 +651,500 @@ pub fn render_inspector_panel(
 
         ui.separator();
 
-        // Quick Add Widget Section
-        ui.label(egui::RichText::new("➕ Insert Widget").strong());
-        egui::Grid::new("insert_widget_grid")
-            .num_columns(2)
-            .spacing([8.0, 8.0])
+        ui.separator();
+
+        // Comprehensive Categorized Accordions & Dropdown Palettes
+        egui::CollapsingHeader::new(egui::RichText::new("🔘 Controls & Inputs").strong())
+            .default_open(true)
             .show(ui, |ui| {
-                if ui.button("🔘 Button").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Button {
-                            id: Some("new_btn".into()),
-                            text: "Button".into(),
-                            on_click: None,
-                            style: Some("accent".into()),
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                if ui.button("🏷 Label").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Label {
-                            id: Some("new_label".into()),
-                            text: "New Label".into(),
-                            style: None,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                ui.end_row();
+                egui::Grid::new("controls_input_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 6.0])
+                    .show(ui, |ui| {
+                        if ui.button("🔘 Button").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Button {
+                                    id: Some("btn".into()),
+                                    text: "Click".into(),
+                                    on_click: None,
+                                    style: Some("accent".into()),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("🔲 Toggle").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Toggle {
+                                    id: Some("toggle".into()),
+                                    label: "Power".into(),
+                                    checked: true,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
 
-                if ui.button("🎚 Slider").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Slider {
-                            id: Some("new_slider".into()),
-                            min: 0,
-                            max: 100,
-                            value: 50,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                if ui.button("⏻ Toggle").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Toggle {
-                            id: Some("new_toggle".into()),
-                            label: "Power".into(),
-                            checked: true,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                ui.end_row();
+                        if ui.button("☑ Checkbox").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Checkbox {
+                                    id: Some("chk".into()),
+                                    label: "Enable".into(),
+                                    checked: false,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("🎚 Slider").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Slider {
+                                    id: Some("slider".into()),
+                                    min: 0,
+                                    max: 100,
+                                    value: 50,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
 
-                if ui.button("⏱ Gauge / Scale").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Scale {
-                            id: Some("new_gauge".into()),
-                            mode: "radial".into(),
-                            min: 0.0,
-                            max: 100.0,
-                            value: 25.0,
-                            major_ticks: 5,
-                            minor_ticks: 2,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                if ui.button("📊 Progress Bar").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::ProgressBar {
-                            id: Some("new_progress".into()),
-                            value: 0.75,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                ui.end_row();
+                        if ui.button("🔢 Spinbox").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Spinbox {
+                                    id: Some("spin".into()),
+                                    min: 0,
+                                    max: 999,
+                                    value: 120,
+                                    digits: 3,
+                                    decimals: 1,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("🔢 NumPicker").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::NumberPicker {
+                                    id: Some("numpick".into()),
+                                    min: 40,
+                                    max: 220,
+                                    value: 135,
+                                    unit: "BPM".into(),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
 
-                if ui.button("📈 Scope Plotter").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::Plotter {
-                            id: Some("new_plotter".into()),
-                            mode: "sine".into(),
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                if ui.button("⚙️ Busy Spinner").clicked() {
-                    screen.grid.children.push((
-                        GridPlacementDef::default(),
-                        WidgetDef::BusyWheel {
-                            id: Some("new_spinner".into()),
-                            active: true,
-                        },
-                    ));
-                    *selected_widget_idx = Some(screen.grid.children.len() - 1);
-                    modified = true;
-                }
-                ui.end_row();
+                        if ui.button("🕒 TimePicker").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::TimePicker {
+                                    id: Some("time".into()),
+                                    hour: 12,
+                                    minute: 30,
+                                    is_12h: true,
+                                    is_pm: true,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("📋 Dropdown").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Dropdown {
+                                    id: Some("drop".into()),
+                                    options: vec!["Auto".into(), "Cool".into(), "Heat".into()],
+                                    selected: 0,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("🎡 Roller Wheel").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Roller {
+                                    id: Some("roller".into()),
+                                    options: vec!["Low".into(), "Med".into(), "High".into()],
+                                    selected: 1,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+            });
+
+        egui::CollapsingHeader::new(egui::RichText::new("📝 Text & Containers").strong())
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::Grid::new("text_containers_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 6.0])
+                    .show(ui, |ui| {
+                        if ui.button("📝 Label").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Label {
+                                    id: Some("label".into()),
+                                    text: "System Ready".into(),
+                                    style: None,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("✨ XOR Inverted").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Label {
+                                    id: Some("badge".into()),
+                                    text: "[ ACTIVE ]".into(),
+                                    style: Some("inverted".into()),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("📱 StatusBar").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::StatusBar {
+                                    id: Some("status".into()),
+                                    time: "10:42".into(),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("💬 Dialog").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Dialog {
+                                    id: Some("dlg".into()),
+                                    title: "Confirm".into(),
+                                    message: "Apply settings?".into(),
+                                    dialog_type: "confirm".into(),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("📊 Table Grid").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Table {
+                                    id: Some("table".into()),
+                                    headers: Some(vec!["SENSOR".into(), "VAL".into()]),
+                                    rows: vec![
+                                        vec!["Temp".into(), "42°C".into()],
+                                        vec!["Volt".into(), "3.3V".into()],
+                                    ],
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+            });
+
+        egui::CollapsingHeader::new(egui::RichText::new("📊 Gauges & Telemetry").strong())
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::Grid::new("gauges_telemetry_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 6.0])
+                    .show(ui, |ui| {
+                        if ui.button("📈 ProgressBar").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::ProgressBar {
+                                    id: Some("progress".into()),
+                                    value: 0.65,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("⏱ Tachometer").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Scale {
+                                    id: Some("scale".into()),
+                                    mode: "radial".into(),
+                                    min: 0.0,
+                                    max: 100.0,
+                                    value: 65.0,
+                                    major_ticks: 5,
+                                    minor_ticks: 2,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("📐 Sweeping Arc").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::SweepingArc {
+                                    id: Some("arc".into()),
+                                    start_angle: 0,
+                                    end_angle: 180,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("🌀 Spinner").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::BusyWheel {
+                                    id: Some("spinner".into()),
+                                    active: true,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("📉 Scope Plotter").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Plotter {
+                                    id: Some("plotter".into()),
+                                    mode: "waveform".into(),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+            });
+
+        egui::CollapsingHeader::new(egui::RichText::new("📐 Vector Shapes").strong())
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::Grid::new("vector_shapes_grid")
+                    .num_columns(2)
+                    .spacing([6.0, 6.0])
+                    .show(ui, |ui| {
+                        if ui.button("🔲 Bezel Rect").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::RectShape {
+                                    id: Some("bezel".into()),
+                                    radius: 2,
+                                    stroke_width: 1,
+                                    fill_color: Some("#000000".into()),
+                                    stroke_color: Some("#FFFFFF".into()),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("⚪ Circle").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::CircleShape {
+                                    id: Some("circle".into()),
+                                    radius: 12,
+                                    stroke_width: 1,
+                                    fill_color: None,
+                                    stroke_color: Some("#FFFFFF".into()),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+
+                        if ui.button("➖ Line Divider").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::LineShape {
+                                    id: Some("line".into()),
+                                    stroke_width: 1,
+                                    color: Some("#FFFFFF".into()),
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("✒️ Bézier Curve").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "spline",
+                                "M 0 10 C 20 0, 40 40, 60 10",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+            });
+
+        egui::CollapsingHeader::new(egui::RichText::new("🎨 Vector Asset Library").strong())
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(egui::RichText::new("🔋 Power & Battery").small());
+                egui::Grid::new("asset_power_grid")
+                    .num_columns(2)
+                    .spacing([4.0, 4.0])
+                    .show(ui, |ui| {
+                        if ui.small_button("🔋 Batt Full").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "batt_full",
+                                "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 12 2 L 12 4 L 2 4 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.small_button("🪫 Batt Low").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "batt_low",
+                                "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 4 2 L 4 4 L 2 4 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.small_button("⚡ Bolt (Charge)").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "bolt",
+                                "M 6 0 L 1 7 L 5 7 L 3 13 L 10 5 L 5 5 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+
+                ui.separator();
+                ui.label(egui::RichText::new("📶 Connectivity & Badges").small());
+                egui::Grid::new("asset_badges_grid")
+                    .num_columns(2)
+                    .spacing([4.0, 4.0])
+                    .show(ui, |ui| {
+                        if ui.small_button("📡 Bluetooth").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "bluetooth",
+                                "M 4 1 L 8 5 L 5 8 L 5 0 L 8 3 L 4 7",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.small_button("📶 Signal Bars").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "signal",
+                                "M 1 6 L 3 6 L 3 8 L 1 8 Z M 5 4 L 7 4 L 7 8 L 5 8 Z M 9 2 L 11 2 L 11 8 L 9 8 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.small_button("⚠️ Warning").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "warning",
+                                "M 6 1 L 12 11 L 0 11 Z M 6 4 L 6 7 M 6 9 L 6 10",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.small_button("🛡️ Shield").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "shield",
+                                "M 0 2 L 6 0 L 12 2 L 12 7 C 12 10, 6 13, 6 13 C 6 13, 0 10, 0 7 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.small_button("❤️ Heart / BPM").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "heart",
+                                "M 6 2 C 4 0, 0 1, 0 4 C 0 8, 6 11, 6 11 C 6 11, 12 8, 12 4 C 12 1, 8 0, 6 2 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.small_button("🎯 Crosshair").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "crosshair",
+                                "M 6 0 L 6 3 M 6 9 L 6 12 M 0 6 L 3 6 M 9 6 L 12 6 M 6 2 C 8.2 2, 10 3.8, 10 6 C 10 8.2, 8.2 10, 6 10 C 3.8 10, 2 8.2, 2 6 C 2 3.8, 3.8 2, 6 2 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
+
+                ui.separator();
+                ui.label(egui::RichText::new("⏱️ Tools & Media").small());
+                egui::Grid::new("asset_tools_grid")
+                    .num_columns(2)
+                    .spacing([4.0, 4.0])
+                    .show(ui, |ui| {
+                        if ui.small_button("⏱ Clock Dial").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "timer",
+                                "M 6 0 C 9.3 0, 12 2.7, 12 6 C 12 9.3, 9.3 12, 6 12 C 2.7 12, 0 9.3, 0 6 C 0 2.7, 2.7 0, 6 0 Z M 6 2 L 6 6 L 9 6",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.small_button("⚙️ Settings Gear").clicked() {
+                            push_vector_asset(
+                                screen,
+                                "gear",
+                                "M 5 0 L 7 0 L 7 2 L 9 3 L 11 1 L 12 2 L 10 4 L 11 6 L 13 6 L 13 8 L 11 8 L 10 10 L 12 12 L 11 13 L 9 11 L 7 12 L 7 14 L 5 14 L 5 12 L 3 11 L 1 13 L 0 12 L 2 10 L 1 8 L 0 8 L 0 6 L 2 6 L 1 4 L 2 2 L 4 3 L 5 2 Z",
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.small_button("▶ Play").clicked() {
+                            push_vector_asset(screen, "play", "M 2 1 L 11 6 L 2 11 Z", selected_widget_idx);
+                            modified = true;
+                        }
+                        if ui.small_button("⏸ Pause").clicked() {
+                            push_vector_asset(screen, "pause", "M 2 1 L 5 1 L 5 11 L 2 11 Z M 7 1 L 10 1 L 10 11 L 7 11 Z", selected_widget_idx);
+                            modified = true;
+                        }
+                        ui.end_row();
+                    });
             });
     }
 

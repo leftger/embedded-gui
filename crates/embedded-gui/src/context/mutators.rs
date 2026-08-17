@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use crate::{
     geometry::Rect,
     input::{UiEvent, WidgetEvent, WidgetEventKind},
