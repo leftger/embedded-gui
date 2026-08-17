@@ -5,7 +5,7 @@ use eframe::egui::{
 };
 use embedded_gui::motion::timing::{EasingCurve, evaluate_easing};
 use embedded_gui_codegen::{
-    GridPlacementDef, GridTrackDef, ScreenDef, generate_rust_code, parse_kdl_screen,
+    GridPlacementDef, GridTrackDef, ScreenDef, WidgetDef, generate_rust_code, parse_kdl_screen,
     serialize_kdl_screen,
 };
 
@@ -169,6 +169,40 @@ impl EmbeddedGuiStudio {
         self.kdl_source = serialize_kdl_screen(screen);
         self.generated_rust = generate_rust_code(screen);
         self.parsed_screen = Ok(screen.clone());
+    }
+
+    /// Inserts a new widget into the active screen layout and synchronizes KDL source.
+    pub fn insert_widget(&mut self, widget: WidgetDef) {
+        if let Ok(mut screen) = self.parsed_screen.clone() {
+            let max_cols = screen.grid.cols.len().max(1);
+            let (next_col, next_row) = if let Some((last_p, _)) = screen.grid.children.last() {
+                let nc = (last_p.col + last_p.col_span) % max_cols;
+                let nr = last_p.row + if nc == 0 { last_p.row_span } else { 0 };
+                (nc, nr)
+            } else {
+                (0, 0)
+            };
+            let placement = GridPlacementDef {
+                col: next_col,
+                row: next_row,
+                col_span: 1,
+                row_span: 1,
+            };
+            screen.grid.children.push((placement, widget));
+            self.selected_widget_idx = Some(screen.grid.children.len() - 1);
+            self.sync_from_screen(&screen);
+            self.action_toast = Some(("✓ Widget inserted".to_string(), 2.0));
+        }
+    }
+
+    /// Inserts a named vector asset as an SVG path widget onto the canvas.
+    pub fn insert_vector_asset(&mut self, name: &str, d: &str) {
+        let verbs = embedded_gui_codegen::parse_svg_path_d(d);
+        self.insert_widget(WidgetDef::VectorPath {
+            id: Some(name.to_lowercase()),
+            stroke_width: 1,
+            verbs,
+        });
     }
 
     pub fn render_visual_preview(&mut self, ui: &mut egui::Ui, screen: &ScreenDef) {
@@ -1298,6 +1332,305 @@ impl eframe::App for EmbeddedGuiStudio {
                             }
                         }
                         ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("➕ Insert Widget", |ui| {
+                    ui.label(egui::RichText::new("🔘 Controls & Inputs").strong());
+                    if ui.button("🔘 Button (Action & Navigate)").clicked() {
+                        self.insert_widget(WidgetDef::Button {
+                            id: None,
+                            text: "CLICK ME".to_string(),
+                            on_click: None,
+                            style: None,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🔲 Toggle Switch").clicked() {
+                        self.insert_widget(WidgetDef::Toggle {
+                            id: None,
+                            label: "POWER".to_string(),
+                            checked: true,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("☑ Checkbox").clicked() {
+                        self.insert_widget(WidgetDef::Checkbox {
+                            id: None,
+                            label: "ENABLE".to_string(),
+                            checked: false,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🎚 Linear Slider").clicked() {
+                        self.insert_widget(WidgetDef::Slider {
+                            id: None,
+                            min: 0,
+                            max: 100,
+                            value: 50,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🔢 Spinbox (Precision Digit)").clicked() {
+                        self.insert_widget(WidgetDef::Spinbox {
+                            id: None,
+                            min: 0,
+                            max: 999,
+                            value: 120,
+                            digits: 3,
+                            decimals: 1,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🔢 Number Picker (Unit Scroll)").clicked() {
+                        self.insert_widget(WidgetDef::NumberPicker {
+                            id: None,
+                            min: 40,
+                            max: 220,
+                            value: 135,
+                            unit: "BPM".to_string(),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🕒 Time Picker (HH:MM)").clicked() {
+                        self.insert_widget(WidgetDef::TimePicker {
+                            id: None,
+                            hour: 12,
+                            minute: 30,
+                            is_12h: true,
+                            is_pm: true,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("📋 Dropdown Menu").clicked() {
+                        self.insert_widget(WidgetDef::Dropdown {
+                            id: None,
+                            options: vec!["Auto".to_string(), "Cool".to_string(), "Heat".to_string()],
+                            selected: 0,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🎡 Rotary Roller Wheel").clicked() {
+                        self.insert_widget(WidgetDef::Roller {
+                            id: None,
+                            options: vec!["Low".to_string(), "Med".to_string(), "High".to_string(), "Turbo".to_string()],
+                            selected: 1,
+                        });
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("📝 Text & Containers").strong());
+                    if ui.button("📝 Label (Primary Text)").clicked() {
+                        self.insert_widget(WidgetDef::Label {
+                            id: None,
+                            text: "SYSTEM ONLINE".to_string(),
+                            style: None,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("✨ Inverted XOR Status Label").clicked() {
+                        self.insert_widget(WidgetDef::Label {
+                            id: None,
+                            text: "[ ACTIVE ]".to_string(),
+                            style: Some("inverted".to_string()),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("📱 Header Status Bar").clicked() {
+                        self.insert_widget(WidgetDef::StatusBar {
+                            id: None,
+                            time: "10:42".to_string(),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("💬 Confirmation Dialog").clicked() {
+                        self.insert_widget(WidgetDef::Dialog {
+                            id: None,
+                            title: "Confirm".to_string(),
+                            message: "Apply settings now?".to_string(),
+                            dialog_type: "confirm".to_string(),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("📊 Data Table Grid").clicked() {
+                        self.insert_widget(WidgetDef::Table {
+                            id: None,
+                            headers: Some(vec!["SENSOR".to_string(), "VAL".to_string()]),
+                            rows: vec![
+                                vec!["Core Temp".to_string(), "42°C".to_string()],
+                                vec!["Voltage".to_string(), "3.3V".to_string()],
+                            ],
+                        });
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("📊 Gauges & Waveforms").strong());
+                    if ui.button("📈 Progress Bar").clicked() {
+                        self.insert_widget(WidgetDef::ProgressBar {
+                            id: None,
+                            value: 0.65,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("⏱ Radial Tachometer Scale").clicked() {
+                        self.insert_widget(WidgetDef::Scale {
+                            id: None,
+                            mode: "radial".to_string(),
+                            min: 0.0,
+                            max: 120.0,
+                            value: 65.0,
+                            major_ticks: 6,
+                            minor_ticks: 2,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("📐 Sweeping Arc Dial").clicked() {
+                        self.insert_widget(WidgetDef::SweepingArc {
+                            id: None,
+                            start_angle: 0,
+                            end_angle: 180,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("🌀 Animated Busy Spinner").clicked() {
+                        self.insert_widget(WidgetDef::BusyWheel {
+                            id: None,
+                            active: true,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("📉 Oscilloscope Waveform Plotter").clicked() {
+                        self.insert_widget(WidgetDef::Plotter {
+                            id: None,
+                            mode: "waveform".to_string(),
+                        });
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("📐 Vector Shapes & Splines").strong());
+                    if ui.button("🔲 Bezel Rectangle (Border & Fill)").clicked() {
+                        self.insert_widget(WidgetDef::RectShape {
+                            id: None,
+                            radius: 2,
+                            stroke_width: 1,
+                            fill_color: Some("#000000".to_string()),
+                            stroke_color: Some("#FFFFFF".to_string()),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("⚪ Vector Circle").clicked() {
+                        self.insert_widget(WidgetDef::CircleShape {
+                            id: None,
+                            radius: 12,
+                            stroke_width: 1,
+                            fill_color: None,
+                            stroke_color: Some("#FFFFFF".to_string()),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("➖ Divider Line").clicked() {
+                        self.insert_widget(WidgetDef::LineShape {
+                            id: None,
+                            stroke_width: 1,
+                            color: Some("#FFFFFF".to_string()),
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("✒️ SVG Bézier Curve Path").clicked() {
+                        self.insert_vector_asset("curve", "M 0 10 C 20 0, 40 40, 60 10");
+                        ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("🎨 Vector Assets", |ui| {
+                    ui.label(egui::RichText::new("🔋 Power & Battery").strong());
+                    if ui.button("🔋 Battery 100% (Full)").clicked() {
+                        self.insert_vector_asset("batt_full", "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 12 2 L 12 4 L 2 4 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("🪫 Battery 20% (Low)").clicked() {
+                        self.insert_vector_asset("batt_low", "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 4 2 L 4 4 L 2 4 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("⚡ Lightning Bolt (Charging)").clicked() {
+                        self.insert_vector_asset("bolt", "M 6 0 L 1 7 L 5 7 L 3 13 L 10 5 L 5 5 Z");
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("📶 Connectivity").strong());
+                    if ui.button("📡 Bluetooth 5.2 Icon").clicked() {
+                        self.insert_vector_asset("bluetooth", "M 4 1 L 8 5 L 5 8 L 5 0 L 8 3 L 4 7");
+                        ui.close_menu();
+                    }
+                    if ui.button("📶 Cellular Signal Bars").clicked() {
+                        self.insert_vector_asset("signal", "M 1 6 L 3 6 L 3 8 L 1 8 Z M 5 4 L 7 4 L 7 8 L 5 8 Z M 9 2 L 11 2 L 11 8 L 9 8 Z");
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("🛡️ Badges & Status").strong());
+                    if ui.button("⚠️ Warning Triangle").clicked() {
+                        self.insert_vector_asset("warning", "M 6 1 L 12 11 L 0 11 Z M 6 4 L 6 7 M 6 9 L 6 10");
+                        ui.close_menu();
+                    }
+                    if ui.button("🛡️ Security Shield").clicked() {
+                        self.insert_vector_asset("shield", "M 0 2 L 6 0 L 12 2 L 12 7 C 12 10, 6 13, 6 13 C 6 13, 0 10, 0 7 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("❤️ Heart Pulse (Health)").clicked() {
+                        self.insert_vector_asset("heart", "M 6 2 C 4 0, 0 1, 0 4 C 0 8, 6 11, 6 11 C 6 11, 12 8, 12 4 C 12 1, 8 0, 6 2 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("🎯 Target Crosshair").clicked() {
+                        self.insert_vector_asset("crosshair", "M 6 0 L 6 3 M 6 9 L 6 12 M 0 6 L 3 6 M 9 6 L 12 6 M 6 2 C 8.2 2, 10 3.8, 10 6 C 10 8.2, 8.2 10, 6 10 C 3.8 10, 2 8.2, 2 6 C 2 3.8, 3.8 2, 6 2 Z");
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+                    ui.label(egui::RichText::new("⚙️ Navigation & Tools").strong());
+                    if ui.button("⏱ Timer Clock Dial").clicked() {
+                        self.insert_vector_asset("timer", "M 6 0 C 9.3 0, 12 2.7, 12 6 C 12 9.3, 9.3 12, 6 12 C 2.7 12, 0 9.3, 0 6 C 0 2.7, 2.7 0, 6 0 Z M 6 2 L 6 6 L 9 6");
+                        ui.close_menu();
+                    }
+                    if ui.button("⚙️ Settings Gear").clicked() {
+                        self.insert_vector_asset("gear", "M 5 0 L 7 0 L 7 2 L 9 3 L 11 1 L 12 2 L 10 4 L 11 6 L 13 6 L 13 8 L 11 8 L 10 10 L 12 12 L 11 13 L 9 11 L 7 12 L 7 14 L 5 14 L 5 12 L 3 11 L 1 13 L 0 12 L 2 10 L 1 8 L 0 8 L 0 6 L 2 6 L 1 4 L 2 2 L 4 3 L 5 2 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("▶ Play Arrow").clicked() {
+                        self.insert_vector_asset("play", "M 2 1 L 11 6 L 2 11 Z");
+                        ui.close_menu();
+                    }
+                    if ui.button("⏸ Pause Double Bar").clicked() {
+                        self.insert_vector_asset("pause", "M 2 1 L 5 1 L 5 11 L 2 11 Z M 7 1 L 10 1 L 10 11 L 7 11 Z");
+                        ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("✨ Easing Curves", |ui| {
+                    ui.label(egui::RichText::new("✨ Motion Easing Solver").strong());
+                    let curves = [
+                        (EasingCurve::Linear, "Linear (Constant Rate)"),
+                        (EasingCurve::EaseInQuad, "EaseInQuad (Gentle Start)"),
+                        (EasingCurve::EaseOutQuad, "EaseOutQuad (Gentle Decel)"),
+                        (EasingCurve::EaseInOutQuad, "EaseInOutQuad (Smooth S-Curve)"),
+                        (EasingCurve::EaseInCubic, "EaseInCubic (Accelerating)"),
+                        (EasingCurve::EaseOutCubic, "EaseOutCubic (Decelerating)"),
+                        (EasingCurve::EaseInOutCubic, "EaseInOutCubic (Natural Motion)"),
+                        (EasingCurve::EaseOutBack, "EaseOutBack (Overshoot & Settle)"),
+                        (EasingCurve::EaseOutBounce, "EaseOutBounce (Falling Ball Settle)"),
+                        (EasingCurve::Moook, "Moook (Pebble Rubber-Band Physics)"),
+                        (EasingCurve::CubicBezier, "CubicBezier (Custom Spline Parameterized)"),
+                    ];
+                    for (curve, name) in curves {
+                        if ui.selectable_label(self.selected_easing == curve, name).clicked() {
+                            self.selected_easing = curve;
+                            self.action_toast = Some((format!("Active Easing: {:?}", curve), 2.0));
+                            ui.close_menu();
+                        }
                     }
                 });
 
