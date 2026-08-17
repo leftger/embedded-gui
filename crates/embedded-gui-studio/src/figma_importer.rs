@@ -1,10 +1,168 @@
-//! Generic Figma (.fig) binary importer for Embedded GUI Studio.
-//! Parses Figma Kiwi binary containers (zip + zstd) and dynamically extracts canvas frames into KDL screen schemas.
+//! Generic Figma (.fig) binary importer and VectorNetwork decoder for Embedded GUI Studio.
+//! Parses Figma Kiwi binary containers (zip + zstd) and converts VectorNetwork graphs into KDL vector paths.
 
+use embedded_gui_codegen::PathVerbDef;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
+
+/// A single vertex in Figma's VectorNetwork graph.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct VectorVertex {
+    pub x: f32,
+    pub y: f32,
+    pub corner_radius: f32,
+}
+
+/// A directed Bézier segment between two vertices in a VectorNetwork graph.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct VectorSegment {
+    pub start: usize,
+    pub end: usize,
+    pub tangent_start: (f32, f32),
+    pub tangent_end: (f32, f32),
+}
+
+/// A closed filled loop of segment indices in a VectorNetwork graph.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct VectorRegion {
+    pub loops: Vec<Vec<usize>>,
+    pub is_even_odd: bool,
+}
+
+/// Figma VectorNetwork graph representation.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[allow(dead_code)]
+pub struct VectorNetwork {
+    pub vertices: Vec<VectorVertex>,
+    pub segments: Vec<VectorSegment>,
+    pub regions: Vec<VectorRegion>,
+}
+
+#[allow(dead_code)]
+impl VectorNetwork {
+    /// Converts this VectorNetwork graph into standard cubic/quadratic PathVerbDefs.
+    pub fn to_path_verbs(&self) -> Vec<PathVerbDef> {
+        let mut verbs = Vec::new();
+        if self.vertices.is_empty() || self.segments.is_empty() {
+            return verbs;
+        }
+
+        if self.regions.is_empty() {
+            // Unconnected or stroked open segments
+            let mut last_end_idx: Option<usize> = None;
+            for seg in &self.segments {
+                if seg.start >= self.vertices.len() || seg.end >= self.vertices.len() {
+                    continue;
+                }
+                let v0 = &self.vertices[seg.start];
+                let v1 = &self.vertices[seg.end];
+
+                if last_end_idx != Some(seg.start) {
+                    verbs.push(PathVerbDef::MoveTo(
+                        v0.x.round() as i32,
+                        v0.y.round() as i32,
+                    ));
+                }
+
+                if seg.tangent_start == (0.0, 0.0) && seg.tangent_end == (0.0, 0.0) {
+                    verbs.push(PathVerbDef::LineTo(
+                        v1.x.round() as i32,
+                        v1.y.round() as i32,
+                    ));
+                } else {
+                    let p1x = (v0.x + seg.tangent_start.0).round() as i32;
+                    let p1y = (v0.y + seg.tangent_start.1).round() as i32;
+                    let p2x = (v1.x + seg.tangent_end.0).round() as i32;
+                    let p2y = (v1.y + seg.tangent_end.1).round() as i32;
+                    let p3x = v1.x.round() as i32;
+                    let p3y = v1.y.round() as i32;
+                    verbs.push(PathVerbDef::CubicTo(p1x, p1y, p2x, p2y, p3x, p3y));
+                }
+
+                last_end_idx = Some(seg.end);
+            }
+        } else {
+            // Closed regions/loops
+            for region in &self.regions {
+                for loop_indices in &region.loops {
+                    if loop_indices.is_empty() {
+                        continue;
+                    }
+
+                    let first_seg_idx = loop_indices[0];
+                    if first_seg_idx >= self.segments.len() {
+                        continue;
+                    }
+                    let first_seg = &self.segments[first_seg_idx];
+                    if first_seg.start >= self.vertices.len() {
+                        continue;
+                    }
+                    let start_v = &self.vertices[first_seg.start];
+                    verbs.push(PathVerbDef::MoveTo(
+                        start_v.x.round() as i32,
+                        start_v.y.round() as i32,
+                    ));
+
+                    for &seg_idx in loop_indices {
+                        if seg_idx >= self.segments.len() {
+                            continue;
+                        }
+                        let seg = &self.segments[seg_idx];
+                        if seg.start >= self.vertices.len() || seg.end >= self.vertices.len() {
+                            continue;
+                        }
+                        let v0 = &self.vertices[seg.start];
+                        let v1 = &self.vertices[seg.end];
+
+                        if seg.tangent_start == (0.0, 0.0) && seg.tangent_end == (0.0, 0.0) {
+                            verbs.push(PathVerbDef::LineTo(
+                                v1.x.round() as i32,
+                                v1.y.round() as i32,
+                            ));
+                        } else {
+                            let p1x = (v0.x + seg.tangent_start.0).round() as i32;
+                            let p1y = (v0.y + seg.tangent_start.1).round() as i32;
+                            let p2x = (v1.x + seg.tangent_end.0).round() as i32;
+                            let p2y = (v1.y + seg.tangent_end.1).round() as i32;
+                            let p3x = v1.x.round() as i32;
+                            let p3y = v1.y.round() as i32;
+                            verbs.push(PathVerbDef::CubicTo(p1x, p1y, p2x, p2y, p3x, p3y));
+                        }
+                    }
+
+                    verbs.push(PathVerbDef::Close);
+                }
+            }
+        }
+
+        verbs
+    }
+
+    /// Converts this VectorNetwork graph into standard SVG `d="..."` path string format.
+    pub fn to_svg_d(&self) -> String {
+        let verbs = self.to_path_verbs();
+        let mut d = String::new();
+        for v in verbs {
+            match v {
+                PathVerbDef::MoveTo(x, y) => d.push_str(&format!("M {} {} ", x, y)),
+                PathVerbDef::LineTo(x, y) => d.push_str(&format!("L {} {} ", x, y)),
+                PathVerbDef::QuadTo(cx, cy, x, y) => {
+                    d.push_str(&format!("Q {} {} {} {} ", cx, cy, x, y))
+                }
+                PathVerbDef::CubicTo(c1x, c1y, c2x, c2y, x, y) => {
+                    d.push_str(&format!("C {} {} {} {} {} {} ", c1x, c1y, c2x, c2y, x, y))
+                }
+                PathVerbDef::Close => d.push_str("Z "),
+            }
+        }
+        d.trim().to_string()
+    }
+}
 
 /// Prompts user to pick a `.fig` file and imports all screens found inside.
 pub fn import_figma_dialog() -> Option<(PathBuf, Vec<(String, String)>)> {
@@ -173,4 +331,139 @@ screen id="{}" width={} height={} {{
     }
 
     screens
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vector_network_straight_lines() {
+        let network = VectorNetwork {
+            vertices: vec![
+                VectorVertex {
+                    x: 0.0,
+                    y: 0.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 10.0,
+                    y: 0.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 10.0,
+                    y: 10.0,
+                    corner_radius: 0.0,
+                },
+            ],
+            segments: vec![
+                VectorSegment {
+                    start: 0,
+                    end: 1,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+                VectorSegment {
+                    start: 1,
+                    end: 2,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+            ],
+            regions: vec![],
+        };
+
+        let svg_d = network.to_svg_d();
+        assert_eq!(svg_d, "M 0 0 L 10 0 L 10 10");
+    }
+
+    #[test]
+    fn test_vector_network_bezier_curves() {
+        let network = VectorNetwork {
+            vertices: vec![
+                VectorVertex {
+                    x: 0.0,
+                    y: 10.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 50.0,
+                    y: 10.0,
+                    corner_radius: 0.0,
+                },
+            ],
+            segments: vec![VectorSegment {
+                start: 0,
+                end: 1,
+                tangent_start: (15.0, -10.0),
+                tangent_end: (-15.0, -10.0),
+            }],
+            regions: vec![],
+        };
+
+        let svg_d = network.to_svg_d();
+        assert_eq!(svg_d, "M 0 10 C 15 0 35 0 50 10");
+    }
+
+    #[test]
+    fn test_vector_network_closed_region_loop() {
+        let network = VectorNetwork {
+            vertices: vec![
+                VectorVertex {
+                    x: 0.0,
+                    y: 0.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 20.0,
+                    y: 0.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 20.0,
+                    y: 20.0,
+                    corner_radius: 0.0,
+                },
+                VectorVertex {
+                    x: 0.0,
+                    y: 20.0,
+                    corner_radius: 0.0,
+                },
+            ],
+            segments: vec![
+                VectorSegment {
+                    start: 0,
+                    end: 1,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+                VectorSegment {
+                    start: 1,
+                    end: 2,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+                VectorSegment {
+                    start: 2,
+                    end: 3,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+                VectorSegment {
+                    start: 3,
+                    end: 0,
+                    tangent_start: (0.0, 0.0),
+                    tangent_end: (0.0, 0.0),
+                },
+            ],
+            regions: vec![VectorRegion {
+                loops: vec![vec![0, 1, 2, 3]],
+                is_even_odd: false,
+            }],
+        };
+
+        let svg_d = network.to_svg_d();
+        assert_eq!(svg_d, "M 0 0 L 20 0 L 20 20 L 0 20 L 0 0 Z");
+    }
 }
