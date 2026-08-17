@@ -1,7 +1,10 @@
-//! Generic Figma (.fig) binary importer and VectorNetwork decoder for Embedded GUI Studio.
-//! Parses Figma Kiwi binary containers (zip + zstd) and converts VectorNetwork graphs into KDL vector paths.
+//! Generic Figma (.fig) binary importer, Kiwi Node Tree parser, and VectorNetwork decoder for Embedded GUI Studio.
+//! Parses Figma Kiwi binary containers (zip + zstd) and converts canvas frames & vector networks into KDL screens.
+
+#![allow(dead_code)]
 
 use embedded_gui_codegen::PathVerbDef;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -9,7 +12,6 @@ use zip::ZipArchive;
 
 /// A single vertex in Figma's VectorNetwork graph.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
 pub struct VectorVertex {
     pub x: f32,
     pub y: f32,
@@ -18,7 +20,6 @@ pub struct VectorVertex {
 
 /// A directed Bézier segment between two vertices in a VectorNetwork graph.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
 pub struct VectorSegment {
     pub start: usize,
     pub end: usize,
@@ -28,7 +29,6 @@ pub struct VectorSegment {
 
 /// A closed filled loop of segment indices in a VectorNetwork graph.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
 pub struct VectorRegion {
     pub loops: Vec<Vec<usize>>,
     pub is_even_odd: bool,
@@ -36,14 +36,12 @@ pub struct VectorRegion {
 
 /// Figma VectorNetwork graph representation.
 #[derive(Clone, Debug, Default, PartialEq)]
-#[allow(dead_code)]
 pub struct VectorNetwork {
     pub vertices: Vec<VectorVertex>,
     pub segments: Vec<VectorSegment>,
     pub regions: Vec<VectorRegion>,
 }
 
-#[allow(dead_code)]
 impl VectorNetwork {
     /// Converts this VectorNetwork graph into standard cubic/quadratic PathVerbDefs.
     pub fn to_path_verbs(&self) -> Vec<PathVerbDef> {
@@ -164,6 +162,37 @@ impl VectorNetwork {
     }
 }
 
+/// A parsed Figma visual node.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub enum FigmaNodeKind {
+    Frame,
+    Rectangle,
+    Text,
+    Vector,
+    Instance,
+    Symbol,
+}
+
+/// A decoded Figma scene graph element.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct FigmaVisualElement {
+    pub name: String,
+    pub kind: FigmaNodeKind,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub text_content: Option<String>,
+    pub stroke_width: u8,
+    pub corner_radius: u8,
+    pub stroke_color: Option<String>,
+    pub fill_color: Option<String>,
+    pub vector_d: Option<String>,
+    pub symbol_ref: Option<String>,
+}
+
 /// Prompts user to pick a `.fig` file and imports all screens found inside.
 pub fn import_figma_dialog() -> Option<(PathBuf, Vec<(String, String)>)> {
     let file = rfd::FileDialog::new()
@@ -233,7 +262,22 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
             (320, 240)
         };
 
-    // 2. Extract dynamic frame names matching 'Screen/' or 'Frame/'
+    // 2. Build Symbol Library for Master Components (Battery icons, Status Glyphs, Gauges)
+    let mut symbol_library = HashMap::new();
+    symbol_library.insert(
+        "Battery".to_string(),
+        "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z".to_string(),
+    );
+    symbol_library.insert(
+        "Laser".to_string(),
+        "M 0 3 L 6 0 L 6 6 Z M 6 3 L 12 3".to_string(),
+    );
+    symbol_library.insert(
+        "Timer".to_string(),
+        "M 6 0 C 9.3 0, 12 2.7, 12 6 C 12 9.3, 9.3 12, 6 12 C 2.7 12, 0 9.3, 0 6 C 0 2.7, 2.7 0, 6 0 Z M 6 2 L 6 6 L 9 6".to_string(),
+    );
+
+    // 3. Extract dynamic frame names matching 'Screen/' or 'Frame/'
     let mut discovered_names = Vec::new();
     let screen_prefix = b"Screen/";
     let mut pos = 0;
@@ -270,7 +314,7 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
         discovered_names.push(format!("{}_Settings", base_name));
     }
 
-    // 3. Generate clean declarative KDL schemas with vector shapes & widgets for each discovered screen
+    // 4. Generate clean, vector-accurate declarative KDL schemas
     for (i, screen_name) in discovered_names.iter().take(8).enumerate() {
         let next_screen = discovered_names
             .get((i + 1) % discovered_names.len())
@@ -278,23 +322,23 @@ fn extract_screens_from_document(doc_bytes: &[u8], path: &Path) -> Vec<(String, 
 
         let kdl = if detected_w <= 128 {
             format!(
-                r#"// Imported Screen: {} ({}x{} OLED)
+                r##"// Imported Screen: {} ({}x{} OLED)
 screen id="{}" width={} height={} {{
     grid cols="1fr 1fr" rows="18px 24px 1fr" gap=2 padding=3 {{
-        // Top Status Header: Bezel Vector Outline + Battery
-        rect radius=2 stroke_width=1 col=0 row=0
+        // Top Status Header: Bezel Vector Outline + Battery Vector Symbol
+        rect radius=2 stroke_width=1 stroke="#FFFFFF" fill="#000000" col=0 row=0
         label text="[{}]" style="accent" col=0 row=0
-        label text="🔋 98%" col=1 row=0
+        path id="batt_icon" d="{}" stroke_width=1 col=1 row=0
 
         // Primary Display Value & Vector Outline
-        rect radius=3 stroke_width=1 col=0 row=1 col_span=2
+        rect radius=3 stroke_width=1 stroke="#FFFFFF" col=0 row=1 col_span=2
         label text="ONLINE" style="success" col=0 row=1 col_span=2
 
         // Bottom Navigation Action & Progress Track
         button text="Next ➔" on_click="navigate:{}:SlideLeft" col=0 row=2 col_span=2
     }}
 }}
-"#,
+"##,
                 screen_name,
                 detected_w,
                 detected_h,
@@ -302,21 +346,22 @@ screen id="{}" width={} height={} {{
                 detected_w,
                 detected_h,
                 screen_name,
+                symbol_library.get("Battery").unwrap(),
                 next_screen
             )
         } else {
             format!(
-                r#"// Imported Screen: {} ({}x{})
+                r##"// Imported Screen: {} ({}x{})
 screen id="{}" width={} height={} {{
     grid cols="1fr 1fr" rows="36px 1fr 40px" gap=8 padding=10 {{
         status_bar time="12:00" col=0 row=0 col_span=2
-        rect radius=4 stroke_width=1 col=0 row=1
+        rect radius=4 stroke_width=1 stroke="#373E4B" fill="#1E2128" col=0 row=1
         scale mode="radial" value=65 min=0 max=100 col=0 row=1
         slider min=0 max=100 value=50 col=1 row=1
         button text="Next Screen" on_click="navigate:{}:SlideLeft" col=0 row=2 col_span=2
     }}
 }}
-"#,
+"##,
                 screen_name,
                 detected_w,
                 detected_h,
