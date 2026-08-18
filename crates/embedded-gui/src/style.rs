@@ -609,8 +609,9 @@ impl StyleTransition {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum VisualState {
+    #[default]
     Normal,
     Focused,
     Pressed,

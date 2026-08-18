@@ -29,6 +29,7 @@ pub mod dialog;
 pub mod gauges;
 pub mod notification;
 pub mod picker;
+pub mod repeater;
 pub mod rich_text_node;
 pub mod scale;
 pub mod spinbox;
@@ -50,6 +51,7 @@ pub use notification::{
     NotificationAction, NotificationError, NotificationPriority, NotificationSheetWidget,
 };
 pub use picker::{NumberPickerWidget, PickerError, TimeFormat, TimePickerField, TimePickerWidget};
+pub use repeater::RepeaterWidget;
 pub use rich_text_node::{RichTextError, RichTextNodeWidget, TextSpan};
 pub use scale::{ScaleMode, ScaleWidget};
 pub use spinbox::SpinboxWidget;

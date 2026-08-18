@@ -1,5 +1,6 @@
 pub mod band;
 pub mod compositor;
+pub mod line_buffer;
 pub mod stroke;
 pub mod task;
 pub mod text_style;
@@ -10,6 +11,7 @@ pub use compositor::{
     Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
     WindowedDrawTarget, lerp_rgb565,
 };
+pub use line_buffer::{LineBufferRenderer, ScanlineTarget};
 pub use stroke::{
     AntiAliasMode, PathVerb, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D,
     VectorPath,
