@@ -5,13 +5,15 @@ mod app;
 mod assets;
 mod bridge;
 mod curve_visualizer;
+mod device_link;
 mod exporter;
 mod figma_importer;
 mod inspector;
 mod layout;
+mod live_render;
 mod presets;
-mod renderer;
 mod syntax;
+mod theme;
 mod types;
 
 use app::EmbeddedGuiStudio;

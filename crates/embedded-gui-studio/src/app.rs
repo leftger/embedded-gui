@@ -1,8 +1,10 @@
 //! Main Studio Application state, UI lifecycle, and canvas interaction.
 
 use eframe::egui::{
-    self, Color32, CornerRadius, FontId, Key, Pos2, Rect, Stroke, StrokeKind, Vec2,
+    self, Color32, ColorImage, CornerRadius, FontId, Key, Pos2, Rect, Stroke, StrokeKind,
+    TextureHandle, TextureOptions, Vec2,
 };
+use embedded_graphics_core::pixelcolor::RgbColor;
 use embedded_gui::motion::timing::{EasingCurve, evaluate_easing};
 use embedded_gui_codegen::{
     GridPlacementDef, GridTrackDef, ScreenDef, WidgetDef, generate_rust_code, parse_kdl_screen,
@@ -11,9 +13,7 @@ use embedded_gui_codegen::{
 
 use crate::curve_visualizer::render_curve_graph;
 use crate::inspector::render_inspector_panel;
-use crate::layout::compute_track_sizes;
 use crate::presets::*;
-use crate::renderer::{ThemePalette, draw_animated_widget};
 use crate::types::{
     ActiveDrag, DisplayTheme, HardwareProfile, ScreenTransition, StudioMode, StudioTab,
     TransitionStyle,
@@ -26,6 +26,14 @@ pub struct EmbeddedGuiStudio {
     pub active_tab: StudioTab,
     pub mode: StudioMode,
     pub preview_zoom: f32,
+    /// Texture containing the same RGB565 framebuffer submitted to USB.
+    pub preview_texture: Option<TextureHandle>,
+    /// Set when the screen size differs from the attached panel, as
+    /// `(screen_w, screen_h, panel_w, panel_h)`.
+    pub device_size_warning: Option<(u32, u32, u16, u16)>,
+    /// Tracks the handshake edge so the first fitted frame is sent once the
+    /// agent reports its panel size.
+    pub device_handshake_seen: bool,
     pub copied_toast_timer: f32,
     pub action_toast: Option<(String, f32)>,
 
@@ -36,6 +44,12 @@ pub struct EmbeddedGuiStudio {
 
     // Hardware Bridge
     pub hardware_bridge: crate::bridge::HardwareBridge,
+
+    // USB display agent link (RGB565 streaming over native USB bulk)
+    pub device_link: Option<crate::device_link::DeviceLink>,
+    pub device_ports: Vec<String>,
+    pub selected_port: Option<String>,
+    pub live_stream: bool,
 
     // Theme & Hardware
     pub display_theme: DisplayTheme,
@@ -52,6 +66,9 @@ pub struct EmbeddedGuiStudio {
     pub playback_speed: f32,
     pub loop_duration: f32,
     pub selected_easing: EasingCurve,
+    /// Accumulates UI time so USB animation submission is capped independently
+    /// of the monitor/egui repaint rate.
+    pub animation_stream_accumulator: f32,
 
     // Undo / Redo history
     pub undo_stack: Vec<String>,
@@ -60,6 +77,16 @@ pub struct EmbeddedGuiStudio {
 
 impl Default for EmbeddedGuiStudio {
     fn default() -> Self {
+        let mut app = Self::new_offline();
+        app.autoconnect_display();
+        app
+    }
+}
+
+impl EmbeddedGuiStudio {
+    /// Builds the studio without touching USB, so tests can exercise the
+    /// screen/target logic without a board attached.
+    pub fn new_offline() -> Self {
         let project_screens = vec![
             (
                 "AutoCluster".to_string(),
@@ -88,12 +115,19 @@ impl Default for EmbeddedGuiStudio {
             active_tab: StudioTab::VisualPreview,
             mode: StudioMode::Design,
             preview_zoom: 1.5,
+            preview_texture: None,
+            device_size_warning: None,
+            device_handshake_seen: false,
             copied_toast_timer: 0.0,
             action_toast: None,
             project_screens,
             active_screen_idx: 0,
             transition_state: None,
             hardware_bridge: crate::bridge::HardwareBridge::new(9080),
+            device_link: None,
+            device_ports: Vec::new(),
+            selected_port: None,
+            live_stream: true,
             display_theme: DisplayTheme::DarkTft,
             hardware_profile: HardwareProfile::Esp32S3Box,
             selected_widget_idx: None,
@@ -104,25 +138,23 @@ impl Default for EmbeddedGuiStudio {
             playback_speed: 1.0,
             loop_duration: 4.0,
             selected_easing: EasingCurve::EaseInOutCubic,
+            animation_stream_accumulator: 0.0,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
         };
-        app.recompile();
+        app.reparse();
+        app.apply_hardware_profile();
         app
     }
-}
 
-impl EmbeddedGuiStudio {
     pub fn switch_to_screen(&mut self, idx: usize) {
         if idx < self.project_screens.len() {
             if self.active_screen_idx < self.project_screens.len() {
                 self.project_screens[self.active_screen_idx].1 = self.kdl_source.clone();
             }
-            self.push_undo_snapshot();
             self.active_screen_idx = idx;
-            self.kdl_source = self.project_screens[idx].1.clone();
-            self.selected_widget_idx = None;
-            self.recompile();
+            let source = self.project_screens[idx].1.clone();
+            self.load_kdl_source(source);
         }
     }
     pub fn push_undo_snapshot(&mut self) {
@@ -151,7 +183,64 @@ impl EmbeddedGuiStudio {
         }
     }
 
+    /// Renders the current screen to RGB565 and streams it to the connected
+    /// display agent (dirty tiles only after the first frame). Disconnects on
+    /// a transport error.
+    pub fn push_live_frame(&mut self) {
+        self.push_live_frame_inner(false);
+    }
+
+    /// Renders and streams the current screen, repainting every tile even where
+    /// pixels are unchanged. Backs the manual **Push Frame** action.
+    pub fn push_live_frame_full(&mut self) {
+        self.push_live_frame_inner(true);
+    }
+
+    fn push_live_frame_inner(&mut self, force_full: bool) {
+        let screen = match &self.parsed_screen {
+            Ok(s) => s.clone(),
+            Err(_) => return,
+        };
+        let Some(link) = self.device_link.as_ref() else {
+            return;
+        };
+        // Rendering is host-side work; transmission happens on the link thread,
+        // so a stalled device never blocks the UI.
+        let mut frame = crate::live_render::render_screen_at(
+            &screen,
+            self.display_theme,
+            self.animation_phase(),
+        );
+        // The agent advertises its panel size during the handshake. Fitting here
+        // keeps an oversized screen centered instead of losing its right and
+        // bottom edges to rectangles the panel cannot address.
+        if let Some((fb_w, fb_h)) = link.framebuffer_size() {
+            if (fb_w, fb_h) != (frame.width, frame.height) {
+                let bg = crate::live_render::RenderedFrame::background_for(self.display_theme);
+                frame = frame.fit_to(fb_w, fb_h, bg);
+                self.device_size_warning = Some((screen.width, screen.height, fb_w, fb_h));
+            } else {
+                self.device_size_warning = None;
+            }
+        }
+        if force_full {
+            link.submit_full(frame);
+        } else {
+            link.submit(frame);
+        }
+
+        if let Some(err) = link.take_error() {
+            self.device_link = None;
+            self.action_toast = Some((format!("USB stream error: {err}"), 3.0));
+        }
+    }
+
     pub fn recompile(&mut self) {
+        self.reparse();
+        self.stream_if_live();
+    }
+
+    fn reparse(&mut self) {
         match parse_kdl_screen(&self.kdl_source) {
             Ok(screen) => {
                 self.generated_rust = generate_rust_code(&screen);
@@ -169,6 +258,115 @@ impl EmbeddedGuiStudio {
         self.kdl_source = serialize_kdl_screen(screen);
         self.generated_rust = generate_rust_code(screen);
         self.parsed_screen = Ok(screen.clone());
+        self.stream_if_live();
+    }
+
+    /// Replaces the editor contents with a newly loaded screen and re-applies
+    /// the active target.
+    ///
+    /// Every path that swaps in a whole document — presets, file opens, screen
+    /// tabs — goes through here so a screen authored for another panel cannot
+    /// resize the canvas behind the Target selector. Typing in the editor
+    /// deliberately does not, since re-serializing mid-keystroke would reformat
+    /// the source out from under the cursor.
+    pub fn load_kdl_source(&mut self, source: String) {
+        self.push_undo_snapshot();
+        self.kdl_source = source;
+        self.selected_widget_idx = None;
+        self.reparse();
+        // Resizing already streams, so only push here when the screen was
+        // already the right size; otherwise the board flashes the oversized
+        // frame before the fitted one.
+        if !self.apply_hardware_profile() {
+            self.stream_if_live();
+        }
+    }
+
+    /// Scans for display agents at startup and attaches to one if it is
+    /// unambiguous.
+    ///
+    /// Connecting only reaches the handshake; the panel size arrives later, so
+    /// the target is adopted in [`EmbeddedGuiStudio::adopt_detected_panel`].
+    /// With several agents present the choice is left to the user rather than
+    /// guessing which board they meant.
+    pub fn autoconnect_display(&mut self) {
+        self.device_ports = crate::device_link::list_devices();
+        let [only_device] = self.device_ports.as_slice() else {
+            return;
+        };
+        let device_id = only_device.clone();
+        self.selected_port = Some(device_id.clone());
+        match crate::device_link::DeviceLink::connect(&device_id) {
+            Ok(link) => {
+                self.device_link = Some(link);
+                self.action_toast = Some((format!("Found display {device_id}"), 2.5));
+            }
+            Err(e) => self.action_toast = Some((e, 3.0)),
+        }
+    }
+
+    /// Adopts the attached panel's size as the active target once the agent
+    /// reports it, so the canvas matches the hardware without manual selection.
+    pub fn adopt_detected_panel(&mut self) {
+        let Some((fb_w, fb_h)) = self
+            .device_link
+            .as_ref()
+            .and_then(|link| link.framebuffer_size())
+        else {
+            return;
+        };
+        let detected = HardwareProfile::Detected {
+            width: fb_w as u32,
+            height: fb_h as u32,
+        };
+        if self.hardware_profile == detected {
+            return;
+        }
+        self.hardware_profile = detected;
+        self.apply_hardware_profile();
+        self.action_toast = Some((format!("Target set to panel {fb_w}x{fb_h}"), 2.5));
+    }
+
+    /// Resizes the active screen to the selected target's panel.
+    ///
+    /// The Target selector stands for physical hardware, so it stays
+    /// authoritative rather than applying only at the moment it changes.
+    /// Without this, loading a screen authored for a different panel leaves the
+    /// canvas at that screen's size while the selector still names the old one.
+    /// Returns whether the active screen had to be resized to match the target.
+    pub fn apply_hardware_profile(&mut self) -> bool {
+        let Some((w, h)) = self.hardware_profile.dimensions() else {
+            return false;
+        };
+        let Ok(screen) = &self.parsed_screen else {
+            return false;
+        };
+        if screen.width == w && screen.height == h {
+            return false;
+        }
+        let mut resized = screen.clone();
+        resized.width = w;
+        resized.height = h;
+        self.sync_from_screen(&resized);
+        true
+    }
+
+    /// Streams the current screen whenever Live is enabled and a board is
+    /// attached. Every mutation path funnels through here so canvas drags,
+    /// inspector edits, and screen switches reach the panel without a manual
+    /// **Push Frame**.
+    pub fn stream_if_live(&mut self) {
+        if self.live_stream && self.device_link.is_some() {
+            self.push_live_frame();
+        }
+    }
+
+    fn animation_phase(&self) -> f32 {
+        if self.loop_duration <= f32::EPSILON {
+            0.0
+        } else {
+            (self.timeline_time / self.loop_duration).rem_euclid(1.0)
+        }
     }
 
     /// Inserts a new widget into the active screen layout and synchronizes KDL source.
@@ -232,6 +430,7 @@ impl EmbeddedGuiStudio {
 
             // Display Theme Selector
             ui.label("Theme:");
+            let prev_theme = self.display_theme;
             egui::ComboBox::from_id_salt("theme_selector")
                 .selected_text(match self.display_theme {
                     DisplayTheme::DarkTft => "Dark TFT",
@@ -263,6 +462,9 @@ impl EmbeddedGuiStudio {
                         "Monochrome OLED",
                     );
                 });
+            if self.display_theme != prev_theme && self.live_stream {
+                self.push_live_frame();
+            }
 
             ui.separator();
 
@@ -272,6 +474,11 @@ impl EmbeddedGuiStudio {
             egui::ComboBox::from_id_salt("hardware_profile_selector")
                 .selected_text(self.hardware_profile.name())
                 .show_ui(ui, |ui| {
+                    // Only offered once an agent has reported its panel size.
+                    if let HardwareProfile::Detected { width, height } = self.hardware_profile {
+                        let detected = HardwareProfile::Detected { width, height };
+                        ui.selectable_value(&mut self.hardware_profile, detected, detected.name());
+                    }
                     ui.selectable_value(
                         &mut self.hardware_profile,
                         HardwareProfile::Custom,
@@ -305,12 +512,7 @@ impl EmbeddedGuiStudio {
                 });
 
             if self.hardware_profile != prev_profile {
-                if let Some((w, h)) = self.hardware_profile.dimensions() {
-                    let mut s = screen.clone();
-                    s.width = w;
-                    s.height = h;
-                    self.sync_from_screen(&s);
-                }
+                self.apply_hardware_profile();
             }
 
             ui.separator();
@@ -422,9 +624,11 @@ impl EmbeddedGuiStudio {
             }
             if let Some(i) = to_remove {
                 self.project_screens.remove(i);
-                self.active_screen_idx = self.active_screen_idx.min(self.project_screens.len().saturating_sub(1));
-                self.kdl_source = self.project_screens[self.active_screen_idx].1.clone();
-                self.recompile();
+                self.active_screen_idx = self
+                    .active_screen_idx
+                    .min(self.project_screens.len().saturating_sub(1));
+                let restored = self.project_screens[self.active_screen_idx].1.clone();
+                self.load_kdl_source(restored);
             }
             if ui.button("➕ New Screen").clicked() {
                 let count = self.project_screens.len() + 1;
@@ -442,7 +646,36 @@ impl EmbeddedGuiStudio {
         let screen_w = screen.width as f32 * self.preview_zoom;
         let screen_h = screen.height as f32 * self.preview_zoom;
 
-        let palette = ThemePalette::for_theme(self.display_theme);
+        // Render through embedded-gui itself. This is the same RGB565 path used
+        // for USB, so the canvas reflects the actual firmware-facing pixels.
+        let preview_frame = crate::live_render::render_screen_at(
+            screen,
+            self.display_theme,
+            self.animation_phase(),
+        );
+        let mut preview_rgb = Vec::with_capacity(preview_frame.pixels.len() * 3);
+        for pixel in &preview_frame.pixels {
+            preview_rgb.extend_from_slice(&[
+                (u16::from(pixel.r()) * 255 / 31) as u8,
+                (u16::from(pixel.g()) * 255 / 63) as u8,
+                (u16::from(pixel.b()) * 255 / 31) as u8,
+            ]);
+        }
+        let preview_image = ColorImage::from_rgb(
+            [preview_frame.width as usize, preview_frame.height as usize],
+            &preview_rgb,
+        );
+        match &mut self.preview_texture {
+            Some(texture) => texture.set(preview_image, TextureOptions::NEAREST),
+            None => {
+                self.preview_texture = Some(ui.ctx().load_texture(
+                    "embedded-gui-rgb565-preview",
+                    preview_image,
+                    TextureOptions::NEAREST,
+                ));
+            }
+        }
+        let preview_texture_id = self.preview_texture.as_ref().map(TextureHandle::id);
 
         egui::ScrollArea::both().show(ui, |ui| {
             let (response, painter) = ui.allocate_painter(
@@ -478,8 +711,16 @@ impl EmbeddedGuiStudio {
                 StrokeKind::Outside,
             );
 
-            // Display LCD background
-            painter.rect_filled(display_rect, CornerRadius::same(2), palette.display_bg);
+            // Display the exact RGB565 framebuffer sent to the board. Nearest
+            // filtering preserves the embedded display's pixel boundaries.
+            if let Some(texture_id) = preview_texture_id {
+                painter.image(
+                    texture_id,
+                    display_rect,
+                    Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            }
 
             // Compute grid layout pixel bounds
             let pad = (screen.grid.padding as f32) * self.preview_zoom;
@@ -488,23 +729,24 @@ impl EmbeddedGuiStudio {
 
             let cols = &screen.grid.cols;
             let rows = &screen.grid.rows;
-            let col_widths = compute_track_sizes(cols, inner_rect.width(), gap);
-            let row_heights = compute_track_sizes(rows, inner_rect.height(), gap);
 
-            // Calculate track starting offsets
-            let mut col_xs = Vec::with_capacity(col_widths.len());
-            let mut cur_x = inner_rect.min.x;
-            for w in &col_widths {
-                col_xs.push(cur_x);
-                cur_x += *w + gap;
-            }
-
-            let mut row_ys = Vec::with_capacity(row_heights.len());
-            let mut cur_y = inner_rect.min.y;
-            for h in &row_heights {
-                row_ys.push(cur_y);
-                cur_y += *h + gap;
-            }
+            // Scale the renderer's own track math into canvas space. Recomputing
+            // it against the zoomed viewport would misplace `px` and `auto`
+            // tracks, whose sizes are absolute and do not scale with zoom.
+            let geometry = crate::live_render::grid_geometry(screen);
+            let zoom = self.preview_zoom;
+            let col_widths: Vec<f32> = geometry.col_sizes.iter().map(|w| w * zoom).collect();
+            let row_heights: Vec<f32> = geometry.row_sizes.iter().map(|h| h * zoom).collect();
+            let col_xs: Vec<f32> = geometry
+                .col_starts
+                .iter()
+                .map(|x| display_rect.min.x + x * zoom)
+                .collect();
+            let row_ys: Vec<f32> = geometry
+                .row_starts
+                .iter()
+                .map(|y| display_rect.min.y + y * zoom)
+                .collect();
 
             let pointer_pos = ui.input(|i| i.pointer.interact_pos());
             let primary_down = ui.input(|i| i.pointer.primary_down());
@@ -962,7 +1204,7 @@ impl EmbeddedGuiStudio {
                 }
             }
 
-            // --- B. RENDER ALL WIDGETS & SELECTION OVERLAYS ---
+            // --- B. EDITOR SELECTION OVERLAYS ---
             for (idx, (placement, widget)) in screen.grid.children.iter().enumerate() {
                 let c = placement.col.min(col_xs.len().saturating_sub(1));
                 let r = placement.row.min(row_ys.len().saturating_sub(1));
@@ -993,18 +1235,6 @@ impl EmbeddedGuiStudio {
                 }
 
                 let widget_rect = Rect::from_min_size(Pos2::new(x0, y0), Vec2::new(w, h));
-                let is_pressed = self.pressed_widget == Some(idx);
-
-                // Draw live widget representation
-                draw_animated_widget(
-                    &painter,
-                    widget_rect,
-                    widget,
-                    t,
-                    self.display_theme,
-                    is_pressed,
-                );
-
                 // Selection highlight & bounding box in Design Mode
                 if self.mode == StudioMode::Design && self.selected_widget_idx == Some(idx) {
                     let select_stroke = Stroke::new(2.0f32, Color32::from_rgb(60, 160, 255));
@@ -1073,6 +1303,20 @@ impl EmbeddedGuiStudio {
 
 impl eframe::App for EmbeddedGuiStudio {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The agent reports its panel size asynchronously, so the frame sent at
+        // connect time cannot be fitted yet. Resend once the handshake lands.
+        let handshaked = self
+            .device_link
+            .as_ref()
+            .is_some_and(|link| link.is_handshaked());
+        if handshaked && !self.device_handshake_seen {
+            self.device_handshake_seen = true;
+            self.adopt_detected_panel();
+            self.push_live_frame_full();
+        } else if !handshaked {
+            self.device_handshake_seen = false;
+        }
+
         // Handle Timers
         let dt = ctx.input(|i| i.stable_dt);
         if self.copied_toast_timer > 0.0 {
@@ -1115,10 +1359,7 @@ impl eframe::App for EmbeddedGuiStudio {
             // File Shortcuts
             if i.modifiers.command && i.key_pressed(Key::O) {
                 if let Some((path, content)) = crate::exporter::open_kdl_file_dialog() {
-                    self.push_undo_snapshot();
-                    self.kdl_source = content;
-                    self.selected_widget_idx = None;
-                    self.recompile();
+                    self.load_kdl_source(content);
                     self.action_toast = Some((
                         format!("Opened {:?}", path.file_name().unwrap_or_default()),
                         2.0,
@@ -1249,6 +1490,22 @@ impl eframe::App for EmbeddedGuiStudio {
             if self.timeline_time > self.loop_duration {
                 self.timeline_time %= self.loop_duration;
             }
+            self.animation_stream_accumulator += dt;
+            const STREAM_PERIOD: f32 = 1.0 / 30.0;
+            let has_animated_pixels = self
+                .parsed_screen
+                .as_ref()
+                .is_ok_and(crate::live_render::has_animated_content);
+            if self.animation_stream_accumulator >= STREAM_PERIOD
+                && self.live_stream
+                && self.device_link.is_some()
+                && has_animated_pixels
+            {
+                // The link's single latest-frame slot coalesces if SPI is
+                // slower than this producer, preventing animation latency.
+                self.animation_stream_accumulator %= STREAM_PERIOD;
+                self.push_live_frame();
+            }
             ctx.request_repaint();
         }
 
@@ -1261,10 +1518,7 @@ impl eframe::App for EmbeddedGuiStudio {
                 ui.menu_button("📁 File", |ui| {
                     if ui.button("📂 Open .kdl File... (Ctrl+O)").clicked() {
                         if let Some((path, content)) = crate::exporter::open_kdl_file_dialog() {
-                            self.push_undo_snapshot();
-                            self.kdl_source = content;
-                            self.selected_widget_idx = None;
-                            self.recompile();
+                            self.load_kdl_source(content);
                             self.action_toast = Some((
                                 format!("Opened {:?}", path.file_name().unwrap_or_default()),
                                 2.0,
@@ -1636,77 +1890,47 @@ impl eframe::App for EmbeddedGuiStudio {
 
                 ui.menu_button("📄 Presets", |ui| {
                     if ui.button("📟 Monochrome OLED Display (128×64)").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_SSD1306_OLED.to_string();
                         self.display_theme = DisplayTheme::MonochromeOled;
                         self.hardware_profile = HardwareProfile::Ssd1306Oled;
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_SSD1306_OLED.to_string());
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.button("🚗 Automotive Digital Cluster").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_AUTOMOTIVE_CLUSTER.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
                         ui.close_menu();
                     }
                     if ui.button("❄️ HVAC Smart Climate").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_HVAC_CLIMATE.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_HVAC_CLIMATE.to_string());
                         ui.close_menu();
                     }
                     if ui.button("🩺 Patient Vital Monitor").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_PATIENT_MONITOR.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_PATIENT_MONITOR.to_string());
                         ui.close_menu();
                     }
                     if ui.button("⚙️ Industrial CNC Controller").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_CNC_CONTROLLER.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_CNC_CONTROLLER.to_string());
                         ui.close_menu();
                     }
                     if ui.button("⌚ Smartwatch Activity Tracker").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_SMARTWATCH_FITNESS.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_SMARTWATCH_FITNESS.to_string());
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.button("📈 Live Oscilloscope").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_WAVEFORM.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_WAVEFORM.to_string());
                         ui.close_menu();
                     }
                     if ui.button("✨ Motion Kitchen Sink").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_MOTION_KITCHEN_SINK.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_MOTION_KITCHEN_SINK.to_string());
                         ui.close_menu();
                     }
                     if ui.button("🌡 Smart Thermostat").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_THERMOSTAT.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_THERMOSTAT.to_string());
                         ui.close_menu();
                     }
                     if ui.button("📊 Sensor Dashboard").clicked() {
-                        self.push_undo_snapshot();
-                        self.kdl_source = SAMPLE_DASHBOARD.to_string();
-                        self.selected_widget_idx = None;
-                        self.recompile();
+                        self.load_kdl_source(SAMPLE_DASHBOARD.to_string());
                         ui.close_menu();
                     }
                 });
@@ -1785,6 +2009,89 @@ impl eframe::App for EmbeddedGuiStudio {
                         self.action_toast =
                             Some(("Bridge listening on 127.0.0.1:9080".into(), 2.0));
                     }
+
+                    ui.separator();
+
+                    // USB Display Agent controls (native 512-byte USB bulk)
+                    // Surface worker-thread failures without blocking the UI.
+                    if let Some(link) = self.device_link.as_ref() {
+                        let err = link.take_error();
+                        if err.is_some() || !link.is_alive() {
+                            let msg = err.unwrap_or_else(|| "device disconnected".to_string());
+                            self.device_link = None;
+                            self.action_toast = Some((format!("USB link lost: {msg}"), 3.0));
+                        }
+                    }
+
+                    let connection = self
+                        .device_link
+                        .as_ref()
+                        .map(|l| (l.device_id().to_string(), l.is_handshaked()));
+                    match connection {
+                        Some((name, handshaked)) => {
+                            let color = if handshaked {
+                                Color32::from_rgb(80, 220, 120)
+                            } else {
+                                Color32::from_rgb(230, 180, 60)
+                            };
+                            let suffix = if handshaked { "" } else { " (no ACK)" };
+                            ui.colored_label(color, format!("🖥 USB: {}{}", name, suffix));
+                            if ui.button("⏏ Disconnect").clicked() {
+                                self.device_link = None;
+                            } else if ui.button("⚡ Push Frame").clicked() {
+                                self.push_live_frame_full();
+                            }
+                            ui.checkbox(&mut self.live_stream, "Live");
+                            if let Some((sw, sh, pw, ph)) = self.device_size_warning {
+                                ui.colored_label(
+                                    Color32::from_rgb(230, 180, 60),
+                                    format!("⚠ screen {sw}x{sh} ≠ panel {pw}x{ph} (centered)"),
+                                );
+                            }
+                        }
+                        None => {
+                            if self.device_ports.is_empty() {
+                                self.device_ports = crate::device_link::list_devices();
+                            }
+                            let selected_text = self
+                                .selected_port
+                                .clone()
+                                .unwrap_or_else(|| "Select USB device".to_string());
+                            let ports = self.device_ports.clone();
+                            egui::ComboBox::from_id_salt("usb_port_selector")
+                                .selected_text(selected_text)
+                                .show_ui(ui, |ui| {
+                                    for p in &ports {
+                                        ui.selectable_value(
+                                            &mut self.selected_port,
+                                            Some(p.clone()),
+                                            p,
+                                        );
+                                    }
+                                });
+                            if ui.small_button("🔄").clicked() {
+                                self.device_ports = crate::device_link::list_devices();
+                            }
+                            if ui.button("🔌 Connect USB").clicked() {
+                                if let Some(device_id) = self.selected_port.clone() {
+                                    match crate::device_link::DeviceLink::connect(&device_id) {
+                                        Ok(link) => {
+                                            self.device_link = Some(link);
+                                            self.push_live_frame();
+                                            self.action_toast =
+                                                Some((format!("Connected {}", device_id), 2.0));
+                                        }
+                                        Err(e) => {
+                                            self.action_toast = Some((e, 3.0));
+                                        }
+                                    }
+                                } else {
+                                    self.action_toast =
+                                        Some(("Select a USB display agent first".into(), 2.0));
+                                }
+                            }
+                        }
+                    }
                 }
             });
         });
@@ -1827,6 +2134,9 @@ impl eframe::App for EmbeddedGuiStudio {
                             self.recompile();
                             if self.hardware_bridge.is_running {
                                 self.hardware_bridge.broadcast_kdl(&self.kdl_source);
+                            }
+                            if self.live_stream && self.device_link.is_some() {
+                                self.push_live_frame();
                             }
                         }
                     });
@@ -2041,5 +2351,45 @@ impl eframe::App for EmbeddedGuiStudio {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn size(app: &EmbeddedGuiStudio) -> (u32, u32) {
+        let screen = app.parsed_screen.as_ref().expect("screen parses");
+        (screen.width, screen.height)
+    }
+
+    #[test]
+    fn startup_snaps_the_first_screen_to_the_target() {
+        let app = EmbeddedGuiStudio::new_offline();
+        assert_eq!(app.hardware_profile.dimensions(), Some((320, 240)));
+        assert_eq!(size(&app), (320, 240));
+    }
+
+    #[test]
+    fn returning_to_a_screen_keeps_the_target_size() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        app.switch_to_screen(1);
+        app.switch_to_screen(0);
+        assert_eq!(size(&app), (320, 240));
+    }
+
+    #[test]
+    fn loading_an_oversized_preset_snaps_to_the_target() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        app.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
+        assert_eq!(size(&app), (320, 240));
+    }
+
+    #[test]
+    fn a_custom_target_leaves_the_authored_size_alone() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        app.hardware_profile = HardwareProfile::Custom;
+        app.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
+        assert_eq!(size(&app), (480, 272));
     }
 }

@@ -1,0 +1,19 @@
+[package]
+name = "embedded-gui-live"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Live streaming protocol (RGB565 frame push + control) between embedded-gui-studio and a flashed display agent over USB-CDC/UART"
+
+[dependencies]
+
+[features]
+default = []
+# Enables std-only conveniences (Vec-returning encoders, error impls).
+std = []
+
+[dev-dependencies]

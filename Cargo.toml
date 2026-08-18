@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/embedded-gui",
     "crates/embedded-gui-codegen",
+    "crates/embedded-gui-live",
     "crates/embedded-gui-macros",
     "crates/embedded-gui-studio",
 ]
@@ -24,6 +25,7 @@ readme = "README.md"
 [workspace.dependencies]
 embedded-gui = { path = "crates/embedded-gui", version = "0.2.4" }
 embedded-gui-codegen = { path = "crates/embedded-gui-codegen", version = "0.2.4" }
+embedded-gui-live = { path = "crates/embedded-gui-live", version = "0.2.4" }
 embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.4" }
 
 embedded-graphics-core = "0.4.1"
