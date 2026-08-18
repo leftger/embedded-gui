@@ -1,7 +1,281 @@
 //! Visual inspector sidebar panel for properties, tracks, and screen settings.
 
 use eframe::egui::{self, DragValue};
-use embedded_gui_codegen::{GridPlacementDef, ScreenDef, WidgetDef};
+use embedded_gui_codegen::{
+    GridPlacementDef, ScreenDef, ScreenTransitionDef, WidgetAnimationDef, WidgetDef,
+};
+
+const WIDGET_ANIMATION_PRESETS: &[(&str, &str)] = &[
+    ("fade_in", "Fade In"),
+    ("fade_in_up", "Fade In + Rise"),
+    ("slide_in_left", "Fly In From Left"),
+    ("slide_in_right", "Fly In From Right"),
+    ("slide_in_up", "Fly In From Bottom"),
+    ("slide_in_down", "Fly In From Top"),
+    ("zoom_in", "Zoom In"),
+    ("pulse", "Pulse"),
+    ("breathe", "Breathe"),
+    ("shake", "Shake"),
+];
+
+const EASINGS: &[(&str, &str)] = &[
+    ("linear", "Linear"),
+    ("in_sine", "Ease In"),
+    ("out_sine", "Ease Out"),
+    ("in_out_sine", "Ease In/Out"),
+    ("out_cubic", "Smooth Decelerate"),
+    ("out_back", "Overshoot"),
+    ("out_bounce", "Bounce"),
+    ("moook", "Moook"),
+];
+
+fn named_value<'a>(value: &str, choices: &'a [(&str, &str)]) -> &'a str {
+    choices
+        .iter()
+        .find_map(|(code, label)| (*code == value).then_some(*label))
+        .unwrap_or("Custom")
+}
+
+fn render_widget_animation(ui: &mut egui::Ui, animation: &mut Option<WidgetAnimationDef>) -> bool {
+    let mut modified = false;
+    egui::CollapsingHeader::new(egui::RichText::new("✨ Animation").strong())
+        .default_open(true)
+        .show(ui, |ui| {
+            let mut enabled = animation.is_some();
+            if ui.checkbox(&mut enabled, "Animate this widget").changed() {
+                *animation = enabled.then(WidgetAnimationDef::default);
+                modified = true;
+            }
+            let Some(animation) = animation.as_mut() else {
+                ui.label(
+                    egui::RichText::new("Add an entrance, exit, emphasis, or looping effect.")
+                        .small()
+                        .weak(),
+                );
+                return;
+            };
+
+            ui.horizontal(|ui| {
+                ui.label("Effect:");
+                egui::ComboBox::from_id_salt("widget_animation_preset")
+                    .selected_text(named_value(&animation.preset, WIDGET_ANIMATION_PRESETS))
+                    .show_ui(ui, |ui| {
+                        for (code, label) in WIDGET_ANIMATION_PRESETS {
+                            if ui
+                                .selectable_value(
+                                    &mut animation.preset,
+                                    (*code).to_string(),
+                                    *label,
+                                )
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label("Start:");
+                egui::ComboBox::from_id_salt("widget_animation_trigger")
+                    .selected_text(match animation.trigger.as_str() {
+                        "screen_exit" => "When leaving screen",
+                        "click" => "On click / tap",
+                        "loop" => "With screen (loop)",
+                        _ => "When screen appears",
+                    })
+                    .show_ui(ui, |ui| {
+                        for (code, label) in [
+                            ("screen_enter", "When screen appears"),
+                            ("screen_exit", "When leaving screen"),
+                            ("click", "On click / tap"),
+                            ("loop", "With screen (loop)"),
+                        ] {
+                            if ui
+                                .selectable_value(&mut animation.trigger, code.into(), label)
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label("Duration:");
+                if ui
+                    .add(
+                        DragValue::new(&mut animation.duration_ms)
+                            .range(16..=10_000)
+                            .suffix(" ms"),
+                    )
+                    .changed()
+                {
+                    modified = true;
+                }
+                ui.label("Delay:");
+                if ui
+                    .add(
+                        DragValue::new(&mut animation.delay_ms)
+                            .range(0..=10_000)
+                            .suffix(" ms"),
+                    )
+                    .changed()
+                {
+                    modified = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Timing:");
+                egui::ComboBox::from_id_salt("widget_animation_easing")
+                    .selected_text(named_value(&animation.easing, EASINGS))
+                    .show_ui(ui, |ui| {
+                        for (code, label) in EASINGS {
+                            if ui
+                                .selectable_value(
+                                    &mut animation.easing,
+                                    (*code).to_string(),
+                                    *label,
+                                )
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+                ui.label("Repeat:");
+                if ui
+                    .add(
+                        DragValue::new(&mut animation.repeat)
+                            .range(0..=100)
+                            .custom_formatter(|value, _| {
+                                if value == 0.0 {
+                                    "Forever".into()
+                                } else {
+                                    format!("{value:.0}×")
+                                }
+                            }),
+                    )
+                    .changed()
+                {
+                    modified = true;
+                }
+            });
+        });
+    modified
+}
+
+fn render_screen_transition(ui: &mut egui::Ui, screen: &mut ScreenDef) -> bool {
+    let mut modified = false;
+    egui::CollapsingHeader::new(egui::RichText::new("🎬 Screen Transition").strong())
+        .default_open(true)
+        .show(ui, |ui| {
+            let mut enabled = screen.transition.is_some();
+            if ui.checkbox(&mut enabled, "Animate navigation into this screen").changed() {
+                screen.transition = enabled.then(ScreenTransitionDef::default);
+                modified = true;
+            }
+            let Some(transition) = screen.transition.as_mut() else {
+                return;
+            };
+            const TRANSITIONS: &[(&str, &str)] = &[
+                ("window_push", "Push"),
+                ("window_pop", "Pop"),
+                ("fade", "Fade"),
+                ("timeline_slide", "Slide"),
+                ("modal_present", "Modal Rise"),
+                ("shutter_left", "Shutter Left"),
+                ("shutter_right", "Shutter Right"),
+                ("port_hole_left", "Port Hole Left"),
+                ("port_hole_right", "Port Hole Right"),
+                ("round_flip_to_launcher", "Round Flip"),
+            ];
+            ui.horizontal(|ui| {
+                ui.label("Effect:");
+                egui::ComboBox::from_id_salt("screen_transition_preset")
+                    .selected_text(named_value(&transition.preset, TRANSITIONS))
+                    .show_ui(ui, |ui| {
+                        for (code, label) in TRANSITIONS {
+                            if ui
+                                .selectable_value(
+                                    &mut transition.preset,
+                                    (*code).to_string(),
+                                    *label,
+                                )
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label("Duration:");
+                if ui
+                    .add(
+                        DragValue::new(&mut transition.duration_ms)
+                            .range(16..=5_000)
+                            .suffix(" ms"),
+                    )
+                    .changed()
+                {
+                    modified = true;
+                }
+                ui.label("Timing:");
+                egui::ComboBox::from_id_salt("screen_transition_easing")
+                    .selected_text(named_value(&transition.easing, EASINGS))
+                    .show_ui(ui, |ui| {
+                        for (code, label) in EASINGS {
+                            if ui
+                                .selectable_value(
+                                    &mut transition.easing,
+                                    (*code).to_string(),
+                                    *label,
+                                )
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label("Origin:");
+                egui::ComboBox::from_id_salt("screen_transition_origin")
+                    .selected_text(transition.origin.replace('_', " "))
+                    .show_ui(ui, |ui| {
+                        for origin in [
+                            "center",
+                            "top",
+                            "right",
+                            "bottom",
+                            "left",
+                            "top_left",
+                            "top_right",
+                            "bottom_left",
+                            "bottom_right",
+                        ] {
+                            if ui
+                                .selectable_value(
+                                    &mut transition.origin,
+                                    origin.to_string(),
+                                    origin.replace('_', " "),
+                                )
+                                .changed()
+                            {
+                                modified = true;
+                            }
+                        }
+                    });
+            });
+            ui.label(
+                egui::RichText::new(
+                    "This is the destination screen's default transition; navigation buttons can override it.",
+                )
+                .small()
+                .weak(),
+            );
+        });
+    modified
+}
 
 fn push_new_widget(
     screen: &mut ScreenDef,
@@ -21,6 +295,7 @@ fn push_new_widget(
         row: next_row,
         col_span: 1,
         row_span: 1,
+        animation: None,
     };
     screen.grid.children.push((placement, widget));
     *selected_widget_idx = Some(screen.grid.children.len() - 1);
@@ -49,8 +324,10 @@ pub fn render_inspector_panel(
     ui: &mut egui::Ui,
     screen: &mut ScreenDef,
     selected_widget_idx: &mut Option<usize>,
+    available_screens: &[String],
 ) -> bool {
     let mut modified = false;
+    let current_screen_id = screen.id.clone();
 
     if let Some(idx) = *selected_widget_idx {
         if idx < screen.grid.children.len() {
@@ -98,6 +375,11 @@ pub fn render_inspector_panel(
                 }
             });
 
+            ui.separator();
+
+            if render_widget_animation(ui, &mut placement.animation) {
+                modified = true;
+            }
             ui.separator();
 
             // 2. Widget Specific Properties
@@ -225,7 +507,14 @@ pub fn render_inspector_panel(
                                         )
                                         .clicked()
                                     {
-                                        *on_click = Some("navigate:HvacClimate:SlideLeft".into());
+                                        let target = available_screens
+                                            .iter()
+                                            .find(|name| {
+                                                name.as_str() != current_screen_id.as_str()
+                                            })
+                                            .cloned()
+                                            .unwrap_or_else(|| "Screen2".into());
+                                        *on_click = Some(format!("navigate:{target}"));
                                         modified = true;
                                     }
                                     if ui
@@ -245,15 +534,8 @@ pub fn render_inspector_panel(
                         if is_nav {
                             let parts: Vec<&str> = cur_action.split(':').collect();
                             let target_screen = parts.get(1).copied().unwrap_or("HvacClimate");
-                            let trans_code = parts.get(2).copied().unwrap_or("SlideLeft");
+                            let trans_code = parts.get(2).copied().unwrap_or("Default");
 
-                            let known_targets = [
-                                "AutoCluster",
-                                "HvacClimate",
-                                "PatientMonitor",
-                                "CncController",
-                                "FitnessTracker",
-                            ];
                             let mut selected_target = target_screen.to_string();
 
                             ui.horizontal(|ui| {
@@ -261,19 +543,23 @@ pub fn render_inspector_panel(
                                 egui::ComboBox::from_id_salt("btn_nav_target")
                                     .selected_text(&selected_target)
                                     .show_ui(ui, |ui| {
-                                        for t in known_targets {
+                                        for t in available_screens {
                                             if ui
                                                 .selectable_value(
                                                     &mut selected_target,
                                                     t.to_string(),
-                                                    t,
+                                                    t.as_str(),
                                                 )
                                                 .clicked()
                                             {
-                                                *on_click = Some(format!(
-                                                    "navigate:{}:{}",
-                                                    selected_target, trans_code
-                                                ));
+                                                *on_click = if trans_code == "Default" {
+                                                    Some(format!("navigate:{}", selected_target))
+                                                } else {
+                                                    Some(format!(
+                                                        "navigate:{}:{}",
+                                                        selected_target, trans_code
+                                                    ))
+                                                };
                                                 modified = true;
                                             }
                                         }
@@ -281,12 +567,17 @@ pub fn render_inspector_panel(
                             });
 
                             let transitions = [
+                                ("Default", "🎬 Target Screen Default"),
                                 ("SlideLeft", "➡️ Slide Left (300ms)"),
                                 ("SlideRight", "⬅️ Slide Right (300ms)"),
+                                ("SlideUp", "⬆️ Slide Up (300ms)"),
+                                ("SlideDown", "⬇️ Slide Down (300ms)"),
                                 ("Fade", "✨ Fade (200ms)"),
+                                ("ZoomPush", "🔎 Zoom Push (300ms)"),
                                 ("Instant", "⚡ Instant"),
                             ];
-                            let mut selected_trans = trans_code.to_string();
+                            let mut selected_trans =
+                                parts.get(2).copied().unwrap_or("Default").to_string();
 
                             ui.horizontal(|ui| {
                                 ui.label("Effect:");
@@ -296,7 +587,7 @@ pub fn render_inspector_panel(
                                             .iter()
                                             .find(|(c, _)| *c == trans_code)
                                             .map(|(_, n)| *n)
-                                            .unwrap_or("Slide Left"),
+                                            .unwrap_or("Target Screen Default"),
                                     )
                                     .show_ui(ui, |ui| {
                                         for (c, label) in transitions {
@@ -308,10 +599,14 @@ pub fn render_inspector_panel(
                                                 )
                                                 .clicked()
                                             {
-                                                *on_click = Some(format!(
-                                                    "navigate:{}:{}",
-                                                    target_screen, selected_trans
-                                                ));
+                                                *on_click = if selected_trans == "Default" {
+                                                    Some(format!("navigate:{}", target_screen))
+                                                } else {
+                                                    Some(format!(
+                                                        "navigate:{}:{}",
+                                                        target_screen, selected_trans
+                                                    ))
+                                                };
                                                 modified = true;
                                             }
                                         }
@@ -1012,6 +1307,7 @@ pub fn render_inspector_panel(
                     row: p.row,
                     col_span: p.col_span,
                     row_span: p.row_span,
+                    animation: p.animation.clone(),
                 };
                 let dup_widget = w.clone();
                 screen.grid.children.push((dup_placement, dup_widget));
@@ -1063,6 +1359,10 @@ pub fn render_inspector_panel(
             }
         });
 
+        ui.separator();
+        if render_screen_transition(ui, screen) {
+            modified = true;
+        }
         ui.separator();
 
         // 🌳 Layer Hierarchy Tree
@@ -1704,6 +2004,7 @@ mod tests {
                 ui,
                 &mut screen.borrow_mut(),
                 &mut selected.borrow_mut(),
+                &[],
             ));
         });
 

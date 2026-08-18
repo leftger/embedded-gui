@@ -20,7 +20,7 @@ use embedded_gui::{
     TimePickerWidget, VectorPath,
 };
 use embedded_gui_codegen::assets::{BitmapFontData, MeshData, MonoBitmapData};
-use embedded_gui_codegen::{PathVerbDef, ScreenDef, WidgetDef};
+use embedded_gui_codegen::{PathVerbDef, ScreenDef, WidgetAnimationDef, WidgetDef};
 
 use crate::layout::compute_track_sizes;
 use crate::theme::ThemePalette;
@@ -618,7 +618,111 @@ pub fn has_animated_content(screen: &ScreenDef) -> bool {
             widget,
             WidgetDef::BusyWheel { active: true, .. } | WidgetDef::Plotter { .. }
         )
-    })
+    }) || screen
+        .grid
+        .children
+        .iter()
+        .any(|(placement, _)| placement.animation.is_some())
+}
+
+fn animation_easing(name: &str, t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    match name {
+        "in_sine" => 1.0 - (t * core::f32::consts::FRAC_PI_2).cos(),
+        "out_sine" => (t * core::f32::consts::FRAC_PI_2).sin(),
+        "in_out_sine" => -((core::f32::consts::PI * t).cos() - 1.0) / 2.0,
+        "out_cubic" => 1.0 - (1.0 - t).powi(3),
+        "out_back" => {
+            let c1 = 1.70158;
+            let c3 = c1 + 1.0;
+            1.0 + c3 * (t - 1.0).powi(3) + c1 * (t - 1.0).powi(2)
+        }
+        "out_bounce" => {
+            let n1 = 7.5625;
+            let d1 = 2.75;
+            if t < 1.0 / d1 {
+                n1 * t * t
+            } else if t < 2.0 / d1 {
+                let x = t - 1.5 / d1;
+                n1 * x * x + 0.75
+            } else if t < 2.5 / d1 {
+                let x = t - 2.25 / d1;
+                n1 * x * x + 0.9375
+            } else {
+                let x = t - 2.625 / d1;
+                n1 * x * x + 0.984375
+            }
+        }
+        // Close host-side approximation of the runtime's compact spatial curve.
+        "moook" => t * t * (3.0 - 2.0 * t),
+        _ => t,
+    }
+}
+
+fn sample_widget_animation(animation: &WidgetAnimationDef, phase: f32, cell: &Cell) -> (Cell, u8) {
+    let duration = animation.duration_ms.max(1) as f32;
+    let delay = animation.delay_ms as f32;
+    let cycle = duration + delay;
+    let plays = if animation.repeat == 0 {
+        1.0
+    } else {
+        animation.repeat as f32
+    };
+    let elapsed = phase.rem_euclid(1.0) * cycle * plays;
+    let in_cycle = elapsed.rem_euclid(cycle.max(1.0));
+    let raw = ((in_cycle - delay) / duration).clamp(0.0, 1.0);
+    let mut t = animation_easing(&animation.easing, raw);
+    if animation.trigger == "screen_exit" {
+        t = 1.0 - t;
+    }
+    let mut out = Cell {
+        x: cell.x,
+        y: cell.y,
+        w: cell.w,
+        h: cell.h,
+    };
+    let mut opacity = 255u8;
+    let travel_x = cell.w.max(16) as f32;
+    let travel_y = cell.h.max(16) as f32;
+
+    match animation.preset.as_str() {
+        "fade_in" => opacity = (255.0 * t.clamp(0.0, 1.0)) as u8,
+        "fade_in_up" => {
+            out.y += (24.0 * (1.0 - t)) as i32;
+            opacity = (255.0 * t.clamp(0.0, 1.0)) as u8;
+        }
+        "slide_in_left" => out.x -= (travel_x * (1.0 - t)) as i32,
+        "slide_in_right" => out.x += (travel_x * (1.0 - t)) as i32,
+        "slide_in_up" => out.y += (travel_y * (1.0 - t)) as i32,
+        "slide_in_down" => out.y -= (travel_y * (1.0 - t)) as i32,
+        "zoom_in" => {
+            let scale = (0.35 + 0.65 * t).clamp(0.05, 1.2);
+            let w = (cell.w as f32 * scale).max(1.0) as u32;
+            let h = (cell.h as f32 * scale).max(1.0) as u32;
+            out.x += (cell.w.saturating_sub(w) / 2) as i32;
+            out.y += (cell.h.saturating_sub(h) / 2) as i32;
+            out.w = w;
+            out.h = h;
+            opacity = (255.0 * t.clamp(0.0, 1.0)) as u8;
+        }
+        "pulse" => {
+            let scale = 1.0 + 0.08 * (core::f32::consts::PI * raw).sin();
+            let w = (cell.w as f32 * scale) as u32;
+            let h = (cell.h as f32 * scale) as u32;
+            out.x -= (w.saturating_sub(cell.w) / 2) as i32;
+            out.y -= (h.saturating_sub(cell.h) / 2) as i32;
+            out.w = w;
+            out.h = h;
+        }
+        "breathe" => {
+            opacity = (150.0 + 105.0 * (core::f32::consts::PI * raw).sin()) as u8;
+        }
+        "shake" => {
+            out.x += (5.0 * (raw * core::f32::consts::PI * 6.0).sin() * (1.0 - raw)) as i32;
+        }
+        _ => {}
+    }
+    (out, opacity)
 }
 
 /// Renders a static snapshot. Kept for callers and tests that don't have a
@@ -769,7 +873,21 @@ fn render_inner<'a>(
         })
         .collect();
     let mut pixels = vec![palette.display_bg; width as usize * height as usize];
-    let cells = compute_cells(screen);
+    let mut cells = compute_cells(screen);
+    let mut widget_opacities = vec![255u8; cells.len()];
+    for (idx, ((placement, _), cell)) in screen
+        .grid
+        .children
+        .iter()
+        .zip(cells.iter_mut())
+        .enumerate()
+    {
+        if let Some(animation) = &placement.animation {
+            let (animated, opacity) = sample_widget_animation(animation, animation_phase, cell);
+            *cell = animated;
+            widget_opacities[idx] = opacity;
+        }
+    }
 
     // Icon parts borrow their bitmaps, so the `IconPart` slices have to outlive
     // the context they are handed to: declare them before it.
@@ -818,7 +936,7 @@ fn render_inner<'a>(
     for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
         let Some(cell) = cells.get(idx) else { continue };
         let rect = Rect::new(cell.x, cell.y, cell.w, cell.h);
-        add_widget(
+        if let Some(widget_id) = add_widget(
             &mut gui,
             rect,
             widget,
@@ -835,7 +953,15 @@ fn render_inner<'a>(
             &mut plot_idx,
             &mut icon_idx,
             &mut overlays,
-        );
+        ) {
+            if let Some(opacity) = widget_opacities
+                .get(idx)
+                .copied()
+                .filter(|value| *value < 255)
+            {
+                let _ = gui.set_widget_opacity(widget_id, opacity);
+            }
+        }
     }
 
     {
@@ -996,9 +1122,9 @@ fn add_widget<'a>(
     plot_idx: &mut usize,
     icon_idx: &mut usize,
     overlays: &mut Vec<Overlay<'a>>,
-) {
+) -> Option<WidgetId> {
     let style = p.panel(Some("card"));
-    let _ = match widget {
+    match widget {
         WidgetDef::Label {
             text,
             style: token,
@@ -1296,7 +1422,8 @@ fn add_widget<'a>(
             });
             gui.add_spacer(rect)
         }
-    };
+    }
+    .ok()
 }
 
 fn paint_overlay<D>(ctx: &mut RenderCtx<'_, D>, overlay: &Overlay<'_>, p: &Palette565)
@@ -1545,6 +1672,21 @@ mod tests {
             !changed_tiles(&first, &second, 40, 40).is_empty(),
             "different timeline phases must produce dirty tiles"
         );
+    }
+
+    #[test]
+    fn declarative_widget_animation_changes_preview_pixels() {
+        let kdl = r#"screen id="Motion" width=160 height=80 {
+            grid cols="1fr" rows="1fr" gap=0 padding=8 {
+                button id="go" text="GO" animation="slide_in_left" animation_duration=400 animation_easing="out_cubic" col=0 row=0
+            }
+        }"#;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        assert!(has_animated_content(&screen));
+
+        let first = render_screen_at(&screen, DisplayTheme::DarkTft, 0.05, None);
+        let last = render_screen_at(&screen, DisplayTheme::DarkTft, 0.95, None);
+        assert!(!changed_tiles(&first, &last, 20, 20).is_empty());
     }
 
     #[test]

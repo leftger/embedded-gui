@@ -801,6 +801,7 @@ impl EmbeddedGuiStudio {
                 row: next_row,
                 col_span: 1,
                 row_span: 1,
+                animation: None,
             };
             screen.grid.children.push((placement, widget));
             self.selected_widget_idx = Some(screen.grid.children.len() - 1);
@@ -1247,24 +1248,29 @@ impl EmbeddedGuiStudio {
             );
             let mut canvas_offset = Vec2::ZERO;
             let mut transition_scale = 1.0;
+            let mut transition_alpha = 255;
             if let Some(trans) = &self.transition_state {
+                let progress = trans.visual_progress();
                 match trans.style {
                     TransitionStyle::SlideLeft => {
-                        canvas_offset.x = -screen_w * trans.progress;
+                        canvas_offset.x = -screen_w * progress;
                     }
                     TransitionStyle::SlideRight => {
-                        canvas_offset.x = screen_w * trans.progress;
+                        canvas_offset.x = screen_w * progress;
                     }
                     TransitionStyle::SlideUp => {
-                        canvas_offset.y = -screen_h * trans.progress;
+                        canvas_offset.y = -screen_h * progress;
                     }
                     TransitionStyle::SlideDown => {
-                        canvas_offset.y = screen_h * trans.progress;
+                        canvas_offset.y = screen_h * progress;
                     }
                     TransitionStyle::ZoomPush => {
-                        transition_scale = (1.0 - trans.progress * 0.25).max(0.1);
+                        transition_scale = (1.0 - progress * 0.25).max(0.1);
                         let shrink = screen_w * (1.0 - transition_scale) / 2.0;
                         canvas_offset += Vec2::new(shrink, shrink);
+                    }
+                    TransitionStyle::Fade | TransitionStyle::Dissolve => {
+                        transition_alpha = ((1.0 - progress) * 255.0) as u8;
                     }
                     _ => {}
                 }
@@ -1296,7 +1302,7 @@ impl EmbeddedGuiStudio {
                     texture_id,
                     display_rect,
                     Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                    Color32::WHITE,
+                    Color32::from_white_alpha(transition_alpha),
                 );
             }
 
@@ -1415,13 +1421,36 @@ impl EmbeddedGuiStudio {
                                                 if act.starts_with("navigate:") {
                                                     let parts: Vec<&str> = act.split(':').collect();
                                                     if let Some(target_name) = parts.get(1) {
-                                                        let trans_style = parts.get(2).map(|s| TransitionStyle::from_code(s)).unwrap_or(TransitionStyle::SlideLeft);
                                                         if let Some(target_idx) = self.project_screens.iter().position(|(n, _)| n == *target_name) {
+                                                            let target_transition = self.project_screens
+                                                                .get(target_idx)
+                                                                .and_then(|(_, source)| parse_kdl_screen(source).ok())
+                                                                .and_then(|screen| screen.transition);
+                                                            let (trans_style, duration, easing) = if let Some(code) = parts.get(2) {
+                                                                let style = TransitionStyle::from_code(code);
+                                                                let seconds = if style == TransitionStyle::Fade {
+                                                                    0.2
+                                                                } else if style == TransitionStyle::Instant {
+                                                                    0.001
+                                                                } else {
+                                                                    0.3
+                                                                };
+                                                                (style, seconds, "in_out_sine".to_string())
+                                                            } else if let Some(spec) = target_transition {
+                                                                (
+                                                                    TransitionStyle::from_preset(&spec.preset),
+                                                                    spec.duration_ms as f32 / 1000.0,
+                                                                    spec.easing,
+                                                                )
+                                                            } else {
+                                                                (TransitionStyle::SlideLeft, 0.3, "in_out_sine".to_string())
+                                                            };
                                                             self.transition_state = Some(ScreenTransition {
                                                                 target_screen_idx: target_idx,
                                                                 progress: 0.0,
-                                                                duration: if trans_style == TransitionStyle::Fade { 0.2 } else if trans_style == TransitionStyle::Instant { 0.001 } else { 0.3 },
+                                                                duration,
                                                                 style: trans_style,
+                                                                easing,
                                                             });
                                                             self.action_toast = Some((format!("🔀 Navigating to '{}' ({})", target_name, trans_style.name()), 2.0));
                                                         } else {
@@ -2200,6 +2229,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 row: p.row,
                                 col_span: p.col_span,
                                 row_span: p.row_span,
+                                animation: p.animation.clone(),
                             };
                             let dup_w = w.clone();
                             screen.grid.children.push((dup_p, dup_w));
@@ -3059,7 +3089,13 @@ impl eframe::App for EmbeddedGuiStudio {
                 if let Ok(mut screen) = self.parsed_screen.clone() {
                     let previous_size = (screen.width, screen.height);
                     let mut sel_idx = self.selected_widget_idx;
-                    let modified = render_inspector_panel(ui, &mut screen, &mut sel_idx);
+                    let available_screens: Vec<String> = self
+                        .project_screens
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect();
+                    let modified =
+                        render_inspector_panel(ui, &mut screen, &mut sel_idx, &available_screens);
                     self.selected_widget_idx = sel_idx;
                     if modified {
                         if (screen.width, screen.height) != previous_size {

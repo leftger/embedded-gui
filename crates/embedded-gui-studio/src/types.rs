@@ -212,6 +212,20 @@ impl TransitionStyle {
             _ => Self::Instant,
         }
     }
+
+    /// Maps the richer runtime preset catalog onto the Studio canvas effects.
+    pub fn from_preset(s: &str) -> Self {
+        match s {
+            "window_push" | "timeline_slide" | "shutter_left" | "port_hole_left" => Self::SlideLeft,
+            "window_pop" | "shutter_right" | "port_hole_right" => Self::SlideRight,
+            "modal_present" | "shutter_up" | "port_hole_up" => Self::SlideUp,
+            "modal_dismiss" | "shutter_down" | "port_hole_down" => Self::SlideDown,
+            "fade" => Self::Fade,
+            "round_flip_to_launcher" | "round_flip_from_launcher" => Self::ZoomPush,
+            "none" | "instant" => Self::Instant,
+            other => Self::from_code(other),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -220,6 +234,26 @@ pub struct ScreenTransition {
     pub progress: f32,
     pub duration: f32,
     pub style: TransitionStyle,
+    pub easing: String,
+}
+
+impl ScreenTransition {
+    pub fn visual_progress(&self) -> f32 {
+        let t = self.progress.clamp(0.0, 1.0);
+        match self.easing.as_str() {
+            "in_sine" => 1.0 - (t * core::f32::consts::FRAC_PI_2).cos(),
+            "out_sine" => (t * core::f32::consts::FRAC_PI_2).sin(),
+            "out_cubic" => 1.0 - (1.0 - t).powi(3),
+            "out_back" => {
+                let c1 = 1.70158;
+                let c3 = c1 + 1.0;
+                1.0 + c3 * (t - 1.0).powi(3) + c1 * (t - 1.0).powi(2)
+            }
+            "moook" => t * t * (3.0 - 2.0 * t),
+            "linear" => t,
+            _ => -((core::f32::consts::PI * t).cos() - 1.0) / 2.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

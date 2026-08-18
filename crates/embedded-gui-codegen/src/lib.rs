@@ -36,6 +36,8 @@ pub struct GridPlacementDef {
     pub row: usize,
     pub col_span: usize,
     pub row_span: usize,
+    /// Optional motion applied to this widget by the generated app and Studio preview.
+    pub animation: Option<WidgetAnimationDef>,
 }
 
 impl Default for GridPlacementDef {
@@ -45,6 +47,56 @@ impl Default for GridPlacementDef {
             row: 0,
             col_span: 1,
             row_span: 1,
+            animation: None,
+        }
+    }
+}
+
+/// Declarative animation attached to a widget node in KDL.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WidgetAnimationDef {
+    /// Named preset, for example `fade_in_up`, `slide_in_left`, or `pulse`.
+    pub preset: String,
+    /// `screen_enter`, `screen_exit`, `click`, or `loop`.
+    pub trigger: String,
+    pub duration_ms: u32,
+    pub delay_ms: u32,
+    /// An [`embedded_gui::animation::Easing`] variant in snake case.
+    pub easing: String,
+    /// Number of plays. `0` means repeat forever.
+    pub repeat: u16,
+}
+
+impl Default for WidgetAnimationDef {
+    fn default() -> Self {
+        Self {
+            preset: "fade_in_up".into(),
+            trigger: "screen_enter".into(),
+            duration_ms: 400,
+            delay_ms: 0,
+            easing: "out_cubic".into(),
+            repeat: 1,
+        }
+    }
+}
+
+/// Default transition used when this screen is navigated to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScreenTransitionDef {
+    /// A named `TransitionPreset`, stored in snake case.
+    pub preset: String,
+    pub duration_ms: u32,
+    pub easing: String,
+    pub origin: String,
+}
+
+impl Default for ScreenTransitionDef {
+    fn default() -> Self {
+        Self {
+            preset: "window_push".into(),
+            duration_ms: 300,
+            easing: "in_out_sine".into(),
+            origin: "center".into(),
         }
     }
 }
@@ -332,6 +384,8 @@ pub struct ScreenDef {
     pub width: u32,
     pub height: u32,
     pub theme: Option<String>,
+    /// Transition used by project navigation when this screen is the destination.
+    pub transition: Option<ScreenTransitionDef>,
     /// Fonts imported by this screen, referenced by `font=` on widgets.
     pub fonts: Vec<FontAssetDef>,
     pub grid: GridLayoutDef,
@@ -644,11 +698,30 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
         .or_else(|| get_i64_prop(node, "rowSpan"))
         .unwrap_or(1)
         .max(1) as usize;
+    let animation = get_string_prop(node, "animation").map(|preset| WidgetAnimationDef {
+        preset: preset.to_string(),
+        trigger: get_string_prop(node, "animation_trigger")
+            .unwrap_or("screen_enter")
+            .to_string(),
+        duration_ms: get_i64_prop(node, "animation_duration")
+            .unwrap_or(400)
+            .clamp(1, u32::MAX as i64) as u32,
+        delay_ms: get_i64_prop(node, "animation_delay")
+            .unwrap_or(0)
+            .clamp(0, u32::MAX as i64) as u32,
+        easing: get_string_prop(node, "animation_easing")
+            .unwrap_or("out_cubic")
+            .to_string(),
+        repeat: get_i64_prop(node, "animation_repeat")
+            .unwrap_or(1)
+            .clamp(0, u16::MAX as i64) as u16,
+    });
     let placement = GridPlacementDef {
         col,
         row,
         col_span,
         row_span,
+        animation,
     };
 
     let id = get_string_prop(node, "id").map(|s| s.to_string());
@@ -1065,6 +1138,18 @@ pub fn parse_kdl_screen(kdl_source: &str) -> Result<ScreenDef, CodegenError> {
     let width = get_i64_prop(screen_node, "width").unwrap_or(320).max(1) as u32;
     let height = get_i64_prop(screen_node, "height").unwrap_or(240).max(1) as u32;
     let theme = get_string_prop(screen_node, "theme").map(|s| s.to_string());
+    let transition = get_string_prop(screen_node, "transition").map(|preset| ScreenTransitionDef {
+        preset: preset.to_string(),
+        duration_ms: get_i64_prop(screen_node, "transition_duration")
+            .unwrap_or(300)
+            .clamp(1, u32::MAX as i64) as u32,
+        easing: get_string_prop(screen_node, "transition_easing")
+            .unwrap_or("in_out_sine")
+            .to_string(),
+        origin: get_string_prop(screen_node, "transition_origin")
+            .unwrap_or("center")
+            .to_string(),
+    });
 
     let mut fonts = Vec::new();
     if let Some(children) = screen_node.children() {
@@ -1125,6 +1210,7 @@ pub fn parse_kdl_screen(kdl_source: &str) -> Result<ScreenDef, CodegenError> {
         width,
         height,
         theme,
+        transition,
         fonts,
         grid,
     })
@@ -1217,6 +1303,16 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
     let _ = writeln!(&mut out, "impl {} {{", app_struct_name);
     let _ = writeln!(&mut out, "    pub const WIDTH: u32 = {};", screen.width);
     let _ = writeln!(&mut out, "    pub const HEIGHT: u32 = {};", screen.height);
+    if let Some(transition) = &screen.transition {
+        let _ = writeln!(
+            &mut out,
+            "    pub const TRANSITION: ScreenTransitionSpec = ScreenTransitionSpec {{ effect: {}, duration_ms: {}, origin: {}, easing: {} }};",
+            transition_effect_expr(&transition.preset),
+            transition.duration_ms,
+            transition_origin_expr(&transition.origin),
+            easing_expr(&transition.easing),
+        );
+    }
     let _ = writeln!(
         &mut out,
         "    pub const NODE_COUNT: usize = {};",
@@ -1680,6 +1776,21 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
     let _ = writeln!(&mut out, "        }})");
     let _ = writeln!(&mut out, "    }}");
     let _ = writeln!(&mut out);
+    write_animation_method(
+        &mut out,
+        screen,
+        "screen_enter",
+        "start_screen_enter_animations",
+    );
+    write_animation_method(
+        &mut out,
+        screen,
+        "screen_exit",
+        "start_screen_exit_animations",
+    );
+    write_animation_method(&mut out, screen, "click", "start_click_animations");
+    write_animation_method(&mut out, screen, "loop", "start_loop_animations");
+
     let _ = writeln!(
         &mut out,
         "    pub fn apply_theme<'a, const N: usize, const E: usize, const D: usize>("
@@ -1702,6 +1813,212 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
     let _ = writeln!(&mut out, "}}");
 
     out
+}
+
+fn easing_expr(easing: &str) -> &'static str {
+    match easing {
+        "in_sine" => "Easing::InSine",
+        "out_sine" => "Easing::OutSine",
+        "in_out_sine" => "Easing::InOutSine",
+        "out_cubic" => "Easing::OutCubic",
+        "out_back" => "Easing::OutBack",
+        "out_bounce" => "Easing::OutBounce",
+        "moook" => "Easing::Moook",
+        _ => "Easing::Linear",
+    }
+}
+
+fn transition_effect_expr(preset: &str) -> &'static str {
+    match preset {
+        "window_push" => "ScreenTransitionEffect::PushMoook",
+        "window_pop" => "ScreenTransitionEffect::PopMoook",
+        "fade" => "ScreenTransitionEffect::Fade",
+        "timeline_slide" => "ScreenTransitionEffect::SlideLeft",
+        "modal_present" => "ScreenTransitionEffect::ModalSlideUp",
+        "modal_dismiss" => "ScreenTransitionEffect::ModalSlideDown",
+        "shutter_left" => "ScreenTransitionEffect::ShutterLeft",
+        "shutter_right" => "ScreenTransitionEffect::ShutterRight",
+        "shutter_up" => "ScreenTransitionEffect::ShutterUp",
+        "shutter_down" => "ScreenTransitionEffect::ShutterDown",
+        "port_hole_left" => "ScreenTransitionEffect::PortHoleLeft",
+        "port_hole_right" => "ScreenTransitionEffect::PortHoleRight",
+        "port_hole_up" => "ScreenTransitionEffect::PortHoleUp",
+        "port_hole_down" => "ScreenTransitionEffect::PortHoleDown",
+        "round_flip_to_launcher" => "ScreenTransitionEffect::RoundFlipRight",
+        "round_flip_from_launcher" => "ScreenTransitionEffect::RoundFlipLeft",
+        _ => "ScreenTransitionEffect::None",
+    }
+}
+
+fn transition_origin_expr(origin: &str) -> &'static str {
+    match origin {
+        "top_left" => "ScreenTransitionOrigin::TopLeft",
+        "top" => "ScreenTransitionOrigin::Top",
+        "top_right" => "ScreenTransitionOrigin::TopRight",
+        "left" => "ScreenTransitionOrigin::Left",
+        "right" => "ScreenTransitionOrigin::Right",
+        "bottom_left" => "ScreenTransitionOrigin::BottomLeft",
+        "bottom" => "ScreenTransitionOrigin::Bottom",
+        "bottom_right" => "ScreenTransitionOrigin::BottomRight",
+        _ => "ScreenTransitionOrigin::Center",
+    }
+}
+
+fn animation_expr(from: &str, to: &str, animation: &WidgetAnimationDef, ping_pong: bool) -> String {
+    let mut expr = format!(
+        "Animation::new(({from}) as f32, ({to}) as f32, {}, {}).with_delay({})",
+        animation.duration_ms,
+        easing_expr(&animation.easing),
+        animation.delay_ms
+    );
+    if ping_pong || animation.repeat != 1 {
+        let mode = if ping_pong {
+            "RepeatMode::PingPong"
+        } else {
+            "RepeatMode::Loop"
+        };
+        let count = if animation.repeat == 0 {
+            "None".to_string()
+        } else {
+            format!("Some({})", animation.repeat.saturating_sub(1))
+        };
+        let _ = write!(
+            &mut expr,
+            ".with_repeat_mode({mode}).with_repeat_count({count})"
+        );
+    }
+    expr
+}
+
+fn write_binding(
+    out: &mut String,
+    widget: &str,
+    property: &str,
+    from: &str,
+    to: &str,
+    animation: &WidgetAnimationDef,
+    ping_pong: bool,
+) {
+    let expr = animation_expr(from, to, animation, ping_pong);
+    let _ = writeln!(
+        out,
+        "            animator.bind_property_with_policy(self.widgets.{widget}, AnimatedProperty::{property}, {expr}, AnimationConflictPolicy::Replace)?;"
+    );
+}
+
+fn write_animation_method(out: &mut String, screen: &ScreenDef, trigger: &str, method: &str) {
+    let configured: Vec<_> = screen
+        .grid
+        .children
+        .iter()
+        .filter_map(|(placement, widget)| {
+            let animation = placement.animation.as_ref()?;
+            (animation.trigger == trigger)
+                .then(|| widget.id().map(|id| (to_snake_case(id), animation)))
+                .flatten()
+        })
+        .collect();
+    if configured.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(
+        out,
+        "    pub fn {method}<'a, const N: usize, const E: usize, const D: usize, const TRACKS: usize, const BINDINGS: usize>("
+    );
+    let _ = writeln!(out, "        &self,");
+    let _ = writeln!(out, "        gui: &GuiContext<'a, N, E, D>,");
+    let _ = writeln!(
+        out,
+        "        animator: &mut WidgetAnimator<TRACKS, BINDINGS>,"
+    );
+    let _ = writeln!(out, "    ) -> Result<(), WidgetAnimationError> {{");
+
+    for (widget, animation) in configured {
+        let _ = writeln!(
+            out,
+            "        if let Some(node) = gui.widgets().iter().find(|node| node.id == self.widgets.{widget}) {{"
+        );
+        let _ = writeln!(out, "            let base = node.rect;");
+        let reverse = trigger == "screen_exit";
+        match animation.preset.as_str() {
+            "fade_in" => {
+                let (from, to) = if reverse { ("255", "0") } else { ("0", "255") };
+                write_binding(out, &widget, "Opacity", from, to, animation, false);
+            }
+            "fade_in_up" => {
+                let (from_y, to_y, from_alpha, to_alpha) = if reverse {
+                    ("base.y", "base.y + 24", "255", "0")
+                } else {
+                    ("base.y + 24", "base.y", "0", "255")
+                };
+                write_binding(out, &widget, "WidgetY", from_y, to_y, animation, false);
+                write_binding(
+                    out, &widget, "Opacity", from_alpha, to_alpha, animation, false,
+                );
+            }
+            "slide_in_left" => {
+                let (from, to) = if reverse {
+                    ("base.x", "base.x - base.w as i32")
+                } else {
+                    ("base.x - base.w as i32", "base.x")
+                };
+                write_binding(out, &widget, "WidgetX", from, to, animation, false);
+            }
+            "slide_in_right" => {
+                let (from, to) = if reverse {
+                    ("base.x", "base.x + base.w as i32")
+                } else {
+                    ("base.x + base.w as i32", "base.x")
+                };
+                write_binding(out, &widget, "WidgetX", from, to, animation, false);
+            }
+            "slide_in_up" => {
+                let (from, to) = if reverse {
+                    ("base.y", "base.y + base.h as i32")
+                } else {
+                    ("base.y + base.h as i32", "base.y")
+                };
+                write_binding(out, &widget, "WidgetY", from, to, animation, false);
+            }
+            "slide_in_down" => {
+                let (from, to) = if reverse {
+                    ("base.y", "base.y - base.h as i32")
+                } else {
+                    ("base.y - base.h as i32", "base.y")
+                };
+                write_binding(out, &widget, "WidgetY", from, to, animation, false);
+            }
+            "zoom_in" => {
+                let (from_w, to_w, from_h, to_h) = if reverse {
+                    ("base.w", "1", "base.h", "1")
+                } else {
+                    ("1", "base.w", "1", "base.h")
+                };
+                write_binding(out, &widget, "WidgetWidth", from_w, to_w, animation, false);
+                write_binding(out, &widget, "WidgetHeight", from_h, to_h, animation, false);
+            }
+            "pulse" | "breathe" => {
+                write_binding(out, &widget, "Opacity", "150", "255", animation, true);
+            }
+            "shake" => {
+                write_binding(
+                    out,
+                    &widget,
+                    "WidgetX",
+                    "base.x - 5",
+                    "base.x + 5",
+                    animation,
+                    true,
+                );
+            }
+            _ => {}
+        }
+        let _ = writeln!(out, "        }}");
+    }
+    let _ = writeln!(out, "        Ok(())");
+    let _ = writeln!(out, "    }}");
+    let _ = writeln!(out);
 }
 
 /// Renders a [`WidgetDef::Carousel`]'s parameters as a `CarouselSpec` literal.
@@ -2167,10 +2484,23 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
         Some(t) => format!(" theme=\"{}\"", t),
         None => String::new(),
     };
+    let transition_attr = screen
+        .transition
+        .as_ref()
+        .map(|transition| {
+            format!(
+                " transition=\"{}\" transition_duration={} transition_easing=\"{}\" transition_origin=\"{}\"",
+                transition.preset,
+                transition.duration_ms,
+                transition.easing,
+                transition.origin
+            )
+        })
+        .unwrap_or_default();
     let _ = writeln!(
         &mut out,
-        "screen id=\"{}\" width={} height={}{} {{",
-        screen.id, screen.width, screen.height, theme_attr
+        "screen id=\"{}\" width={} height={}{}{} {{",
+        screen.id, screen.width, screen.height, theme_attr, transition_attr
     );
 
     for font in &screen.fonts {
@@ -2231,6 +2561,18 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
             }
             if p.row_span > 1 {
                 let _ = write!(&mut s, " row_span={}", p.row_span);
+            }
+            if let Some(animation) = &p.animation {
+                let _ = write!(
+                    &mut s,
+                    " animation=\"{}\" animation_trigger=\"{}\" animation_duration={} animation_delay={} animation_easing=\"{}\" animation_repeat={}",
+                    animation.preset,
+                    animation.trigger,
+                    animation.duration_ms,
+                    animation.delay_ms,
+                    animation.easing,
+                    animation.repeat
+                );
             }
             s
         };
@@ -2944,6 +3286,35 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         let serialized = serialize_kdl_screen(&screen);
         let parsed_again = parse_kdl_screen(&serialized).unwrap();
         assert_eq!(screen, parsed_again);
+    }
+
+    #[test]
+    fn roundtrips_widget_animation_and_screen_transition() {
+        let kdl = r#"screen id="Motion" width=320 height=240 transition="window_push" transition_duration=420 transition_easing="moook" transition_origin="right" {
+    grid cols="1fr" rows="1fr" gap=0 padding=0 {
+        button id="launch" text="Launch" animation="fade_in_up" animation_trigger="screen_enter" animation_duration=500 animation_delay=80 animation_easing="out_back" animation_repeat=2 col=0 row=0
+    }
+}"#;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        let transition = screen.transition.as_ref().unwrap();
+        assert_eq!(transition.preset, "window_push");
+        assert_eq!(transition.duration_ms, 420);
+
+        let animation = screen.grid.children[0].0.animation.as_ref().unwrap();
+        assert_eq!(animation.preset, "fade_in_up");
+        assert_eq!(animation.delay_ms, 80);
+        assert_eq!(animation.repeat, 2);
+
+        let reparsed = parse_kdl_screen(&serialize_kdl_screen(&screen)).unwrap();
+        assert_eq!(screen, reparsed);
+
+        let generated = generate_rust_code(&screen);
+        assert!(generated.contains("pub const TRANSITION: ScreenTransitionSpec"));
+        assert!(generated.contains("ScreenTransitionEffect::PushMoook"));
+        assert!(generated.contains("ScreenTransitionOrigin::Right"));
+        assert!(generated.contains("start_screen_enter_animations"));
+        assert!(generated.contains("AnimatedProperty::WidgetY"));
+        assert!(generated.contains("Easing::OutBack"));
     }
 
     #[test]
