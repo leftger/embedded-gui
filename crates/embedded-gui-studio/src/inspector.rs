@@ -1036,13 +1036,13 @@ pub fn render_inspector_panel(
         ui.horizontal(|ui| {
             ui.label("Width:");
             let mut w = screen.width as i32;
-            if ui.add(DragValue::new(&mut w).range(128..=1920)).changed() {
+            if ui.add(DragValue::new(&mut w).range(32..=1920)).changed() {
                 screen.width = w.max(32) as u32;
                 modified = true;
             }
             ui.label("Height:");
             let mut h = screen.height as i32;
-            if ui.add(DragValue::new(&mut h).range(64..=1080)).changed() {
+            if ui.add(DragValue::new(&mut h).range(32..=1080)).changed() {
                 screen.height = h.max(32) as u32;
                 modified = true;
             }
@@ -1648,4 +1648,43 @@ pub fn render_inspector_panel(
     }
 
     modified
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_gui_codegen::parse_kdl_screen;
+
+    /// `DragValue::range` clamps the existing value even without interaction,
+    /// so a range floor above a supported panel size silently rewrites the KDL.
+    #[test]
+    fn showing_the_screen_inspector_leaves_a_96x64_canvas_untouched() {
+        let screen = parse_kdl_screen(
+            r#"screen id="Home" width=96 height=64 {
+                grid cols="1fr" rows="1fr" gap=0 padding=0 {
+                    label text="X" col=0 row=0
+                }
+            }"#,
+        )
+        .expect("screen parses");
+        // `__run_test_ui` takes an `Fn`, so the mutable state lives in cells.
+        let screen = std::cell::RefCell::new(screen);
+        let selected = std::cell::RefCell::new(None);
+        let modified = std::cell::Cell::new(true);
+
+        egui::__run_test_ui(|ui| {
+            modified.set(render_inspector_panel(
+                ui,
+                &mut screen.borrow_mut(),
+                &mut selected.borrow_mut(),
+            ));
+        });
+
+        let screen = screen.into_inner();
+        assert!(
+            !modified.get(),
+            "merely showing the inspector must not edit"
+        );
+        assert_eq!((screen.width, screen.height), (96, 64));
+    }
 }

@@ -173,7 +173,7 @@ impl EmbeddedGuiStudio {
             redo_stack: Vec::new(),
         };
         app.reparse();
-        app.apply_hardware_profile();
+        app.select_target_for_screen();
         app
     }
 
@@ -268,7 +268,20 @@ impl EmbeddedGuiStudio {
     }
 
     pub fn recompile(&mut self) {
+        let previous_size = self
+            .parsed_screen
+            .as_ref()
+            .ok()
+            .map(|screen| (screen.width, screen.height));
         self.reparse();
+        let current_size = self
+            .parsed_screen
+            .as_ref()
+            .ok()
+            .map(|screen| (screen.width, screen.height));
+        if previous_size.is_some() && current_size != previous_size {
+            self.hardware_profile = HardwareProfile::Custom;
+        }
         self.stream_if_live();
     }
 
@@ -293,25 +306,16 @@ impl EmbeddedGuiStudio {
         self.stream_if_live();
     }
 
-    /// Replaces the editor contents with a newly loaded screen and re-applies
-    /// the active target.
-    ///
-    /// Every path that swaps in a whole document — presets, file opens, screen
-    /// tabs — goes through here so a screen authored for another panel cannot
-    /// resize the canvas behind the Target selector. Typing in the editor
-    /// deliberately does not, since re-serializing mid-keystroke would reformat
-    /// the source out from under the cursor.
+    /// Replaces the editor contents with a newly loaded screen. The KDL canvas
+    /// is authoritative: exact known dimensions select their matching target,
+    /// while non-standard dimensions select Custom.
     pub fn load_kdl_source(&mut self, source: String) {
         self.push_undo_snapshot();
         self.kdl_source = source;
         self.selected_widget_idx = None;
         self.reparse();
-        // Resizing already streams, so only push here when the screen was
-        // already the right size; otherwise the board flashes the oversized
-        // frame before the fitted one.
-        if !self.apply_hardware_profile() {
-            self.stream_if_live();
-        }
+        self.select_target_for_screen();
+        self.stream_if_live();
     }
 
     /// Replaces the in-memory tab set with an on-disk KDL project.
@@ -330,7 +334,7 @@ impl EmbeddedGuiStudio {
         let source = self.project_screens[0].1.clone();
         self.kdl_source = source;
         self.reparse();
-        let _ = self.apply_hardware_profile();
+        self.select_target_for_screen();
         self.stream_if_live();
     }
 
@@ -610,8 +614,8 @@ impl EmbeddedGuiStudio {
         }
     }
 
-    /// Adopts the attached panel's size as the active target once the agent
-    /// reports it, so the canvas matches the hardware without manual selection.
+    /// Records the attached panel as the active target without changing the
+    /// authored KDL canvas. Streaming fits the frame to the panel separately.
     pub fn adopt_detected_panel(&mut self) {
         let Some((fb_w, fb_h)) = self
             .device_link
@@ -628,17 +632,18 @@ impl EmbeddedGuiStudio {
             return;
         }
         self.hardware_profile = detected;
-        self.apply_hardware_profile();
         self.action_toast = Some((format!("Target set to panel {fb_w}x{fb_h}"), 2.5));
     }
 
-    /// Resizes the active screen to the selected target's panel.
-    ///
-    /// The Target selector stands for physical hardware, so it stays
-    /// authoritative rather than applying only at the moment it changes.
-    /// Without this, loading a screen authored for a different panel leaves the
-    /// canvas at that screen's size while the selector still names the old one.
-    /// Returns whether the active screen had to be resized to match the target.
+    /// Selects the profile matching the authored screen dimensions, or Custom
+    /// when the dimensions do not correspond to a canned target.
+    fn select_target_for_screen(&mut self) {
+        if let Ok(screen) = &self.parsed_screen {
+            self.hardware_profile = HardwareProfile::from_dimensions(screen.width, screen.height);
+        }
+    }
+
+    /// Explicitly resizes the active screen after the user selects a target.
     pub fn apply_hardware_profile(&mut self) -> bool {
         let Some((w, h)) = self.hardware_profile.dimensions() else {
             return false;
@@ -2709,10 +2714,14 @@ impl eframe::App for EmbeddedGuiStudio {
             .default_width(300.0)
             .show(ctx, |ui| {
                 if let Ok(mut screen) = self.parsed_screen.clone() {
+                    let previous_size = (screen.width, screen.height);
                     let mut sel_idx = self.selected_widget_idx;
                     let modified = render_inspector_panel(ui, &mut screen, &mut sel_idx);
                     self.selected_widget_idx = sel_idx;
                     if modified {
+                        if (screen.width, screen.height) != previous_size {
+                            self.hardware_profile = HardwareProfile::Custom;
+                        }
                         self.sync_from_screen(&screen);
                     }
                 } else {
@@ -2920,32 +2929,59 @@ mod tests {
     }
 
     #[test]
-    fn startup_snaps_the_first_screen_to_the_target() {
+    fn startup_selects_the_target_matching_the_first_screen() {
         let app = EmbeddedGuiStudio::new_offline();
-        assert_eq!(app.hardware_profile.dimensions(), Some((320, 240)));
-        assert_eq!(size(&app), (320, 240));
+        assert_eq!(
+            app.hardware_profile,
+            HardwareProfile::from_dimensions(size(&app).0, size(&app).1)
+        );
     }
 
     #[test]
-    fn returning_to_a_screen_keeps_the_target_size() {
+    fn returning_to_a_screen_restores_its_authored_target() {
         let mut app = EmbeddedGuiStudio::new_offline();
         app.switch_to_screen(1);
         app.switch_to_screen(0);
-        assert_eq!(size(&app), (320, 240));
+        assert_eq!(size(&app), (480, 272));
+        assert_eq!(app.hardware_profile, HardwareProfile::Stm32H7Capacitive);
     }
 
     #[test]
-    fn loading_an_oversized_preset_snaps_to_the_target() {
+    fn loading_a_preset_selects_its_matching_target() {
         let mut app = EmbeddedGuiStudio::new_offline();
-        app.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
-        assert_eq!(size(&app), (320, 240));
-    }
-
-    #[test]
-    fn a_custom_target_leaves_the_authored_size_alone() {
-        let mut app = EmbeddedGuiStudio::new_offline();
-        app.hardware_profile = HardwareProfile::Custom;
+        app.hardware_profile = HardwareProfile::Ssd1306Oled;
         app.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
         assert_eq!(size(&app), (480, 272));
+        assert_eq!(app.hardware_profile, HardwareProfile::Stm32H7Capacitive);
+    }
+
+    #[test]
+    fn loading_non_standard_dimensions_selects_custom() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        let source = SAMPLE_SSD1357.replace("width=96", "width=97");
+        app.load_kdl_source(source);
+        assert_eq!(app.hardware_profile, HardwareProfile::Custom);
+        assert_eq!(size(&app), (97, 64));
+    }
+
+    #[test]
+    fn opening_a_96x64_screen_selects_the_ssd1357_target() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        app.load_kdl_source(SAMPLE_SSD1357.to_string());
+        assert_eq!(app.hardware_profile, HardwareProfile::Ssd1357);
+        assert_eq!(size(&app), (96, 64));
+    }
+
+    #[test]
+    fn editing_kdl_dimensions_reverts_the_target_to_custom() {
+        let mut app = EmbeddedGuiStudio::new_offline();
+        app.load_kdl_source(SAMPLE_SSD1357.to_string());
+        assert_eq!(app.hardware_profile, HardwareProfile::Ssd1357);
+
+        app.kdl_source = app.kdl_source.replace("width=96", "width=95");
+        app.recompile();
+
+        assert_eq!(app.hardware_profile, HardwareProfile::Custom);
+        assert_eq!(size(&app), (95, 64));
     }
 }
