@@ -923,3 +923,47 @@ where
     }
     Ok(())
 }
+
+/// Composite a captured framebuffer into `target`, squashed vertically about
+/// the buffer's own horizontal center line by `scale_y` (`1.0` = full height,
+/// approaching `0.0` = collapsed to a hairline) and then shifted by
+/// `y_shift_px`. Rows outside the visible squashed band are left untouched
+/// (the caller should have already cleared `target` to a background color).
+///
+/// This is a true resample of the source content — unlike a clip-based effect
+/// (e.g. [`ScreenTransitionEffect::RoundFlipLeft`]), the pixels themselves
+/// visually compress, producing a card-flip / page-turn look rather than a
+/// shrinking window onto unscaled content. Sourced by row (nearest-neighbor)
+/// rather than per-pixel, since the scale is vertical-only.
+pub fn composite_framebuffer_scaled_y<D>(
+    target: &mut D,
+    source: &[Rgb565],
+    width: usize,
+    height: usize,
+    scale_y: f32,
+    y_shift_px: i32,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if source.len() < width * height {
+        return Ok(());
+    }
+    let scale_y = scale_y.max(0.001);
+    let src_center = height as f32 / 2.0;
+    for dest_y in 0..height as i32 {
+        let src_y_f = src_center + (dest_y - y_shift_px) as f32 / scale_y - src_center / scale_y;
+        if src_y_f < 0.0 || src_y_f > (height - 1) as f32 {
+            continue;
+        }
+        let src_y = src_y_f.round() as usize;
+        let row_start = src_y * width;
+        let row = &source[row_start..row_start + width];
+        let rect = embedded_graphics_core::primitives::Rectangle::new(
+            embedded_graphics_core::geometry::Point::new(0, dest_y),
+            embedded_graphics_core::geometry::Size::new(width as u32, 1),
+        );
+        let _ = target.fill_contiguous(&rect, row.iter().copied());
+    }
+    Ok(())
+}

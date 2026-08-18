@@ -131,7 +131,7 @@ pub use screen::{
 pub use screen_transition::{
     ActiveScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
     ScreenTransitionSample, ScreenTransitionSpec, composite_framebuffer_fade,
-    fade_outgoing_opacity, render_transition_pair,
+    composite_framebuffer_scaled_y, fade_outgoing_opacity, render_transition_pair,
 };
 pub use state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState};
 pub use style::{

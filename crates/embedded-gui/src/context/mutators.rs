@@ -1549,6 +1549,50 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.mark_subtree_dirty(id)
     }
 
+    /// Overrides a widget's ink color, e.g. a `Label`/`Button`'s glyph color
+    /// (`render_label`/`render_button` draw with `style.text`, not `accent`).
+    /// Use this for runtime-conditional text color (status/state-dependent
+    /// labels) instead of `set_widget_accent`, which only affects the
+    /// focused/pressed accent swatch.
+    pub fn set_widget_text_color(&mut self, id: WidgetId, color: Rgb565) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.text = color;
+        node.style.focused.text = color;
+        node.style.pressed.text = color;
+        node.style.disabled.text = color;
+        self.mark_subtree_dirty(id)
+    }
+
+    /// Overrides a widget's `foreground` color, e.g. a `ProgressBar`/`Meter`'s
+    /// fill color in its normal (non-focused) state (`render_progress` draws
+    /// the fill with `style.foreground`, falling back to `accent` only when
+    /// `VisualState::Focused`). Use this to recolor a progress fill at
+    /// runtime (e.g. a battery gauge's low/medium/high threshold color).
+    pub fn set_widget_foreground(&mut self, id: WidgetId, color: Rgb565) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.foreground = color;
+        node.style.focused.foreground = color;
+        node.style.pressed.foreground = color;
+        node.style.disabled.foreground = color;
+        self.mark_subtree_dirty(id)
+    }
+
+    /// Overrides a widget's `background` fill (e.g. a `ProgressBar`'s track
+    /// color, or a `Label`/`Panel`'s backing fill). Pass `None` for a
+    /// transparent background, matching the `Style::background` field.
+    pub fn set_widget_background(
+        &mut self,
+        id: WidgetId,
+        background: Option<Rgb565>,
+    ) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style.normal.background = background;
+        node.style.focused.background = background;
+        node.style.pressed.background = background;
+        node.style.disabled.background = background;
+        self.mark_subtree_dirty(id)
+    }
+
     pub fn set_widget_parent(
         &mut self,
         id: WidgetId,
