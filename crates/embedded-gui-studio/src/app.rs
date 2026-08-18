@@ -1173,21 +1173,21 @@ impl EmbeddedGuiStudio {
             if let Some(_sel_idx) = self.selected_widget_idx {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("📐 Align Selected:").strong());
-                    if ui.button("⭰ Left").clicked() {
+                    if ui.button("◀ Left").clicked() {
                         self.align_selected_widget(0, None);
                     }
-                    if ui.button("⮀ Center").clicked() {
+                    if ui.button("⏺ Center").clicked() {
                         let center_col = screen.grid.cols.len().saturating_sub(1) / 2;
                         self.align_selected_widget(center_col, None);
                     }
-                    if ui.button("⭲ Right").clicked() {
+                    if ui.button("▶ Right").clicked() {
                         let right_col = screen.grid.cols.len().saturating_sub(1);
                         self.align_selected_widget(right_col, None);
                     }
-                    if ui.button("⭱ Top").clicked() {
+                    if ui.button("▲ Top").clicked() {
                         self.align_selected_widget_row(0);
                     }
-                    if ui.button("⭳ Bottom").clicked() {
+                    if ui.button("▼ Bottom").clicked() {
                         let bottom_row = screen.grid.rows.len().saturating_sub(1);
                         self.align_selected_widget_row(bottom_row);
                     }
@@ -1233,8 +1233,16 @@ impl EmbeddedGuiStudio {
         let preview_texture_id = self.preview_texture.as_ref().map(TextureHandle::id);
 
         egui::ScrollArea::both().show(ui, |ui| {
+            let margin_left = 42.0;
+            let margin_top = 32.0;
+            let margin_right = 42.0;
+            let margin_bottom = 40.0;
+
             let (response, painter) = ui.allocate_painter(
-                Vec2::new(screen_w + 32.0, screen_h + 32.0),
+                Vec2::new(
+                    screen_w + margin_left + margin_right,
+                    screen_h + margin_top + margin_bottom,
+                ),
                 egui::Sense::click_and_drag(),
             );
             let mut canvas_offset = Vec2::ZERO;
@@ -1261,7 +1269,7 @@ impl EmbeddedGuiStudio {
                     _ => {}
                 }
             }
-            let origin = response.rect.min + Vec2::new(16.0, 16.0) + canvas_offset;
+            let origin = response.rect.min + Vec2::new(margin_left, margin_top) + canvas_offset;
             let display_rect = Rect::from_min_size(
                 origin,
                 Vec2::new(screen_w * transition_scale, screen_h * transition_scale),
@@ -1870,17 +1878,32 @@ impl EmbeddedGuiStudio {
                         placement.col_span,
                         placement.row_span
                     );
-                    let badge_pos = Pos2::new(widget_rect.min.x, widget_rect.min.y - 14.0);
+                    let badge_font = FontId::proportional(9.5);
+                    let badge_galley = painter.layout_no_wrap(
+                        badge_text,
+                        badge_font,
+                        Color32::WHITE,
+                    );
+                    let badge_w = (badge_galley.size().x + 12.0).max(100.0);
+                    let badge_h = 16.0;
+                    let badge_y = if widget_rect.min.y - 18.0 < display_rect.min.y {
+                        widget_rect.min.y + 4.0
+                    } else {
+                        widget_rect.min.y - 18.0
+                    };
+                    let badge_pos = Pos2::new(
+                        widget_rect.min.x.clamp(display_rect.min.x, (display_rect.max.x - badge_w).max(display_rect.min.x)),
+                        badge_y,
+                    );
+                    let badge_rect = Rect::from_min_size(badge_pos, Vec2::new(badge_w, badge_h));
                     painter.rect_filled(
-                        Rect::from_min_size(badge_pos, Vec2::new(160.0, 14.0)),
+                        badge_rect,
                         CornerRadius::same(3),
                         Color32::from_rgb(30, 80, 180),
                     );
-                    painter.text(
-                        Pos2::new(badge_pos.x + 4.0, badge_pos.y + 2.0),
-                        egui::Align2::LEFT_TOP,
-                        badge_text,
-                        FontId::proportional(9.0),
+                    painter.galley(
+                        Pos2::new(badge_pos.x + 6.0, badge_pos.y + 2.0),
+                        badge_galley,
                         Color32::WHITE,
                     );
                 }
@@ -1899,7 +1922,7 @@ impl EmbeddedGuiStudio {
 
             // 📏 Canvas Pixel Rulers & Coordinates Crosshair HUD
             if self.show_rulers {
-                // Top ruler ticks
+                // Top ruler ticks & coordinates
                 let mut x_tick = 0.0;
                 while x_tick <= screen_w {
                     let mark_x = display_rect.min.x + x_tick;
@@ -1917,14 +1940,14 @@ impl EmbeddedGuiStudio {
                             Pos2::new(mark_x, display_rect.min.y - 10.0),
                             egui::Align2::CENTER_BOTTOM,
                             format!("{:.0}", x_tick / self.preview_zoom),
-                            FontId::proportional(8.0),
-                            Color32::from_rgb(120, 135, 155),
+                            FontId::proportional(8.5),
+                            Color32::from_rgb(140, 155, 175),
                         );
                     }
                     x_tick += 10.0 * self.preview_zoom;
                 }
 
-                // Left ruler ticks
+                // Left ruler ticks & coordinates
                 let mut y_tick = 0.0;
                 while y_tick <= screen_h {
                     let mark_y = display_rect.min.y + y_tick;
@@ -1942,8 +1965,8 @@ impl EmbeddedGuiStudio {
                             Pos2::new(display_rect.min.x - 10.0, mark_y),
                             egui::Align2::RIGHT_CENTER,
                             format!("{:.0}", y_tick / self.preview_zoom),
-                            FontId::proportional(8.0),
-                            Color32::from_rgb(120, 135, 155),
+                            FontId::proportional(8.5),
+                            Color32::from_rgb(140, 155, 175),
                         );
                     }
                     y_tick += 10.0 * self.preview_zoom;
@@ -1954,22 +1977,41 @@ impl EmbeddedGuiStudio {
             if let Some(pos) = pointer_pos {
                 if display_rect.contains(pos) {
                     let px_x = ((pos.x - display_rect.min.x) / self.preview_zoom)
-                        .clamp(0.0, screen.width as f32) as i32;
+                        .clamp(0.0, screen.width.saturating_sub(1) as f32) as i32;
                     let px_y = ((pos.y - display_rect.min.y) / self.preview_zoom)
-                        .clamp(0.0, screen.height as f32) as i32;
+                        .clamp(0.0, screen.height.saturating_sub(1) as f32) as i32;
                     self.cursor_screen_coords = Some((px_x, px_y));
 
-                    let hud_pos = Pos2::new(display_rect.max.x - 90.0, display_rect.max.y + 8.0);
+                    let hud_text = format!("📍 X:{} Y:{}", px_x, px_y);
+                    let hud_font = FontId::monospace(9.5);
+                    let text_galley = painter.layout_no_wrap(
+                        hud_text,
+                        hud_font,
+                        Color32::from_rgb(120, 220, 160),
+                    );
+                    let badge_w = text_galley.size().x + 16.0;
+                    let badge_h = 20.0;
+                    let badge_x = (display_rect.max.x - badge_w).max(display_rect.min.x);
+                    let badge_y = display_rect.max.y + 8.0;
+                    let hud_rect = Rect::from_min_size(
+                        Pos2::new(badge_x, badge_y),
+                        Vec2::new(badge_w, badge_h),
+                    );
+
                     painter.rect_filled(
-                        Rect::from_min_size(hud_pos, Vec2::new(90.0, 16.0)),
-                        CornerRadius::same(3),
+                        hud_rect,
+                        CornerRadius::same(4),
                         Color32::from_rgb(20, 24, 30),
                     );
-                    painter.text(
-                        Pos2::new(hud_pos.x + 4.0, hud_pos.y + 2.0),
-                        egui::Align2::LEFT_TOP,
-                        format!("📍 X:{} Y:{}", px_x, px_y),
-                        FontId::monospace(9.0),
+                    painter.rect_stroke(
+                        hud_rect,
+                        CornerRadius::same(4),
+                        Stroke::new(1.0_f32, Color32::from_rgb(50, 60, 75)),
+                        StrokeKind::Inside,
+                    );
+                    painter.galley(
+                        Pos2::new(hud_rect.min.x + 8.0, hud_rect.min.y + 4.0),
+                        text_galley,
                         Color32::from_rgb(120, 220, 160),
                     );
                 } else {
@@ -2835,6 +2877,17 @@ impl eframe::App for EmbeddedGuiStudio {
                     ui.label(format!("Nodes: {:.2}KB", static_ram_kb));
                     ui.separator();
                     ui.label(format!("SPI 60FPS: {:.2}MB/s", spi_mb_sec));
+                    ui.separator();
+
+                    if let Some((cx, cy)) = self.cursor_screen_coords {
+                        ui.label(
+                            egui::RichText::new(format!("📍 Cursor: X:{cx} Y:{cy}"))
+                                .color(Color32::from_rgb(120, 220, 160))
+                                .monospace(),
+                        );
+                    } else {
+                        ui.label(egui::RichText::new("📍 Cursor: --:--").weak().monospace());
+                    }
                     ui.separator();
 
                     // Hardware Bridge controls

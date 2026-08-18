@@ -23,6 +23,52 @@ mod types;
 use app::EmbeddedGuiStudio;
 use eframe::egui;
 
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    let candidate_paths = [
+        // Linux (Noto, DejaVu, FreeFonts)
+        "/usr/share/fonts/truetype/noto/NotoSansSymbols-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansMath-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+        // macOS
+        "/System/Library/Fonts/Apple Symbols.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/SFNS.ttf",
+        // Windows
+        "C:\\Windows\\Fonts\\seguisym.ttf",
+        "C:\\Windows\\Fonts\\seguiemj.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+    ];
+
+    let mut added_any = false;
+    for (i, path) in candidate_paths.iter().enumerate() {
+        if let Ok(bytes) = std::fs::read(path) {
+            let font_key = format!("fallback_symbol_font_{i}");
+            fonts.font_data.insert(
+                font_key.clone(),
+                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+            );
+            if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                family.push(font_key.clone());
+            }
+            if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+                family.push(font_key);
+            }
+            added_any = true;
+        }
+    }
+
+    if added_any {
+        ctx.set_fonts(fonts);
+    }
+}
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -35,6 +81,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Embedded GUI Studio",
         options,
-        Box::new(|_cc| Ok(Box::new(EmbeddedGuiStudio::default()))),
+        Box::new(|cc| {
+            setup_custom_fonts(&cc.egui_ctx);
+            Ok(Box::new(EmbeddedGuiStudio::default()))
+        }),
     )
 }
