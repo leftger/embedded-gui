@@ -13,7 +13,8 @@ A cross-platform desktop & web GUI studio for declarative KDL GUI editing, 60 FP
 - **⏱ Animation Controls**: Live playback, reset, and timeline controls for transitions and widgets supported by the real framebuffer renderer.
 - **🦀 Generated Rust**: Instant, zero-allocation `#![no_std]` Rust code generator preview with one-click clipboard copy.
 - **🌲 AST Inspector**: Structured view of screen metrics, grid tracks, and placed widget hierarchy.
-- **Starter Presets**: Built-in starter templates (Oscilloscope, Motion Kitchen Sink, Smart Thermostat, Sensor Dashboard).
+- **Starter Presets**: Built-in starter templates (Oscilloscope, Motion Kitchen Sink, Smart Thermostat, Sensor Dashboard, SSD1357 96×64).
+- **📁 KDL Projects**: Open/save a multi-screen project directory (`project.kdl` + `screens/*.kdl`) for firmware check-in; see [`docs/kdl-projects.md`](../../docs/kdl-projects.md).
 - **🖥 USB Live Display**: Stream the rendered screen to real hardware over native USB-HS bulk. Studio renders the screen through the actual `embedded-gui` `GuiContext` into an RGB565 framebuffer, diffs it, and pushes only changed tiles to a flashed display agent — the board updates in real time as you edit, with no reflash.
 
 ## Running Locally
@@ -42,5 +43,6 @@ Notes:
 - Streamed colors follow the selected **Theme**: KDL style tokens (`accent`, `success`, `danger`, `inverted`, `card`, `bold`) resolve against the same palette the canvas draws with, converted to RGB565. Changing the theme while **Live** is checked repaints the board.
 - The canvas and USB transport consume the same RGB565 render path. In Interactive mode (where editor overlays are hidden), the canvas represents the exact pixels submitted to the display agent.
 - Every `WidgetDef` variant is rendered: core controls go through `GuiContext`, while status bars, pickers, indicators, busy wheels, and vector/shape primitives are painted via `RenderCtx` into the same framebuffer. Plotters use a host-generated demo waveform when KDL only specifies a mode.
-- The transport follows the proven STM32WBA65 Markham design: vendor class (`0xFF`), 512-byte native bulk endpoints, 1024-byte OUT buffering, and direct host USB access rather than a virtual COM port. The reference WBA65 agent pipelines decoded tiles through a two-slot queue to a dedicated GPDMA SPI task, so USB can receive the next tile while the current tile is clocked into the ILI9341. The SPI panel refresh remains the limiting factor, not USB.
-- On-device widget interaction (touch) is an optional protocol phase (`DeviceMsg::Touch`) — the agent can report touches and Studio can inject them into the host `GuiContext`.
+- The transport uses a vendor class (`0xFF`) with 512-byte native bulk endpoints, 1024-byte OUT buffering, and direct host USB access rather than a virtual COM port. The reference WBA65 agent pipelines decoded tiles through a two-slot queue to a dedicated GPDMA SPI task, so USB can receive the next tile while the current tile is clocked into the ILI9341. The SPI panel refresh remains the limiting factor, not USB.
+- Compact targets such as **SSD1357 (96×64)** letterbox onto a larger agent panel while you keep editing at native OLED size — see [`docs/kdl-projects.md`](../../docs/kdl-projects.md).
+- On-glass widget interaction (touch) is supported when the agent uplinks `Touch` samples; Live Interactive injects them into the same hit-testing path as the mouse.

@@ -1,0 +1,4 @@
+project name="ssd1357-demo" panel="ssd1357" theme="dark" {
+    screen id="Status" file="screens/status.kdl"
+    screen id="Menu" file="screens/menu.kdl"
+}

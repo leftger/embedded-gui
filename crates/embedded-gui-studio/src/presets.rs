@@ -122,3 +122,16 @@ screen id="OledScreen" width=128 height=64 {
     }
 }
 "#;
+
+/// Compact RGB OLED layout sized for an SSD1357 96×64 panel.
+pub const SAMPLE_SSD1357: &str = r#"screen id="Status" width=96 height=64 {
+    grid cols="1fr" rows="10px 10px 10px 10px 10px 1fr" gap=0 padding=2 {
+        label id="title" text="FUNC TEST" style="accent" col=0 row=0
+        label id="version" text="v0.0.0" style="bold" col=0 row=1
+        label id="shots" text="Shots: 0" col=0 row=2
+        label id="usb" text="USB: ---" col=0 row=3
+        label id="charge" text="" col=0 row=4
+        progress id="battery" value=0.85 col=0 row=5
+    }
+}
+"#;

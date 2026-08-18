@@ -12,6 +12,7 @@ mod inspector;
 mod layout;
 mod live_render;
 mod presets;
+mod project;
 mod syntax;
 mod theme;
 mod types;

@@ -1,0 +1,7 @@
+screen id="Menu" width=96 height=64 {
+    grid cols="1fr" rows="14px 1fr 12px" gap=0 padding=0 {
+        label id="header" text="SETTINGS" style="accent" col=0 row=0
+        label id="item" text="Selected item" col=0 row=1
+        label id="hint" text="hold to edit" style="dim" col=0 row=2
+    }
+}

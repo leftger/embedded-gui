@@ -1411,6 +1411,7 @@ dependencies = [
  "embedded-gui-codegen",
  "embedded-gui-live",
  "flate2",
+ "kdl",
  "nusb",
  "rfd",
  "zip",

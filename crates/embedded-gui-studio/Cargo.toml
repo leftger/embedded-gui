@@ -18,6 +18,7 @@ embedded-gui = { workspace = true }
 embedded-gui-codegen = { workspace = true }
 embedded-gui-live = { workspace = true, features = ["std"] }
 embedded-graphics-core = { workspace = true }
+kdl = { workspace = true }
 eframe = { version = "0.31", default-features = true }
 egui_extras = { version = "0.31", features = ["syntect"] }
 nusb = "0.2"

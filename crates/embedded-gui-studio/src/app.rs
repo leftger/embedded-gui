@@ -45,6 +45,11 @@ pub struct EmbeddedGuiStudio {
     pub project_screens: Vec<(String, String)>,
     pub active_screen_idx: usize,
     pub transition_state: Option<ScreenTransition>,
+    /// Root directory of the open on-disk project, if any.
+    pub project_root: Option<std::path::PathBuf>,
+    pub project_name: String,
+    /// Relative screen paths from `project.kdl`, parallel to `project_screens`.
+    pub project_screen_files: Vec<String>,
 
     // Hardware Bridge
     pub hardware_bridge: crate::bridge::HardwareBridge,
@@ -141,6 +146,9 @@ impl EmbeddedGuiStudio {
             project_screens,
             active_screen_idx: 0,
             transition_state: None,
+            project_root: None,
+            project_name: "Untitled".to_string(),
+            project_screen_files: Vec::new(),
             hardware_bridge: crate::bridge::HardwareBridge::new(9080),
             device_link: None,
             device_ports: Vec::new(),
@@ -302,6 +310,61 @@ impl EmbeddedGuiStudio {
         // frame before the fitted one.
         if !self.apply_hardware_profile() {
             self.stream_if_live();
+        }
+    }
+
+    /// Replaces the in-memory tab set with an on-disk KDL project.
+    pub fn load_project(&mut self, project: crate::project::GuiProject) {
+        self.push_undo_snapshot();
+        self.project_root = Some(project.root);
+        self.project_name = project.name;
+        self.project_screen_files = project.screen_files;
+        self.project_screens = project.screens;
+        self.active_screen_idx = 0;
+        self.selected_widget_idx = None;
+        if let Some(theme) = project.theme {
+            self.display_theme = theme;
+        }
+        self.hardware_profile = project.hardware_profile;
+        let source = self.project_screens[0].1.clone();
+        self.kdl_source = source;
+        self.reparse();
+        let _ = self.apply_hardware_profile();
+        self.stream_if_live();
+    }
+
+    /// Flushes the active editor into `project_screens` and writes the project.
+    pub fn save_project_to_disk(&mut self) -> Result<std::path::PathBuf, String> {
+        if self.active_screen_idx < self.project_screens.len() {
+            self.project_screens[self.active_screen_idx].1 = self.kdl_source.clone();
+        }
+        let files = if self.project_screen_files.len() == self.project_screens.len() {
+            Some(self.project_screen_files.as_slice())
+        } else {
+            None
+        };
+        if let Some(root) = self.project_root.clone() {
+            crate::project::save_project_to(
+                &root,
+                &self.project_name,
+                self.hardware_profile,
+                self.display_theme,
+                &self.project_screens,
+                files,
+            )
+            .map_err(|e| e.0)
+        } else {
+            crate::project::save_project_dialog(
+                &self.project_name,
+                self.hardware_profile,
+                self.display_theme,
+                &self.project_screens,
+            )
+            .ok_or_else(|| "Save cancelled".to_string())?
+            .map_err(|e| e.0)
+            .inspect(|path| {
+                self.project_root = path.parent().map(|p| p.to_path_buf());
+            })
         }
     }
 
@@ -582,6 +645,11 @@ impl EmbeddedGuiStudio {
                         &mut self.hardware_profile,
                         HardwareProfile::Ssd1306Oled,
                         HardwareProfile::Ssd1306Oled.name(),
+                    );
+                    ui.selectable_value(
+                        &mut self.hardware_profile,
+                        HardwareProfile::Ssd1357,
+                        HardwareProfile::Ssd1357.name(),
                     );
                 });
 
@@ -1643,6 +1711,56 @@ impl eframe::App for EmbeddedGuiStudio {
                 ui.separator();
 
                 ui.menu_button("📁 File", |ui| {
+                    if ui.button("📂 Open Project…").clicked() {
+                        if let Some(result) = crate::project::open_project_dialog() {
+                            match result {
+                                Ok(project) => {
+                                    let name = project.name.clone();
+                                    let n = project.screens.len();
+                                    self.load_project(project);
+                                    self.action_toast = Some((
+                                        format!("Opened project '{name}' ({n} screens)"),
+                                        2.5,
+                                    ));
+                                }
+                                Err(err) => {
+                                    self.action_toast =
+                                        Some((format!("Open project: {err}"), 3.0));
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("💾 Save Project").clicked() {
+                        match self.save_project_to_disk() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!("Saved project to {}", path.display()),
+                                    2.5,
+                                ));
+                            }
+                            Err(err) => {
+                                self.action_toast = Some((format!("Save project: {err}"), 3.0));
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("💾 Save Project As…").clicked() {
+                        self.project_root = None;
+                        match self.save_project_to_disk() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!("Saved project to {}", path.display()),
+                                    2.5,
+                                ));
+                            }
+                            Err(err) => {
+                                self.action_toast = Some((format!("Save project: {err}"), 3.0));
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("📂 Open .kdl File... (Ctrl+O)").clicked() {
                         if let Some((path, content)) = crate::exporter::open_kdl_file_dialog() {
                             self.load_kdl_source(content);
@@ -2016,10 +2134,16 @@ impl eframe::App for EmbeddedGuiStudio {
                 });
 
                 ui.menu_button("📄 Presets", |ui| {
-                    if ui.button("📟 Monochrome OLED Display (128×64)").clicked() {
+                    if ui.button("📟 SSD1306 OLED (128×64 Mono)").clicked() {
                         self.display_theme = DisplayTheme::MonochromeOled;
                         self.hardware_profile = HardwareProfile::Ssd1306Oled;
                         self.load_kdl_source(SAMPLE_SSD1306_OLED.to_string());
+                        ui.close_menu();
+                    }
+                    if ui.button("📟 SSD1357 OLED (96×64 RGB)").clicked() {
+                        self.display_theme = DisplayTheme::DarkTft;
+                        self.hardware_profile = HardwareProfile::Ssd1357;
+                        self.load_kdl_source(SAMPLE_SSD1357.to_string());
                         ui.close_menu();
                     }
                     ui.separator();

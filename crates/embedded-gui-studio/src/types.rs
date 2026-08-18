@@ -39,6 +39,8 @@ pub enum HardwareProfile {
     RoundWearableWatch,
     Waveshare43,
     Ssd1306Oled,
+    /// SSD1357 RGB OLED, typically 96×64 (common wearable / compact module size).
+    Ssd1357,
 }
 
 impl HardwareProfile {
@@ -51,6 +53,7 @@ impl HardwareProfile {
             Self::RoundWearableWatch => Some((240, 240)),
             Self::Waveshare43 => Some((800, 480)),
             Self::Ssd1306Oled => Some((128, 64)),
+            Self::Ssd1357 => Some((96, 64)),
         }
     }
 
@@ -72,7 +75,50 @@ impl HardwareProfile {
             Self::RoundWearableWatch => "Round Watch (240×240 GC9A01)".to_string(),
             Self::Waveshare43 => "Waveshare 4.3\" (800×480 RGB565)".to_string(),
             Self::Ssd1306Oled => "SSD1306 OLED (128×64 Mono 1-bit)".to_string(),
+            Self::Ssd1357 => "SSD1357 OLED (96×64 RGB565)".to_string(),
         }
+    }
+
+    /// Stable slug for `project.kdl` `panel="..."` attributes.
+    pub fn panel_slug(self) -> Option<&'static str> {
+        match self {
+            Self::Esp32S3Box => Some("esp32_s3_box"),
+            Self::Stm32H7Capacitive => Some("stm32_h7_cap"),
+            Self::RoundWearableWatch => Some("gc9a01"),
+            Self::Waveshare43 => Some("waveshare_43"),
+            Self::Ssd1306Oled => Some("ssd1306"),
+            Self::Ssd1357 => Some("ssd1357"),
+            Self::Custom | Self::Detected { .. } => None,
+        }
+    }
+
+    pub fn from_panel_slug(slug: &str) -> Option<Self> {
+        match slug.to_ascii_lowercase().as_str() {
+            "esp32_s3_box" | "esp32s3box" => Some(Self::Esp32S3Box),
+            "stm32_h7_cap" | "stm32h7" => Some(Self::Stm32H7Capacitive),
+            "gc9a01" | "round_watch" => Some(Self::RoundWearableWatch),
+            "waveshare_43" | "waveshare43" => Some(Self::Waveshare43),
+            "ssd1306" => Some(Self::Ssd1306Oled),
+            "ssd1357" => Some(Self::Ssd1357),
+            _ => None,
+        }
+    }
+
+    /// Picks a canned profile when dimensions match exactly; otherwise Custom.
+    pub fn from_dimensions(width: u32, height: u32) -> Self {
+        for candidate in [
+            Self::Ssd1357,
+            Self::Ssd1306Oled,
+            Self::Esp32S3Box,
+            Self::RoundWearableWatch,
+            Self::Stm32H7Capacitive,
+            Self::Waveshare43,
+        ] {
+            if candidate.dimensions() == Some((width, height)) {
+                return candidate;
+            }
+        }
+        Self::Custom
     }
 }
 
