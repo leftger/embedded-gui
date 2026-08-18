@@ -93,6 +93,10 @@ pub struct EmbeddedGuiStudio {
     /// of the monitor/egui repaint rate.
     pub animation_stream_accumulator: f32,
 
+    // Simulated Signals & Reactive State
+    pub mock_playground: crate::playground::MockPlaygroundState,
+    pub preview_visual_state: Option<embedded_gui::style::VisualState>,
+
     // Undo / Redo history
     pub undo_stack: Vec<String>,
     pub redo_stack: Vec<String>,
@@ -169,6 +173,8 @@ impl EmbeddedGuiStudio {
             board_touch_was_pressed: false,
             interaction_flash: None,
             animation_stream_accumulator: 0.0,
+            mock_playground: crate::playground::MockPlaygroundState::default(),
+            preview_visual_state: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
         };
@@ -210,6 +216,20 @@ impl EmbeddedGuiStudio {
             self.undo_stack.push(self.kdl_source.clone());
             self.kdl_source = next;
             self.recompile();
+        }
+    }
+
+    pub fn insert_widget_snippet(&mut self, snippet: &str) {
+        self.push_undo_snapshot();
+        if let Some(last_brace_idx) = self.kdl_source.rfind('}') {
+            let mut new_kdl = self.kdl_source[..last_brace_idx].to_string();
+            new_kdl.push_str(snippet);
+            new_kdl.push_str(&self.kdl_source[last_brace_idx..]);
+            self.load_kdl_source(new_kdl);
+        } else {
+            let mut new_kdl = self.kdl_source.clone();
+            new_kdl.push_str(snippet);
+            self.load_kdl_source(new_kdl);
         }
     }
 
@@ -942,6 +962,42 @@ impl EmbeddedGuiStudio {
                         "Cubic Bezier (Custom)",
                     );
                 });
+
+            ui.separator();
+
+            // Visual State Preview Selector
+            ui.label("State:");
+            egui::ComboBox::from_id_salt("state_preview_combo")
+                .selected_text(match self.preview_visual_state {
+                    None => "Auto State",
+                    Some(embedded_gui::style::VisualState::Normal) => "Normal",
+                    Some(embedded_gui::style::VisualState::Pressed) => "Pressed",
+                    Some(embedded_gui::style::VisualState::Focused) => "Focused",
+                    Some(embedded_gui::style::VisualState::Disabled) => "Disabled",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.preview_visual_state, None, "Auto State");
+                    ui.selectable_value(
+                        &mut self.preview_visual_state,
+                        Some(embedded_gui::style::VisualState::Normal),
+                        "Normal",
+                    );
+                    ui.selectable_value(
+                        &mut self.preview_visual_state,
+                        Some(embedded_gui::style::VisualState::Pressed),
+                        "Pressed",
+                    );
+                    ui.selectable_value(
+                        &mut self.preview_visual_state,
+                        Some(embedded_gui::style::VisualState::Focused),
+                        "Focused",
+                    );
+                    ui.selectable_value(
+                        &mut self.preview_visual_state,
+                        Some(embedded_gui::style::VisualState::Disabled),
+                        "Disabled",
+                    );
+                });
         });
 
         // Interactive Curve Visualizer Bar
@@ -1008,6 +1064,44 @@ impl EmbeddedGuiStudio {
             }
         });
         ui.separator();
+
+        // 🧰 Quick-Insert Widget Palette
+        if self.mode == StudioMode::Design {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("🧰 Insert:").strong());
+                let mut snippet_to_insert = None;
+                if ui.button("🔘 Button").clicked() {
+                    snippet_to_insert = Some("        button text=\"NEW BTN\"\n");
+                }
+                if ui.button("☑ Toggle").clicked() {
+                    snippet_to_insert = Some("        toggle checked=true\n");
+                }
+                if ui.button("🎚 Slider").clicked() {
+                    snippet_to_insert = Some("        slider min=0 max=100 value=50\n");
+                }
+                if ui.button("🔢 Spinbox").clicked() {
+                    snippet_to_insert = Some("        spinbox min=0 max=100 value=25\n");
+                }
+                if ui.button("🧭 Radial Scale").clicked() {
+                    snippet_to_insert =
+                        Some("        scale mode=\"radial\" min=0 max=100 value=75\n");
+                }
+                if ui.button("📊 Progress").clicked() {
+                    snippet_to_insert = Some("        progress value=60\n");
+                }
+                if ui.button("🎠 Carousel").clicked() {
+                    snippet_to_insert = Some("        carousel count=5 selected=0\n");
+                }
+                if ui.button("🏷 Banner").clicked() {
+                    snippet_to_insert = Some("        banner text=\"HEADER TITLE\"\n");
+                }
+
+                if let Some(snippet) = snippet_to_insert {
+                    self.insert_widget_snippet(snippet);
+                }
+            });
+            ui.separator();
+        }
 
         let screen_w = screen.width as f32 * self.preview_zoom;
         let screen_h = screen.height as f32 * self.preview_zoom;
@@ -1728,6 +1822,10 @@ impl eframe::App for EmbeddedGuiStudio {
 
         // Handle Timers
         let dt = ctx.input(|i| i.stable_dt);
+        self.mock_playground.tick(dt);
+        if self.mock_playground.lfo_enabled {
+            ctx.request_repaint();
+        }
         if self.copied_toast_timer > 0.0 {
             self.copied_toast_timer -= dt;
         }
@@ -2757,6 +2855,16 @@ impl eframe::App for EmbeddedGuiStudio {
                     StudioTab::AstHierarchy,
                     "🌲 AST Inspector",
                 );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    StudioTab::Profiler,
+                    "⚡ Resource Profiler",
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    StudioTab::SignalPlayground,
+                    "🎮 Signal Playground",
+                );
             });
             ui.separator();
 
@@ -2912,6 +3020,27 @@ impl eframe::App for EmbeddedGuiStudio {
                         });
                     } else {
                         ui.label("No AST available.");
+                    }
+                }
+                StudioTab::Profiler => {
+                    if let Ok(screen) = &self.parsed_screen {
+                        crate::profiler::render_profiler_panel(ui, screen, &self.hardware_profile);
+                    } else {
+                        ui.label("Fix KDL syntax errors to analyze memory profile.");
+                    }
+                }
+                StudioTab::SignalPlayground => {
+                    if let Ok(mut screen) = self.parsed_screen.clone() {
+                        let mutated = crate::playground::render_playground_panel(
+                            ui,
+                            &mut self.mock_playground,
+                            &mut screen,
+                        );
+                        if mutated {
+                            self.sync_from_screen(&screen);
+                        }
+                    } else {
+                        ui.label("Fix KDL syntax errors to use Signal Playground.");
                     }
                 }
             }

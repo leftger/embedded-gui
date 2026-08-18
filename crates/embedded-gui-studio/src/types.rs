@@ -7,6 +7,8 @@ pub enum StudioTab {
     AstHierarchy,
     AssetBrowser,
     ScreenFlow,
+    Profiler,
+    SignalPlayground,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
