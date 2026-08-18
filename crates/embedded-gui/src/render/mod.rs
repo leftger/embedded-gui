@@ -1,3 +1,4 @@
+pub mod accelerator;
 pub mod band;
 pub mod compositor;
 pub mod line_buffer;
@@ -5,6 +6,7 @@ pub mod stroke;
 pub mod task;
 pub mod text_style;
 
+pub use accelerator::{Hardware2DAccelerator, Software2DAccelerator};
 pub use band::PartialBandBuffer;
 pub(crate) use compositor::apply_blend_mode;
 pub use compositor::{
@@ -13,8 +15,8 @@ pub use compositor::{
 };
 pub use line_buffer::{LineBufferRenderer, ScanlineTarget};
 pub use stroke::{
-    AntiAliasMode, PathVerb, RenderQuality, StrokeCap, StrokeJoin, StrokeStyle, Transform2D,
-    VectorPath,
+    AntiAliasMode, PathVerb, RenderQuality, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle,
+    Transform2D, VectorPath,
 };
 pub use task::{DrawTask, DrawTaskQueue, DrawUnit, SoftwareDrawUnit, dispatch_draw_tasks};
 pub use text_style::{

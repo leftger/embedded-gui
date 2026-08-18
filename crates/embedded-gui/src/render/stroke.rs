@@ -21,12 +21,38 @@ pub enum AntiAliasMode {
 pub enum StrokeCap {
     Butt,
     Round,
+    Square,
+    Triangle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StrokeJoin {
     Miter,
     Round,
+    Bevel,
+}
+
+/// Zero-allocation dashed stroke pattern configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StrokeDash {
+    pub dash_len: u8,
+    pub gap_len: u8,
+    pub offset: u8,
+}
+
+impl StrokeDash {
+    pub const fn new(dash_len: u8, gap_len: u8) -> Self {
+        Self {
+            dash_len,
+            gap_len,
+            offset: 0,
+        }
+    }
+
+    pub const fn with_offset(mut self, offset: u8) -> Self {
+        self.offset = offset;
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +63,7 @@ pub struct StrokeStyle {
     pub antialias_mode: AntiAliasMode,
     pub cap: StrokeCap,
     pub join: StrokeJoin,
+    pub dash: Option<StrokeDash>,
 }
 
 impl StrokeStyle {
@@ -48,11 +75,27 @@ impl StrokeStyle {
             antialias_mode: AntiAliasMode::None,
             cap: StrokeCap::Butt,
             join: StrokeJoin::Miter,
+            dash: None,
         }
     }
 
     pub const fn with_width(mut self, width: u8) -> Self {
         self.width = if width == 0 { 1 } else { width };
+        self
+    }
+
+    pub const fn with_cap(mut self, cap: StrokeCap) -> Self {
+        self.cap = cap;
+        self
+    }
+
+    pub const fn with_join(mut self, join: StrokeJoin) -> Self {
+        self.join = join;
+        self
+    }
+
+    pub const fn with_dash(mut self, dash: StrokeDash) -> Self {
+        self.dash = Some(dash);
         self
     }
 
@@ -72,16 +115,6 @@ impl StrokeStyle {
     pub const fn with_antialias_mode(mut self, mode: AntiAliasMode) -> Self {
         self.antialias_mode = mode;
         self.antialias = !matches!(mode, AntiAliasMode::None);
-        self
-    }
-
-    pub const fn with_cap(mut self, cap: StrokeCap) -> Self {
-        self.cap = cap;
-        self
-    }
-
-    pub const fn with_join(mut self, join: StrokeJoin) -> Self {
-        self.join = join;
         self
     }
 }
