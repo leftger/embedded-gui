@@ -1065,6 +1065,33 @@ pub fn render_inspector_panel(
 
         ui.separator();
 
+        // 🌳 Layer Hierarchy Tree
+        egui::CollapsingHeader::new(egui::RichText::new("🌳 Layer Hierarchy Tree").strong())
+            .default_open(true)
+            .show(ui, |ui| {
+                if screen.grid.children.is_empty() {
+                    ui.label(egui::RichText::new("No widgets on screen.").weak());
+                } else {
+                    for (i, (placement, widget)) in screen.grid.children.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            let is_sel = *selected_widget_idx == Some(i);
+                            let wid_id = widget.id().unwrap_or("widget");
+                            let label = format!(
+                                "{} [c:{}, r:{}, {}×{}]",
+                                wid_id,
+                                placement.col,
+                                placement.row,
+                                placement.col_span,
+                                placement.row_span
+                            );
+                            if ui.selectable_label(is_sel, label).clicked() {
+                                *selected_widget_idx = Some(i);
+                            }
+                        });
+                    }
+                }
+            });
+
         ui.separator();
 
         // Comprehensive Categorized Accordions & Dropdown Palettes

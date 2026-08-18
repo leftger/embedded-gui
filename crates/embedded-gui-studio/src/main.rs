@@ -4,6 +4,7 @@
 mod app;
 mod assets;
 mod bridge;
+mod command_palette;
 mod curve_visualizer;
 mod device_link;
 mod exporter;

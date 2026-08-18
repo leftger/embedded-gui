@@ -97,6 +97,12 @@ pub struct EmbeddedGuiStudio {
     pub mock_playground: crate::playground::MockPlaygroundState,
     pub preview_visual_state: Option<embedded_gui::style::VisualState>,
 
+    // UI/UX Enhancements: Command Palette, Rulers, Layers
+    pub command_palette_open: bool,
+    pub command_query: String,
+    pub show_rulers: bool,
+    pub cursor_screen_coords: Option<(i32, i32)>,
+
     // Undo / Redo history
     pub undo_stack: Vec<String>,
     pub redo_stack: Vec<String>,
@@ -175,6 +181,10 @@ impl EmbeddedGuiStudio {
             animation_stream_accumulator: 0.0,
             mock_playground: crate::playground::MockPlaygroundState::default(),
             preview_visual_state: None,
+            command_palette_open: false,
+            command_query: String::new(),
+            show_rulers: true,
+            cursor_screen_coords: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
         };
@@ -230,6 +240,31 @@ impl EmbeddedGuiStudio {
             let mut new_kdl = self.kdl_source.clone();
             new_kdl.push_str(snippet);
             self.load_kdl_source(new_kdl);
+        }
+    }
+
+    pub fn align_selected_widget(&mut self, col: usize, row: Option<usize>) {
+        if let Ok(mut screen) = self.parsed_screen.clone() {
+            if let Some(sel_idx) = self.selected_widget_idx {
+                if let Some((p, _)) = screen.grid.children.get_mut(sel_idx) {
+                    p.col = col;
+                    if let Some(r) = row {
+                        p.row = r;
+                    }
+                    self.sync_from_screen(&screen);
+                }
+            }
+        }
+    }
+
+    pub fn align_selected_widget_row(&mut self, row: usize) {
+        if let Ok(mut screen) = self.parsed_screen.clone() {
+            if let Some(sel_idx) = self.selected_widget_idx {
+                if let Some((p, _)) = screen.grid.children.get_mut(sel_idx) {
+                    p.row = row;
+                    self.sync_from_screen(&screen);
+                }
+            }
         }
     }
 
@@ -1065,6 +1100,38 @@ impl EmbeddedGuiStudio {
         });
         ui.separator();
 
+        // 🧭 Breadcrumb Navigation Bar
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("🧭").size(11.0));
+            if ui.small_button(format!("📱 {}", screen.id)).clicked() {
+                self.selected_widget_idx = None;
+            }
+            ui.label(egui::RichText::new("❯").weak());
+            ui.label(
+                egui::RichText::new(format!(
+                    "Grid ({}×{})",
+                    screen.grid.cols.len(),
+                    screen.grid.rows.len()
+                ))
+                .weak(),
+            );
+            if let Some(sel_idx) = self.selected_widget_idx {
+                if let Some((placement, widget)) = screen.grid.children.get(sel_idx) {
+                    ui.label(egui::RichText::new("❯").weak());
+                    ui.colored_label(
+                        Color32::from_rgb(80, 200, 255),
+                        format!(
+                            "{} (c:{}, r:{})",
+                            widget.id().unwrap_or("widget"),
+                            placement.col,
+                            placement.row
+                        ),
+                    );
+                }
+            }
+        });
+        ui.separator();
+
         // 🧰 Quick-Insert Widget Palette
         if self.mode == StudioMode::Design {
             ui.horizontal_wrapped(|ui| {
@@ -1101,6 +1168,32 @@ impl EmbeddedGuiStudio {
                 }
             });
             ui.separator();
+
+            // 📐 Alignment & Distribution Toolbar
+            if let Some(_sel_idx) = self.selected_widget_idx {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("📐 Align Selected:").strong());
+                    if ui.button("⭰ Left").clicked() {
+                        self.align_selected_widget(0, None);
+                    }
+                    if ui.button("⮀ Center").clicked() {
+                        let center_col = screen.grid.cols.len().saturating_sub(1) / 2;
+                        self.align_selected_widget(center_col, None);
+                    }
+                    if ui.button("⭲ Right").clicked() {
+                        let right_col = screen.grid.cols.len().saturating_sub(1);
+                        self.align_selected_widget(right_col, None);
+                    }
+                    if ui.button("⭱ Top").clicked() {
+                        self.align_selected_widget_row(0);
+                    }
+                    if ui.button("⭳ Bottom").clicked() {
+                        let bottom_row = screen.grid.rows.len().saturating_sub(1);
+                        self.align_selected_widget_row(bottom_row);
+                    }
+                });
+                ui.separator();
+            }
         }
 
         let screen_w = screen.width as f32 * self.preview_zoom;
@@ -1804,6 +1897,86 @@ impl EmbeddedGuiStudio {
                 painter.circle_filled(pos, 3.0, Color32::from_rgb(80, 220, 255));
             }
 
+            // 📏 Canvas Pixel Rulers & Coordinates Crosshair HUD
+            if self.show_rulers {
+                // Top ruler ticks
+                let mut x_tick = 0.0;
+                while x_tick <= screen_w {
+                    let mark_x = display_rect.min.x + x_tick;
+                    let is_major = (x_tick / self.preview_zoom).round() as i32 % 50 == 0;
+                    let tick_len = if is_major { 8.0 } else { 4.0 };
+                    painter.line_segment(
+                        [
+                            Pos2::new(mark_x, display_rect.min.y - tick_len),
+                            Pos2::new(mark_x, display_rect.min.y),
+                        ],
+                        Stroke::new(1.0_f32, Color32::from_rgb(100, 110, 130)),
+                    );
+                    if is_major {
+                        painter.text(
+                            Pos2::new(mark_x, display_rect.min.y - 10.0),
+                            egui::Align2::CENTER_BOTTOM,
+                            format!("{:.0}", x_tick / self.preview_zoom),
+                            FontId::proportional(8.0),
+                            Color32::from_rgb(120, 135, 155),
+                        );
+                    }
+                    x_tick += 10.0 * self.preview_zoom;
+                }
+
+                // Left ruler ticks
+                let mut y_tick = 0.0;
+                while y_tick <= screen_h {
+                    let mark_y = display_rect.min.y + y_tick;
+                    let is_major = (y_tick / self.preview_zoom).round() as i32 % 50 == 0;
+                    let tick_len = if is_major { 8.0 } else { 4.0 };
+                    painter.line_segment(
+                        [
+                            Pos2::new(display_rect.min.x - tick_len, mark_y),
+                            Pos2::new(display_rect.min.x, mark_y),
+                        ],
+                        Stroke::new(1.0_f32, Color32::from_rgb(100, 110, 130)),
+                    );
+                    if is_major {
+                        painter.text(
+                            Pos2::new(display_rect.min.x - 10.0, mark_y),
+                            egui::Align2::RIGHT_CENTER,
+                            format!("{:.0}", y_tick / self.preview_zoom),
+                            FontId::proportional(8.0),
+                            Color32::from_rgb(120, 135, 155),
+                        );
+                    }
+                    y_tick += 10.0 * self.preview_zoom;
+                }
+            }
+
+            // HUD Coordinate crosshair badge
+            if let Some(pos) = pointer_pos {
+                if display_rect.contains(pos) {
+                    let px_x = ((pos.x - display_rect.min.x) / self.preview_zoom)
+                        .clamp(0.0, screen.width as f32) as i32;
+                    let px_y = ((pos.y - display_rect.min.y) / self.preview_zoom)
+                        .clamp(0.0, screen.height as f32) as i32;
+                    self.cursor_screen_coords = Some((px_x, px_y));
+
+                    let hud_pos = Pos2::new(display_rect.max.x - 90.0, display_rect.max.y + 8.0);
+                    painter.rect_filled(
+                        Rect::from_min_size(hud_pos, Vec2::new(90.0, 16.0)),
+                        CornerRadius::same(3),
+                        Color32::from_rgb(20, 24, 30),
+                    );
+                    painter.text(
+                        Pos2::new(hud_pos.x + 4.0, hud_pos.y + 2.0),
+                        egui::Align2::LEFT_TOP,
+                        format!("📍 X:{} Y:{}", px_x, px_y),
+                        FontId::monospace(9.0),
+                        Color32::from_rgb(120, 220, 160),
+                    );
+                } else {
+                    self.cursor_screen_coords = None;
+                }
+            }
+
             if did_mutate {
                 self.sync_from_screen(&mutated_screen);
             }
@@ -1888,6 +2061,10 @@ impl eframe::App for EmbeddedGuiStudio {
             // Space: Play / Pause
             if i.key_pressed(Key::Space) {
                 self.is_playing = !self.is_playing;
+            }
+            // Command Palette: Ctrl+K / Cmd+K
+            if i.modifiers.command && i.key_pressed(Key::K) {
+                self.command_palette_open = !self.command_palette_open;
             }
             // File Shortcuts
             if i.modifiers.command && i.key_pressed(Key::O) {
@@ -3060,6 +3237,8 @@ impl eframe::App for EmbeddedGuiStudio {
                 }
             }
         });
+
+        crate::command_palette::render_command_palette(self, ctx);
     }
 }
 
