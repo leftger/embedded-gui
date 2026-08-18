@@ -925,6 +925,23 @@ fn to_snake_case(s: &str) -> String {
     out
 }
 
+fn style_expr(style: Option<&str>, default: &str) -> String {
+    match style {
+        None => default.to_string(),
+        Some(s) if s.starts_with("Style::") => s.to_string(),
+        Some("default") | Some("label") | Some("bold") | Some("dim") => "Style::label()".into(),
+        Some("button") => "Style::button()".into(),
+        Some("panel") | Some("card") => "Style::panel()".into(),
+        Some("progress") => "Style::progress()".into(),
+        // Semantic tokens are palette concerns in Studio; firmware codegen maps
+        // them onto the closest stock Style constructor.
+        Some("accent") | Some("success") | Some("danger") | Some("inverted") => {
+            "Style::label()".into()
+        }
+        Some(_) => default.to_string(),
+    }
+}
+
 /// Generates zero-allocation `#![no_std]` Rust code from a parsed `ScreenDef`.
 pub fn generate_rust_code(screen: &ScreenDef) -> String {
     let mut out = String::new();
@@ -1072,7 +1089,7 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
 
         match w {
             WidgetDef::Label { text, style, .. } => {
-                let st = style.as_deref().unwrap_or("Style::default()");
+                let st = style_expr(style.as_deref(), "Style::default()");
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_label(cells[{}], \"{}\", {})?;",
@@ -1080,7 +1097,7 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                 );
             }
             WidgetDef::Button { text, style, .. } => {
-                let st = style.as_deref().unwrap_or("Style::button()");
+                let st = style_expr(style.as_deref(), "Style::button()");
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_button(cells[{}], \"{}\", {})?;",
@@ -1259,7 +1276,7 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                 );
             }
             WidgetDef::Panel { style, .. } => {
-                let st = style.as_deref().unwrap_or("Style::panel()");
+                let st = style_expr(style.as_deref(), "Style::panel()");
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_panel(cells[{}], {})?;",
