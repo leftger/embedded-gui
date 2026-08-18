@@ -164,7 +164,11 @@ mod hardware_profile_tests {
 pub enum TransitionStyle {
     SlideLeft,
     SlideRight,
+    SlideUp,
+    SlideDown,
     Fade,
+    Dissolve,
+    ZoomPush,
     Instant,
 }
 
@@ -173,7 +177,11 @@ impl TransitionStyle {
         match self {
             Self::SlideLeft => "Slide Left (300ms)",
             Self::SlideRight => "Slide Right (300ms)",
+            Self::SlideUp => "Slide Up (300ms)",
+            Self::SlideDown => "Slide Down (300ms)",
             Self::Fade => "Fade (200ms)",
+            Self::Dissolve => "Dissolve (250ms)",
+            Self::ZoomPush => "Zoom Push (300ms)",
             Self::Instant => "Instant",
         }
     }
@@ -183,7 +191,11 @@ impl TransitionStyle {
         match self {
             Self::SlideLeft => "SlideLeft",
             Self::SlideRight => "SlideRight",
+            Self::SlideUp => "SlideUp",
+            Self::SlideDown => "SlideDown",
             Self::Fade => "Fade",
+            Self::Dissolve => "Dissolve",
+            Self::ZoomPush => "ZoomPush",
             Self::Instant => "Instant",
         }
     }
@@ -192,7 +204,11 @@ impl TransitionStyle {
         match s {
             "SlideLeft" => Self::SlideLeft,
             "SlideRight" => Self::SlideRight,
+            "SlideUp" => Self::SlideUp,
+            "SlideDown" => Self::SlideDown,
             "Fade" => Self::Fade,
+            "Dissolve" => Self::Dissolve,
+            "ZoomPush" => Self::ZoomPush,
             _ => Self::Instant,
         }
     }

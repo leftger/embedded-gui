@@ -1145,6 +1145,7 @@ impl EmbeddedGuiStudio {
                 egui::Sense::click_and_drag(),
             );
             let mut canvas_offset = Vec2::ZERO;
+            let mut transition_scale = 1.0;
             if let Some(trans) = &self.transition_state {
                 match trans.style {
                     TransitionStyle::SlideLeft => {
@@ -1153,11 +1154,25 @@ impl EmbeddedGuiStudio {
                     TransitionStyle::SlideRight => {
                         canvas_offset.x = screen_w * trans.progress;
                     }
+                    TransitionStyle::SlideUp => {
+                        canvas_offset.y = -screen_h * trans.progress;
+                    }
+                    TransitionStyle::SlideDown => {
+                        canvas_offset.y = screen_h * trans.progress;
+                    }
+                    TransitionStyle::ZoomPush => {
+                        transition_scale = (1.0 - trans.progress * 0.25).max(0.1);
+                        let shrink = screen_w * (1.0 - transition_scale) / 2.0;
+                        canvas_offset += Vec2::new(shrink, shrink);
+                    }
                     _ => {}
                 }
             }
             let origin = response.rect.min + Vec2::new(16.0, 16.0) + canvas_offset;
-            let display_rect = Rect::from_min_size(origin, Vec2::new(screen_w, screen_h));
+            let display_rect = Rect::from_min_size(
+                origin,
+                Vec2::new(screen_w * transition_scale, screen_h * transition_scale),
+            );
 
             // Bezel / Hardware Chassis
             let bezel_rect = display_rect.expand(6.0);
