@@ -1,7 +1,13 @@
 screen id="Menu" width=96 height=64 {
     grid cols="1fr" rows="14px 1fr 12px" gap=0 padding=0 {
-        label id="header" text="SETTINGS" style="accent" col=0 row=0
-        label id="item" text="Selected item" col=0 row=1
-        label id="hint" text="hold to edit" style="dim" col=0 row=2
+        carousel id="items" selected=2 item_step=16 visible=7 mask_top=14 mask_bottom=12 fade=true indicator=true pulse=96 style="body" col=0 row=1 {
+            option "DEFAULT"
+            option "STEALTH OFF"
+            option "BRIGHTNESS"
+            option "FUNC TEST"
+            option "PUNCTURE"
+        }
+        label id="header" text="SETTINGS" style="body-accent" col=0 row=0
+        label id="hint" text="hold=ok  tap=nxt" style="hint-dim" col=0 row=2
     }
 }

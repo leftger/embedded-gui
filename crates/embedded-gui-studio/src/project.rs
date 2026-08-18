@@ -286,12 +286,18 @@ fn to_snake_case(s: &str) -> String {
     if out.is_empty() { "screen".into() } else { out }
 }
 
-/// Folder picker that loads a project directory (must contain `project.kdl`).
+/// File picker that loads a project by selecting its `project.kdl` manifest.
+///
+/// A file picker is used rather than a folder picker because macOS Finder does
+/// not let you select a file inside a folder-only dialog. [`GuiProject::load`]
+/// accepts either the manifest file or its directory.
 pub fn open_project_dialog() -> Option<Result<GuiProject, ProjectError>> {
-    let folder = rfd::FileDialog::new()
-        .set_title("Open KDL Project Folder")
-        .pick_folder()?;
-    Some(GuiProject::load(&folder))
+    let file = rfd::FileDialog::new()
+        .set_title("Open KDL Project (select project.kdl)")
+        .add_filter("KDL Project Manifest", &["kdl"])
+        .set_file_name(MANIFEST_NAME)
+        .pick_file()?;
+    Some(GuiProject::load(&file))
 }
 
 /// Folder picker that saves the current Studio tabs as a project.

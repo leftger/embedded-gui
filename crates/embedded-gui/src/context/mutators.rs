@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use crate::mono::IconPart;
 use crate::{
     geometry::Rect,
     input::{UiEvent, WidgetEvent, WidgetEventKind},
@@ -59,6 +60,118 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 ..
             } => {
                 *v = value.clamp(0.0, 1.0);
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    /// Moves the carousel selection, clamping to the item count. The selection
+    /// is what the falloff and indicator center on, so this is the primary
+    /// per-step call from a menu's navigation code.
+    pub fn set_carousel_selected(&mut self, id: WidgetId, selected: usize) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Carousel {
+                items,
+                selected: ref mut current,
+                ..
+            } => {
+                *current = selected.min(items.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    pub fn carousel_selected(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::Carousel { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    /// Sets the in-flight scroll offset in whole pixels. Drive this from an
+    /// animation clock between steps and snap it back to `0` once the selection
+    /// changes; a shift of 4 moves every row exactly 4px.
+    pub fn set_carousel_shift(&mut self, id: WidgetId, shift: i16) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Carousel { ref mut spec, .. } => {
+                spec.shift = shift;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    /// Scales the indicator's accent color (0..=255), which is where a breathing
+    /// highlight comes from.
+    pub fn set_carousel_pulse(&mut self, id: WidgetId, pulse: u8) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Carousel { ref mut spec, .. } => {
+                spec.indicator_pulse = pulse;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    /// Replaces the carousel's item slice.
+    ///
+    /// Items are borrowed (`&'a`), so a caller that needs to change label text
+    /// at runtime (a stealth toggle flipping "STEALTH OFF"/"STEALTH ON") owns
+    /// the array and swaps the reference here rather than mutating in place.
+    pub fn set_carousel_items(
+        &mut self,
+        id: WidgetId,
+        items: &'a [&'a str],
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::Carousel {
+                items: ref mut current,
+                ref mut selected,
+                ..
+            } => {
+                *current = items;
+                *selected = (*selected).min(items.len().saturating_sub(1));
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    /// Replaces a composite icon's part slice.
+    ///
+    /// `include_gui!` bakes parts into a `static [IconPart; N]`, which cannot be
+    /// mutated in place to flip a part's `visible`/`tint`. Firmware instead owns
+    /// a mutable copy of that array (seeded from the generated static), edits
+    /// the parts, and swaps the reference here — this is how one icon shows
+    /// compound state (magazine seated, bolt charging).
+    pub fn set_composite_icon_parts(
+        &mut self,
+        id: WidgetId,
+        parts: &'a [IconPart<'a>],
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::CompositeIcon {
+                parts: ref mut current,
+                ..
+            } => {
+                *current = parts;
                 self.dirty.add(rect)?;
                 Ok(())
             }

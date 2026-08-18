@@ -23,6 +23,7 @@ pub mod input;
 pub mod interop;
 pub mod layout;
 mod math;
+pub mod mono;
 pub mod motion;
 pub mod palette;
 pub mod pdc;
@@ -111,6 +112,7 @@ pub use layout::{
     Align, Axis, Constraint, GridLayout, GridPlacement, GridTrack, JustifyContent, LayoutItem,
     Length, LinearLayout,
 };
+pub use mono::{IconAlign, IconPart, MonoBitmap};
 pub use palette::{DisplayMode, DisplayPalette, InkRole, RoleColors};
 pub use pdc::{PdcCommand, PdcCommandType, PdcImage, PdcPrecisePoint};
 pub use present::PresentRegion;
@@ -165,26 +167,32 @@ pub use widgets::{
     TextSpan, TimeFormat, TimePickerField, TimePickerWidget, TimelineNodeState, TimelineNodeWidget,
 };
 pub use widgets::{
-    ChartMode, KeyboardLayout, NotificationLevel, SurfaceState, WidgetKind, WidgetNode,
+    CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, NotificationLevel, SurfaceState,
+    WidgetKind, WidgetNode,
 };
 
 pub mod prelude {
+    /// Re-exported so generated code can name colors without the consumer
+    /// depending on `embedded-graphics-core` directly.
+    pub use embedded_graphics_core::pixelcolor::Rgb565;
+
     pub use crate::{
         ActiveScreenTransition, Align, AlphaLinearGradient, AlphaRadialGradient, AnimatedProperty,
         Animation, AnimationConflictPolicy, AnimationError, AnimationGroup, AnimationHandlers,
         AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
         AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, BitmapFont, Blend,
         BlendMode, Block, Border, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition,
-        ChartMode, CinematicPreset, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
-        ComposedAnimationPlayer, ComposedAnimationStatus, CompositionControls, CompositionMode,
-        Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
-        EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
-        Font, FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
-        GradientDirection, GridLayout, GridPlacement, GridTrack, GuiContext, GuiError,
-        HapticPattern, HapticSequencer, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef,
-        InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
-        KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout,
-        ListState, MenuContract, MotionTokens, NotificationLevel, PackedFont, PathAnimator,
+        CarouselSpec, ChartMode, CinematicPreset, ColorFormat, ComposedAnimation,
+        ComposedAnimationCallbacks, ComposedAnimationPlayer, ComposedAnimationStatus,
+        CompositeIconSpec, CompositionControls, CompositionMode, Compositor, Constraint,
+        DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase,
+        EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId, Font, FontId, Framebuffer,
+        FramebufferGray8, FramebufferRgba8888, GlanceTileSpec, GradientDirection, GridLayout,
+        GridPlacement, GridTrack, GuiContext, GuiError, HapticPattern, HapticSequencer, IconAlign,
+        IconPart, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator, InputEvent,
+        KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks,
+        LayerState, LayoutItem, Length, Line, LinearGradient, LinearLayout, ListState,
+        MenuContract, MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator,
         PathPoint, PathVerb, PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion,
         PressTiming, Rect, ReelFrame, ReelPlayer, RenderBackendCaps, RenderCtx, RenderQuality,
         RepeatMode, Rgba8888, ScaleMode, ScaleWidget, Screen, ScreenCommand, ScreenId,

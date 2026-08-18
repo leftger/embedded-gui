@@ -104,7 +104,12 @@ pub fn render_inspector_panel(
             ui.label(egui::RichText::new("⚙️ Properties").strong());
 
             match widget {
-                WidgetDef::Label { id, text, style } => {
+                WidgetDef::Label {
+                    id,
+                    text,
+                    style,
+                    font,
+                } => {
                     ui.horizontal(|ui| {
                         ui.label("ID:");
                         let mut id_str = id.clone().unwrap_or_default();
@@ -131,6 +136,19 @@ pub fn render_inspector_panel(
                                 None
                             } else {
                                 Some(style_str)
+                            };
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Font:")
+                            .on_hover_text("Name of a font imported on this screen");
+                        let mut font_str = font.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut font_str).changed() {
+                            *font = if font_str.trim().is_empty() {
+                                None
+                            } else {
+                                Some(font_str)
                             };
                             modified = true;
                         }
@@ -507,6 +525,402 @@ pub fn render_inspector_panel(
                         }
                     });
                 }
+                WidgetDef::Image {
+                    id,
+                    source,
+                    fit,
+                    mode,
+                    tint,
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label("ID:");
+                        let mut id_str = id.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut id_str).changed() {
+                            *id = (!id_str.trim().is_empty()).then_some(id_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Project path:");
+                        if ui.text_edit_singleline(source).changed() {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Fit:");
+                        if ui
+                            .selectable_value(fit, "center".into(), "Center")
+                            .changed()
+                            || ui
+                                .selectable_value(fit, "stretch".into(), "Stretch")
+                                .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Mode:");
+                        if ui.selectable_value(mode, "color".into(), "Color").changed()
+                            || ui
+                                .selectable_value(mode, "mask".into(), "1-bit Mask")
+                                .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                    if mode == "mask" {
+                        ui.horizontal(|ui| {
+                            ui.label("Tint:");
+                            let mut tint_str = tint.clone().unwrap_or_else(|| "accent".into());
+                            if ui.text_edit_singleline(&mut tint_str).changed() {
+                                *tint = (!tint_str.trim().is_empty()).then_some(tint_str);
+                                modified = true;
+                            }
+                        });
+                    }
+                }
+                WidgetDef::Carousel {
+                    id,
+                    items,
+                    selected,
+                    item_step,
+                    visible,
+                    shift,
+                    mask_top,
+                    mask_bottom,
+                    fade,
+                    indicator,
+                    pulse,
+                    style,
+                    font,
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label("ID:");
+                        let mut id_str = id.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut id_str).changed() {
+                            *id = (!id_str.trim().is_empty()).then_some(id_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Selected:");
+                        let max = items.len().saturating_sub(1) as i32;
+                        let mut sel = *selected as i32;
+                        if ui
+                            .add(egui::Slider::new(&mut sel, 0..=max.max(0)))
+                            .changed()
+                        {
+                            *selected = sel.max(0) as usize;
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Item step (px):");
+                        let mut step = *item_step as i32;
+                        if ui.add(egui::Slider::new(&mut step, 4..=64)).changed() {
+                            *item_step = step as u16;
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Visible slots:");
+                        let mut slots = *visible as i32;
+                        if ui.add(egui::Slider::new(&mut slots, 1..=15)).changed() {
+                            *visible = slots as u8;
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Scroll shift (px):")
+                            .on_hover_text("In-flight offset; animate this to scroll the list");
+                        let mut value = *shift as i32;
+                        let range = *item_step as i32;
+                        if ui
+                            .add(egui::Slider::new(&mut value, -range..=range))
+                            .changed()
+                        {
+                            *shift = value as i16;
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Chrome masks:");
+                        let mut top = *mask_top as i32;
+                        let mut bottom = *mask_bottom as i32;
+                        if ui
+                            .add(egui::DragValue::new(&mut top).prefix("top "))
+                            .changed()
+                        {
+                            *mask_top = top.max(0) as u16;
+                            modified = true;
+                        }
+                        if ui
+                            .add(egui::DragValue::new(&mut bottom).prefix("bottom "))
+                            .changed()
+                        {
+                            *mask_bottom = bottom.max(0) as u16;
+                            modified = true;
+                        }
+                    });
+                    if ui.checkbox(fade, "Fade edges").changed() {
+                        modified = true;
+                    }
+                    if ui.checkbox(indicator, "Selection indicator").changed() {
+                        modified = true;
+                    }
+                    if *indicator {
+                        ui.horizontal(|ui| {
+                            ui.label("Pulse:");
+                            let mut value = *pulse as i32;
+                            if ui.add(egui::Slider::new(&mut value, 0..=255)).changed() {
+                                *pulse = value as u8;
+                                modified = true;
+                            }
+                        });
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Style:");
+                        let mut style_str = style.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut style_str).changed() {
+                            *style = (!style_str.trim().is_empty()).then_some(style_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Font:");
+                        let mut font_str = font.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut font_str).changed() {
+                            *font = (!font_str.trim().is_empty()).then_some(font_str);
+                            modified = true;
+                        }
+                    });
+                    ui.separator();
+                    ui.label("Items:");
+                    let mut remove = None;
+                    for (idx, item) in items.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            if ui.text_edit_singleline(item).changed() {
+                                modified = true;
+                            }
+                            if ui.small_button("🗑").clicked() {
+                                remove = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove {
+                        items.remove(idx);
+                        *selected = (*selected).min(items.len().saturating_sub(1));
+                        modified = true;
+                    }
+                    if ui.button("➕ Add item").clicked() {
+                        items.push(format!("ITEM {}", items.len() + 1));
+                        modified = true;
+                    }
+                }
+                WidgetDef::CompositeIcon {
+                    id,
+                    parts,
+                    scale,
+                    align,
+                    tint,
+                    threshold,
+                    invert,
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label("ID:");
+                        let mut id_str = id.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut id_str).changed() {
+                            *id = (!id_str.trim().is_empty()).then_some(id_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Scale:");
+                        let mut value = *scale as i32;
+                        if ui.add(egui::Slider::new(&mut value, 1..=8)).changed() {
+                            *scale = value as u8;
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Align:");
+                        if ui
+                            .selectable_value(align, "center".into(), "Center")
+                            .changed()
+                            || ui
+                                .selectable_value(align, "top_left".into(), "Top left")
+                                .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Ink:");
+                        let mut tint_str = tint.clone().unwrap_or_else(|| "accent".into());
+                        if ui.text_edit_singleline(&mut tint_str).changed() {
+                            *tint = (!tint_str.trim().is_empty()).then_some(tint_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Threshold:").on_hover_text(
+                            "Luminance below this becomes ink when the art is imported",
+                        );
+                        let mut value = *threshold as i32;
+                        if ui.add(egui::Slider::new(&mut value, 0..=255)).changed() {
+                            *threshold = value as u8;
+                            modified = true;
+                        }
+                    });
+                    if ui
+                        .checkbox(invert, "Invert (art is light-on-dark)")
+                        .changed()
+                    {
+                        modified = true;
+                    }
+                    ui.separator();
+                    ui.label("Parts (stacked in order):");
+                    let mut remove = None;
+                    let removable = parts.len() > 1;
+                    for (idx, part) in parts.iter_mut().enumerate() {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("src:");
+                                if ui.text_edit_singleline(&mut part.source).changed() {
+                                    modified = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("offset:");
+                                if ui
+                                    .add(egui::DragValue::new(&mut part.dx).prefix("x "))
+                                    .changed()
+                                    || ui
+                                        .add(egui::DragValue::new(&mut part.dy).prefix("y "))
+                                        .changed()
+                                {
+                                    modified = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                if ui.checkbox(&mut part.visible, "Visible").changed() {
+                                    modified = true;
+                                }
+                                let mut part_tint = part.tint.clone().unwrap_or_default();
+                                ui.label("tint:");
+                                if ui.text_edit_singleline(&mut part_tint).changed() {
+                                    part.tint = (!part_tint.trim().is_empty()).then_some(part_tint);
+                                    modified = true;
+                                }
+                                if removable && ui.small_button("🗑").clicked() {
+                                    remove = Some(idx);
+                                }
+                            });
+                        });
+                    }
+                    if let Some(idx) = remove {
+                        parts.remove(idx);
+                        modified = true;
+                    }
+                    if ui.button("➕ Add part").clicked() {
+                        parts.push(embedded_gui_codegen::IconPartDef {
+                            source: "assets/icons/part.bmp".into(),
+                            dx: 0,
+                            dy: 0,
+                            visible: true,
+                            tint: None,
+                        });
+                        modified = true;
+                    }
+                }
+                WidgetDef::Mesh3d {
+                    id,
+                    source,
+                    shading,
+                    color,
+                    scale,
+                    roll,
+                    pitch,
+                    yaw,
+                    camera_distance,
+                    fov,
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label("ID:");
+                        let mut id_str = id.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut id_str).changed() {
+                            *id = (!id_str.trim().is_empty()).then_some(id_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Project path (.obj):");
+                        if ui.text_edit_singleline(source).changed() {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Shading:");
+                        for (value, label) in [
+                            ("solid", "Solid"),
+                            ("lit", "Lit"),
+                            ("lines", "Wireframe"),
+                            ("points", "Points"),
+                        ] {
+                            if ui.selectable_value(shading, value.into(), label).changed() {
+                                modified = true;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Color:");
+                        let mut color_str = color.clone().unwrap_or_default();
+                        if ui.text_edit_singleline(&mut color_str).changed() {
+                            *color = (!color_str.trim().is_empty()).then_some(color_str);
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Scale:");
+                        if ui
+                            .add(egui::Slider::new(scale, 0.1..=8.0).logarithmic(true))
+                            .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Rotation (rad):");
+                        if ui
+                            .add(egui::DragValue::new(roll).prefix("roll ").speed(0.05))
+                            .changed()
+                            || ui
+                                .add(egui::DragValue::new(pitch).prefix("pitch ").speed(0.05))
+                                .changed()
+                            || ui
+                                .add(egui::DragValue::new(yaw).prefix("yaw ").speed(0.05))
+                                .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Camera:");
+                        if ui
+                            .add(
+                                egui::DragValue::new(camera_distance)
+                                    .prefix("dist ")
+                                    .speed(0.1),
+                            )
+                            .changed()
+                            || ui
+                                .add(egui::DragValue::new(fov).prefix("fov ").speed(0.02))
+                                .changed()
+                        {
+                            modified = true;
+                        }
+                    });
+                }
                 WidgetDef::Roller {
                     id,
                     options,
@@ -804,6 +1218,7 @@ pub fn render_inspector_panel(
                                     id: Some("label".into()),
                                     text: "System Ready".into(),
                                     style: None,
+                                    font: None,
                                 },
                                 selected_widget_idx,
                             );
@@ -816,6 +1231,7 @@ pub fn render_inspector_panel(
                                     id: Some("badge".into()),
                                     text: "[ ACTIVE ]".into(),
                                     style: Some("inverted".into()),
+                                    font: None,
                                 },
                                 selected_widget_idx,
                             );
@@ -1003,6 +1419,89 @@ pub fn render_inspector_panel(
                             modified = true;
                         }
                         ui.end_row();
+                        if ui.button("🖼 Project Image").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Image {
+                                    id: Some("image".into()),
+                                    source: "assets/image.png".into(),
+                                    fit: "center".into(),
+                                    mode: "color".into(),
+                                    tint: None,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.button("🎠 Carousel").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Carousel {
+                                    id: Some("carousel".into()),
+                                    items: vec![
+                                        "DEFAULT".into(),
+                                        "STEALTH".into(),
+                                        "BRIGHTNESS".into(),
+                                    ],
+                                    selected: 0,
+                                    item_step: 16,
+                                    visible: 7,
+                                    shift: 0,
+                                    mask_top: 0,
+                                    mask_bottom: 0,
+                                    fade: true,
+                                    indicator: true,
+                                    pulse: 96,
+                                    style: None,
+                                    font: None,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        if ui.button("🧩 Composite Icon").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::CompositeIcon {
+                                    id: Some("icon".into()),
+                                    parts: vec![embedded_gui_codegen::IconPartDef {
+                                        source: "assets/icons/part.bmp".into(),
+                                        dx: 0,
+                                        dy: 0,
+                                        visible: true,
+                                        tint: None,
+                                    }],
+                                    scale: 1,
+                                    align: "center".into(),
+                                    tint: Some("accent".into()),
+                                    threshold: 128,
+                                    invert: false,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
+                        ui.end_row();
+                        if ui.button("🧊 3D Mesh").clicked() {
+                            push_new_widget(
+                                screen,
+                                WidgetDef::Mesh3d {
+                                    id: Some("logo".into()),
+                                    source: "assets/logo.obj".into(),
+                                    shading: "lit".into(),
+                                    color: Some("accent".into()),
+                                    scale: 1.0,
+                                    roll: 0.0,
+                                    pitch: 0.0,
+                                    yaw: 0.0,
+                                    camera_distance: 4.0,
+                                    fov: 1.5707964,
+                                },
+                                selected_widget_idx,
+                            );
+                            modified = true;
+                        }
                     });
             });
 

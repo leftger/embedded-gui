@@ -14,7 +14,7 @@ keywords = ["gui", "embedded", "kdl", "codegen", "studio"]
 categories = ["embedded", "gui", "development-tools"]
 
 [dependencies]
-embedded-gui = { workspace = true }
+embedded-gui = { workspace = true, features = ["embedded-3dgfx"] }
 embedded-gui-codegen = { workspace = true }
 embedded-gui-live = { workspace = true, features = ["std"] }
 embedded-graphics-core = { workspace = true }
@@ -26,3 +26,4 @@ rfd = "0.15"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 zstd = "0.13"
 flate2 = "1.0"
+image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp"] }

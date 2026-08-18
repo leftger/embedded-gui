@@ -1,0 +1,14 @@
+screen id="Counter" width=96 height=64 {
+    font id="sevenseg" src="assets/fonts/sevenseg30.bdf" chars="0123456789"
+
+    grid cols="1fr 26px" rows="12px 1fr 14px" gap=0 padding=0 {
+        label id="title" text="SHOTS" style="hint-accent" col=0 row=0 col_span=2
+        label id="count" text="042" font="sevenseg" style="body" col=0 row=1
+        icon id="battery" scale=1 align="center" tint="success" col=1 row=1 {
+            part src="assets/icons/batt_shell.bmp" x=0 y=0
+            part src="assets/icons/batt_fill.bmp" x=0 y=0
+            part src="assets/icons/batt_bolt.bmp" x=0 y=0 visible=false tint="accent"
+        }
+        mesh id="gem" src="assets/meshes/gem.obj" shading="lit" color="accent" scale=1.0 roll=0.4 pitch=0.7 yaw=0.0 camera_distance=3.5 fov=1.2 col=0 row=2 col_span=2
+    }
+}

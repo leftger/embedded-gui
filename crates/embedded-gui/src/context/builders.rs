@@ -4,10 +4,14 @@ use crate::{
     geometry::Rect,
     haptics::HapticPattern,
     image::{ImageFit, ImageRef, ReelPlayer},
+    mono::IconPart,
     render::TextAlign,
     style::{Style, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, Widget, WidgetId},
-    widgets::{ChartMode, KeyboardLayout, NotificationLevel, ScaleMode, SurfaceState, WidgetKind},
+    widgets::{
+        CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, NotificationLevel, ScaleMode,
+        SurfaceState, WidgetKind,
+    },
 };
 use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
 
@@ -1114,6 +1118,44 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         S: Into<WidgetStyle>,
     {
         self.add_widget(rect, WidgetKind::Image { image, fit }, style)
+    }
+
+    /// Adds a wrap-around carousel. Drive `spec.shift` and `selected` from the
+    /// caller's animation clock to scroll it.
+    pub fn add_carousel<S>(
+        &mut self,
+        rect: Rect,
+        items: &'a [&'a str],
+        selected: usize,
+        spec: CarouselSpec,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(
+            rect,
+            WidgetKind::Carousel {
+                items,
+                selected,
+                spec,
+            },
+            style,
+        )
+    }
+
+    /// Adds a multi-part 1bpp icon whose parts are toggled and tinted per state.
+    pub fn add_composite_icon<S>(
+        &mut self,
+        rect: Rect,
+        parts: &'a [IconPart<'a>],
+        spec: CompositeIconSpec,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        self.add_widget(rect, WidgetKind::CompositeIcon { parts, spec }, style)
     }
 
     #[cfg(feature = "rich-widgets")]

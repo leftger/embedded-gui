@@ -11,6 +11,7 @@ use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
     image::{ImageFit, ImageRef, ReelPlayer},
+    mono::{IconAlign, IconPart},
     render::{Compositor, RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{
@@ -61,6 +62,105 @@ pub use wearable::{
 };
 
 pub const TEXTAREA_CAPACITY: usize = 128;
+
+/// Geometry and motion of a [`WidgetKind::Carousel`].
+///
+/// Every measurement is in pixels so a layout ports exactly between the host
+/// preview and firmware; nothing here is derived from the widget rect.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CarouselSpec {
+    /// Vertical pitch between item rows.
+    pub item_step: u16,
+    /// Total rows drawn, including the selected one. Even values round up to
+    /// keep the selection centered.
+    pub visible_slots: u8,
+    /// In-flight scroll offset, driven by the caller's animation clock.
+    pub shift: i16,
+    /// Height of the background bands painted immediately above and below the
+    /// widget after its rows are drawn. Rows near the edge overhang the rect;
+    /// masking the neighbouring chrome makes them scroll *behind* a header and
+    /// footer instead of colliding with them. Draw that chrome after the
+    /// carousel so it survives the mask.
+    pub mask_top: u16,
+    pub mask_bottom: u16,
+    /// Darkens the rows nearest the top and bottom edges.
+    pub fade_edges: bool,
+    /// Draws accent bars flanking the selected row.
+    pub indicator: bool,
+    /// Scales the indicator's accent color, letting the caller pulse it.
+    pub indicator_pulse: u8,
+    pub indicator_bar_w: u16,
+    pub indicator_bar_h: u16,
+    pub indicator_gap: u16,
+}
+
+impl Default for CarouselSpec {
+    fn default() -> Self {
+        Self {
+            item_step: 16,
+            visible_slots: 7,
+            shift: 0,
+            mask_top: 0,
+            mask_bottom: 0,
+            fade_edges: true,
+            indicator: false,
+            indicator_pulse: 255,
+            indicator_bar_w: 5,
+            indicator_bar_h: 3,
+            indicator_gap: 6,
+        }
+    }
+}
+
+impl CarouselSpec {
+    pub fn new(item_step: u16, visible_slots: u8) -> Self {
+        Self {
+            item_step,
+            visible_slots,
+            ..Self::default()
+        }
+    }
+}
+
+/// Scale and placement of a [`WidgetKind::CompositeIcon`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompositeIconSpec {
+    /// Nearest-neighbor upscale, which keeps pixel art crisp.
+    pub scale: u8,
+    pub align: IconAlign,
+    /// Fill for non-ink pixels. `None` leaves the backdrop visible.
+    pub paper: Option<Rgb565>,
+}
+
+impl Default for CompositeIconSpec {
+    fn default() -> Self {
+        Self {
+            scale: 1,
+            align: IconAlign::Center,
+            paper: None,
+        }
+    }
+}
+
+/// Scales an RGB565 color by `num5/31` on the 5-bit channels and `num6/63` on
+/// green, which keeps the carousel falloff exact at any base color.
+#[inline]
+fn scale_rgb565(color: Rgb565, num5: u16, num6: u16) -> Rgb565 {
+    Rgb565::new(
+        ((u16::from(color.r()) * num5) / 31) as u8,
+        ((u16::from(color.g()) * num6) / 63) as u8,
+        ((u16::from(color.b()) * num5) / 31) as u8,
+    )
+}
+
+/// Per-slot brightness falloff, indexed by distance from the selected row.
+const CAROUSEL_FALLOFF: [(u16, u16); 4] = [(31, 63), (12, 24), (6, 12), (3, 6)];
+
+#[inline]
+fn carousel_slot_color(text: Rgb565, distance: u32) -> Rgb565 {
+    let (n5, n6) = CAROUSEL_FALLOFF[(distance as usize).min(CAROUSEL_FALLOFF.len() - 1)];
+    scale_rgb565(text, n5, n6)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceState {
@@ -292,6 +392,19 @@ pub enum WidgetKind<'a> {
     Image {
         image: ImageRef<'a>,
         fit: ImageFit,
+    },
+    /// Vertically scrolling wrap-around list drawn as a single widget so the
+    /// slot falloff, edge fade, and chrome masks stay identical between host
+    /// preview and firmware.
+    Carousel {
+        items: &'a [&'a str],
+        selected: usize,
+        spec: CarouselSpec,
+    },
+    /// Multi-part 1bpp glyph whose parts are individually toggled and tinted.
+    CompositeIcon {
+        parts: &'a [IconPart<'a>],
+        spec: CompositeIconSpec,
     },
     Border,
     #[default]
@@ -900,6 +1013,14 @@ impl<'a> WidgetNode<'a> {
             ),
             WidgetKind::Image { image, fit } => {
                 render_image(ctx, rect, image, fit, self.style, state)
+            }
+            WidgetKind::Carousel {
+                items,
+                selected,
+                spec,
+            } => render_carousel(ctx, rect, items, selected, &spec, self.style, state),
+            WidgetKind::CompositeIcon { parts, spec } => {
+                render_composite_icon(ctx, rect, parts, &spec, self.style, state)
             }
             WidgetKind::Border => ctx.stroke_rect(rect, self.style.resolve(state).border),
             WidgetKind::Spacer => Ok(()),
@@ -2818,6 +2939,191 @@ where
     let block = Block::styled(style);
     block.render(rect, ctx)?;
     ctx.draw_image(block.inner(rect), image, fit)
+}
+
+fn render_carousel<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    items: &[&str],
+    selected: usize,
+    spec: &CarouselSpec,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    if items.is_empty() || inner.is_empty() {
+        return Ok(());
+    }
+
+    let count = items.len() as i32;
+    let step = spec.item_step.max(1) as i32;
+    let half = spec.visible_slots.max(1) as i32 / 2;
+    let center_y = inner.y + inner.h as i32 / 2;
+    let advance = style.font.advance() as i32;
+    let line_height = style.font.line_height() as i32;
+    let selected = selected.min(items.len() - 1);
+
+    let text_left = |text: &str| {
+        let width = text.chars().count() as i32 * advance;
+        (inner.x + (inner.w as i32 - width) / 2, width)
+    };
+
+    for rel in -half..=half {
+        let row_center = center_y + rel * step + spec.shift as i32;
+        if row_center + line_height / 2 < inner.y || row_center - line_height / 2 >= inner.bottom()
+        {
+            continue;
+        }
+        let idx = (selected as i32 + rel).rem_euclid(count) as usize;
+        let text = items[idx];
+        let color = carousel_slot_color(style.text, rel.unsigned_abs());
+        let (x, _) = text_left(text);
+        ctx.draw_text_with_font(x, row_center - line_height / 2, text, color, style.font)?;
+    }
+
+    let background = style.background.unwrap_or(Rgb565::BLACK);
+
+    if spec.fade_edges {
+        // Two rows of backdrop then two progressively brighter rows, so items
+        // dissolve into the bezel instead of being cut off.
+        for i in 0..6i32 {
+            let shade = match i {
+                0 | 1 => background,
+                2 | 3 => scale_rgb565(style.text, 1, 2),
+                _ => scale_rgb565(style.text, 2, 4),
+            };
+            ctx.fill_rect(Rect::new(inner.x, inner.y + i, inner.w, 1), shade)?;
+            ctx.fill_rect(
+                Rect::new(inner.x, inner.bottom() - 1 - i, inner.w, 1),
+                shade,
+            )?;
+        }
+    }
+
+    if spec.indicator {
+        let glow = scale_rgb565(
+            style.accent,
+            (spec.indicator_pulse as u16 * 31) / 255,
+            (spec.indicator_pulse as u16 * 63) / 255,
+        );
+        let bar_w = spec.indicator_bar_w.max(1);
+        let bar_h = spec.indicator_bar_h.max(1);
+        let (left, width) = text_left(items[selected]);
+        let y = center_y + spec.shift as i32 - bar_h as i32 / 2;
+        let left_x = left - spec.indicator_gap as i32 - bar_w as i32;
+        let right_x = left + width + spec.indicator_gap as i32;
+        if left_x >= inner.x {
+            ctx.fill_rect(Rect::new(left_x, y, bar_w as u32, bar_h as u32), glow)?;
+        }
+        if right_x + bar_w as i32 <= inner.right() {
+            ctx.fill_rect(Rect::new(right_x, y, bar_w as u32, bar_h as u32), glow)?;
+        }
+    }
+
+    if spec.mask_top > 0 {
+        ctx.fill_rect(
+            Rect::new(
+                rect.x,
+                rect.y - spec.mask_top as i32,
+                rect.w,
+                spec.mask_top as u32,
+            ),
+            background,
+        )?;
+    }
+    if spec.mask_bottom > 0 {
+        ctx.fill_rect(
+            Rect::new(rect.x, rect.bottom(), rect.w, spec.mask_bottom as u32),
+            background,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn render_composite_icon<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    parts: &[IconPart<'_>],
+    spec: &CompositeIconSpec,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+    let inner = block.inner(rect);
+    if parts.is_empty() || inner.is_empty() {
+        return Ok(());
+    }
+
+    let scale = spec.scale.max(1) as i32;
+    // Bounds cover every part, visible or not, so toggling a part never
+    // shifts the ones that stay on screen.
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+    for part in parts {
+        min_x = min_x.min(part.dx);
+        min_y = min_y.min(part.dy);
+        max_x = max_x.max(part.dx + part.bitmap.width as i32);
+        max_y = max_y.max(part.dy + part.bitmap.height as i32);
+    }
+    let content_w = (max_x - min_x).max(0) * scale;
+    let content_h = (max_y - min_y).max(0) * scale;
+
+    let (origin_x, origin_y) = match spec.align {
+        IconAlign::TopLeft => (inner.x, inner.y),
+        IconAlign::Center => (
+            inner.x + (inner.w as i32 - content_w) / 2,
+            inner.y + (inner.h as i32 - content_h) / 2,
+        ),
+    };
+    let origin_x = origin_x - min_x * scale;
+    let origin_y = origin_y - min_y * scale;
+
+    if let Some(paper) = spec.paper {
+        ctx.fill_rect(
+            Rect::new(
+                origin_x + min_x * scale,
+                origin_y + min_y * scale,
+                content_w.max(0) as u32,
+                content_h.max(0) as u32,
+            ),
+            paper,
+        )?;
+    }
+
+    for part in parts {
+        if !part.visible {
+            continue;
+        }
+        let ink = part.tint.unwrap_or(style.foreground);
+        for y in 0..part.bitmap.height {
+            for x in 0..part.bitmap.width {
+                if !part.bitmap.is_ink(x, y) {
+                    continue;
+                }
+                let px = origin_x + (part.dx + x as i32) * scale;
+                let py = origin_y + (part.dy + y as i32) * scale;
+                ctx.fill_rect(Rect::new(px, py, scale as u32, scale as u32), ink)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

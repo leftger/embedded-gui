@@ -236,11 +236,12 @@ impl EmbeddedGuiStudio {
         };
         // Rendering is host-side work; transmission happens on the link thread,
         // so a stalled device never blocks the UI.
-        let mut frame = crate::live_render::render_screen_at(
+        let mut frame = crate::live_render::render_screen_at_with_assets(
             &screen,
             self.display_theme,
             self.animation_phase(),
             self.active_highlight(),
+            self.project_root.as_deref(),
         );
         // The agent advertises its panel size during the handshake. Fitting here
         // keeps an oversized screen centered instead of losing its right and
@@ -366,6 +367,224 @@ impl EmbeddedGuiStudio {
                 self.project_root = path.parent().map(|p| p.to_path_buf());
             })
         }
+    }
+
+    /// Copies a file into the open project under `assets/<subdir>`, returning
+    /// the copy's path and the project-relative path KDL should reference.
+    ///
+    /// Existing names are never overwritten: a `-2`, `-3`, ... suffix is added
+    /// so re-importing a revised asset can't silently replace one still in use
+    /// by another screen.
+    fn copy_into_assets(
+        &self,
+        source: &std::path::Path,
+        subdir: &str,
+    ) -> Result<(std::path::PathBuf, String), String> {
+        let root = self
+            .project_root
+            .clone()
+            .ok_or_else(|| "Save or open a project before importing assets".to_string())?;
+        let file_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| "The selected file has an invalid filename".to_string())?;
+        let assets_dir = if subdir.is_empty() {
+            root.join("assets")
+        } else {
+            root.join("assets").join(subdir)
+        };
+        std::fs::create_dir_all(&assets_dir)
+            .map_err(|e| format!("Could not create {}: {e}", assets_dir.display()))?;
+
+        let mut destination = assets_dir.join(file_name);
+        if destination.exists() && destination != source {
+            let stem = source
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or("asset");
+            let extension = source
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or("bin");
+            for suffix in 2.. {
+                let candidate = assets_dir.join(format!("{stem}-{suffix}.{extension}"));
+                if !candidate.exists() {
+                    destination = candidate;
+                    break;
+                }
+            }
+        }
+        if destination != source {
+            std::fs::copy(source, &destination).map_err(|e| {
+                format!(
+                    "Could not copy {} to {}: {e}",
+                    source.display(),
+                    destination.display()
+                )
+            })?;
+        }
+
+        let name = destination
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(file_name);
+        let relative = if subdir.is_empty() {
+            format!("assets/{name}")
+        } else {
+            format!("assets/{subdir}/{name}")
+        };
+        Ok((destination, relative))
+    }
+
+    /// Copies an image into the open project's `assets/` directory and inserts
+    /// an image node behind the current screen's other widgets.
+    fn import_image_asset(&mut self) -> Result<std::path::PathBuf, String> {
+        let source = rfd::FileDialog::new()
+            .set_title("Import PNG, JPEG, or BMP")
+            .add_filter("Image", &["png", "jpg", "jpeg", "bmp"])
+            .pick_file()
+            .ok_or_else(|| "Import cancelled".to_string())?;
+        let (destination, relative) = self.copy_into_assets(&source, "")?;
+
+        let mut screen = self.parsed_screen.as_ref().map_err(Clone::clone)?.clone();
+        screen.grid.children.insert(
+            0,
+            (
+                GridPlacementDef::default(),
+                WidgetDef::Image {
+                    id: Some("image".into()),
+                    source: relative,
+                    fit: "center".into(),
+                    mode: "color".into(),
+                    tint: None,
+                },
+            ),
+        );
+        self.selected_widget_idx = Some(0);
+        self.sync_from_screen(&screen);
+        Ok(destination)
+    }
+
+    /// Imports a BDF font and declares it on the active screen, ready for
+    /// `font="…"` on labels and carousels.
+    fn import_font_asset(&mut self) -> Result<std::path::PathBuf, String> {
+        let source = rfd::FileDialog::new()
+            .set_title("Import BDF bitmap font")
+            .add_filter("BDF font", &["bdf"])
+            .pick_file()
+            .ok_or_else(|| "Import cancelled".to_string())?;
+
+        // Fail before copying if the font can't be parsed, so a broken import
+        // doesn't leave a stray file in the project.
+        let text = std::fs::read_to_string(&source)
+            .map_err(|e| format!("Could not read {}: {e}", source.display()))?;
+        embedded_gui_codegen::assets::parse_bdf(&text, None)
+            .map_err(|e| format!("{}: {e}", source.display()))?;
+
+        let (destination, relative) = self.copy_into_assets(&source, "fonts")?;
+        let name = destination
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("font")
+            .to_string();
+
+        let mut screen = self.parsed_screen.as_ref().map_err(Clone::clone)?.clone();
+        if let Some(existing) = screen.fonts.iter_mut().find(|font| font.name == name) {
+            existing.source = relative;
+        } else {
+            screen.fonts.push(embedded_gui_codegen::FontAssetDef {
+                name,
+                source: relative,
+                chars: String::new(),
+            });
+        }
+        self.sync_from_screen(&screen);
+        Ok(destination)
+    }
+
+    /// Imports 1-bit icon art. With a composite icon selected the art becomes
+    /// another layer of it; otherwise a new icon widget is created.
+    fn import_icon_asset(&mut self) -> Result<std::path::PathBuf, String> {
+        let source = rfd::FileDialog::new()
+            .set_title("Import icon art (PNG, BMP)")
+            .add_filter("Image", &["png", "bmp", "jpg", "jpeg"])
+            .pick_file()
+            .ok_or_else(|| "Import cancelled".to_string())?;
+        let (destination, relative) = self.copy_into_assets(&source, "icons")?;
+
+        let mut screen = self.parsed_screen.as_ref().map_err(Clone::clone)?.clone();
+        let part = embedded_gui_codegen::IconPartDef {
+            source: relative,
+            dx: 0,
+            dy: 0,
+            visible: true,
+            tint: None,
+        };
+        let selected = self
+            .selected_widget_idx
+            .filter(|idx| *idx < screen.grid.children.len());
+        match selected.map(|idx| &mut screen.grid.children[idx].1) {
+            Some(WidgetDef::CompositeIcon { parts, .. }) => parts.push(part),
+            _ => {
+                screen.grid.children.insert(
+                    0,
+                    (
+                        GridPlacementDef::default(),
+                        WidgetDef::CompositeIcon {
+                            id: Some("icon".into()),
+                            parts: vec![part],
+                            scale: 1,
+                            align: "center".into(),
+                            tint: Some("accent".into()),
+                            threshold: 128,
+                            invert: false,
+                        },
+                    ),
+                );
+                self.selected_widget_idx = Some(0);
+            }
+        }
+        self.sync_from_screen(&screen);
+        Ok(destination)
+    }
+
+    /// Imports an OBJ or STL mesh and inserts a 3D node for it.
+    fn import_mesh_asset(&mut self) -> Result<std::path::PathBuf, String> {
+        let source = rfd::FileDialog::new()
+            .set_title("Import 3D mesh")
+            .add_filter("OBJ or STL mesh", &["obj", "stl"])
+            .pick_file()
+            .ok_or_else(|| "Import cancelled".to_string())?;
+
+        let bytes = std::fs::read(&source)
+            .map_err(|e| format!("Could not read {}: {e}", source.display()))?;
+        let name = source.file_name().unwrap_or_default().to_string_lossy();
+        embedded_gui_codegen::assets::parse_mesh(&name, &bytes)
+            .map_err(|e| format!("{}: {e}", source.display()))?;
+
+        let (destination, relative) = self.copy_into_assets(&source, "meshes")?;
+        let mut screen = self.parsed_screen.as_ref().map_err(Clone::clone)?.clone();
+        screen.grid.children.insert(
+            0,
+            (
+                GridPlacementDef::default(),
+                WidgetDef::Mesh3d {
+                    id: Some("mesh".into()),
+                    source: relative,
+                    shading: "lit".into(),
+                    color: Some("accent".into()),
+                    scale: 1.0,
+                    roll: 0.0,
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    camera_distance: 4.0,
+                    fov: 1.5707964,
+                },
+            ),
+        );
+        self.selected_widget_idx = Some(0);
+        self.sync_from_screen(&screen);
+        Ok(destination)
     }
 
     /// Scans for display agents at startup and attaches to one if it is
@@ -790,11 +1009,12 @@ impl EmbeddedGuiStudio {
 
         // Render through embedded-gui itself. This is the same RGB565 path used
         // for USB, so the canvas reflects the actual firmware-facing pixels.
-        let preview_frame = crate::live_render::render_screen_at(
+        let preview_frame = crate::live_render::render_screen_at_with_assets(
             screen,
             self.display_theme,
             self.animation_phase(),
             self.active_highlight(),
+            self.project_root.as_deref(),
         );
         let mut preview_rgb = Vec::with_capacity(preview_frame.pixels.len() * 3);
         for pixel in &preview_frame.pixels {
@@ -1711,7 +1931,7 @@ impl eframe::App for EmbeddedGuiStudio {
                 ui.separator();
 
                 ui.menu_button("📁 File", |ui| {
-                    if ui.button("📂 Open Project…").clicked() {
+                    if ui.button("📂 Open Project (project.kdl)…").clicked() {
                         if let Some(result) = crate::project::open_project_dialog() {
                             match result {
                                 Ok(project) => {
@@ -1757,6 +1977,89 @@ impl eframe::App for EmbeddedGuiStudio {
                             Err(err) => {
                                 self.action_toast = Some((format!("Save project: {err}"), 3.0));
                             }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("🖼 Import Image Asset…").clicked() {
+                        match self.import_image_asset() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!(
+                                        "Imported {} and added it to the active screen",
+                                        path.file_name()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("image")
+                                    ),
+                                    3.0,
+                                ));
+                            }
+                            Err(err) if err != "Import cancelled" => {
+                                self.action_toast = Some((format!("Import image: {err}"), 3.0));
+                            }
+                            Err(_) => {}
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("🔤 Import Font (BDF)…").clicked() {
+                        match self.import_font_asset() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!(
+                                        "Imported {}; reference it with font=\"{}\"",
+                                        path.file_name()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("font"),
+                                        path.file_stem()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("font")
+                                    ),
+                                    4.0,
+                                ));
+                            }
+                            Err(err) if err != "Import cancelled" => {
+                                self.action_toast = Some((format!("Import font: {err}"), 4.0));
+                            }
+                            Err(_) => {}
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("🧩 Import Icon Art (1-bit)…").clicked() {
+                        match self.import_icon_asset() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!(
+                                        "Imported {} as an icon layer",
+                                        path.file_name()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("icon")
+                                    ),
+                                    3.0,
+                                ));
+                            }
+                            Err(err) if err != "Import cancelled" => {
+                                self.action_toast = Some((format!("Import icon: {err}"), 3.0));
+                            }
+                            Err(_) => {}
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("🧊 Import Mesh (OBJ)…").clicked() {
+                        match self.import_mesh_asset() {
+                            Ok(path) => {
+                                self.action_toast = Some((
+                                    format!(
+                                        "Imported {} as a 3D node",
+                                        path.file_name()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("mesh")
+                                    ),
+                                    3.0,
+                                ));
+                            }
+                            Err(err) if err != "Import cancelled" => {
+                                self.action_toast = Some((format!("Import mesh: {err}"), 3.0));
+                            }
+                            Err(_) => {}
                         }
                         ui.close_menu();
                     }
@@ -1925,6 +2228,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             id: None,
                             text: "SYSTEM ONLINE".to_string(),
                             style: None,
+                            font: None,
                         });
                         ui.close_menu();
                     }
@@ -1933,6 +2237,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             id: None,
                             text: "[ ACTIVE ]".to_string(),
                             style: Some("inverted".to_string()),
+                            font: None,
                         });
                         ui.close_menu();
                     }

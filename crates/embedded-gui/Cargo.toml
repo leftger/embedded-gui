@@ -49,7 +49,7 @@ embedded-graphics = { workspace = true, optional = true }
 embedded-text = { workspace = true, optional = true }
 embedded-layout = { workspace = true, optional = true }
 embedded-dsp = { workspace = true, optional = true }
-embedded-3dgfx = { workspace = true, optional = true }
+embedded-3dgfx = { workspace = true, optional = true, features = ["lighting"] }
 nalgebra = { workspace = true, features = ["libm"], optional = true }
 embedded-gui-macros = { workspace = true, optional = true }
 
@@ -143,6 +143,11 @@ required-features = ["std"]
 name = "cinematic_transitions_showcase"
 path = "examples/basics/cinematic_transitions_showcase.rs"
 required-features = ["std"]
+
+[[example]]
+name = "kdl_advanced_widgets_showcase"
+path = "examples/basics/kdl_advanced_widgets_showcase.rs"
+required-features = ["std", "macros", "embedded-3dgfx"]
 
 [[example]]
 name = "generate_readme_screenshots"

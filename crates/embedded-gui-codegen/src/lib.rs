@@ -3,6 +3,8 @@
 //! Enables UI designers and non-technical domain experts to author declarative GUI screens
 //! in KDL and compile them into deterministic, zero-allocation (`no_std`) Rust code.
 
+pub mod assets;
+
 use core::fmt::Write as _;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use thiserror::Error;
@@ -62,6 +64,8 @@ pub enum WidgetDef {
         id: Option<String>,
         text: String,
         style: Option<String>,
+        /// Name of a `font` declared on the screen, e.g. a BDF import.
+        font: Option<String>,
     },
     Button {
         id: Option<String>,
@@ -172,6 +176,52 @@ pub enum WidgetDef {
         id: Option<String>,
         style: Option<String>,
     },
+    Image {
+        id: Option<String>,
+        source: String,
+        fit: String,
+        mode: String,
+        tint: Option<String>,
+    },
+    /// Wrap-around scrolling list with slot falloff, edge fade, and chrome masks.
+    Carousel {
+        id: Option<String>,
+        items: Vec<String>,
+        selected: usize,
+        item_step: u16,
+        visible: u8,
+        shift: i16,
+        mask_top: u16,
+        mask_bottom: u16,
+        fade: bool,
+        indicator: bool,
+        pulse: u8,
+        style: Option<String>,
+        font: Option<String>,
+    },
+    /// Stacked 1bpp bitmap parts, each independently toggled and tinted.
+    CompositeIcon {
+        id: Option<String>,
+        parts: Vec<IconPartDef>,
+        scale: u8,
+        align: String,
+        tint: Option<String>,
+        threshold: u8,
+        invert: bool,
+    },
+    /// A mesh rendered through embedded-3dgfx inside the widget rect.
+    Mesh3d {
+        id: Option<String>,
+        source: String,
+        shading: String,
+        color: Option<String>,
+        scale: f32,
+        roll: f32,
+        pitch: f32,
+        yaw: f32,
+        camera_distance: f32,
+        fov: f32,
+    },
     Spacer,
     VectorPath {
         id: Option<String>,
@@ -199,6 +249,36 @@ pub enum WidgetDef {
     },
 }
 
+/// One layer of a [`WidgetDef::CompositeIcon`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct IconPartDef {
+    pub source: String,
+    pub dx: i32,
+    pub dy: i32,
+    pub visible: bool,
+    pub tint: Option<String>,
+}
+
+/// A font imported by a screen, resolved to bitmap data by a project-aware
+/// caller such as `include_gui!`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontAssetDef {
+    /// Name referenced by `font=` on widgets.
+    pub name: String,
+    pub source: String,
+    /// Characters to embed; empty means the font's full range.
+    pub chars: String,
+}
+
+/// RGB565 image data resolved by a project-aware caller such as `include_gui!`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageAssetDef {
+    pub source: String,
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<u16>,
+}
+
 impl WidgetDef {
     pub fn id(&self) -> Option<&str> {
         match self {
@@ -223,6 +303,10 @@ impl WidgetDef {
             | WidgetDef::ContentIndicator { id, .. }
             | WidgetDef::CrumbsIndicator { id, .. }
             | WidgetDef::Panel { id, .. }
+            | WidgetDef::Image { id, .. }
+            | WidgetDef::Carousel { id, .. }
+            | WidgetDef::CompositeIcon { id, .. }
+            | WidgetDef::Mesh3d { id, .. }
             | WidgetDef::VectorPath { id, .. }
             | WidgetDef::RectShape { id, .. }
             | WidgetDef::LineShape { id, .. }
@@ -248,6 +332,8 @@ pub struct ScreenDef {
     pub width: u32,
     pub height: u32,
     pub theme: Option<String>,
+    /// Fonts imported by this screen, referenced by `font=` on widgets.
+    pub fonts: Vec<FontAssetDef>,
     pub grid: GridLayoutDef,
 }
 
@@ -574,7 +660,13 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
                 .or_else(|| node.entries().first().and_then(entry_to_str))
                 .unwrap_or("")
                 .to_string();
-            WidgetDef::Label { id, text, style }
+            let font = get_string_prop(node, "font").map(|s| s.to_string());
+            WidgetDef::Label {
+                id,
+                text,
+                style,
+                font,
+            }
         }
         "button" => {
             let text = get_string_prop(node, "text")
@@ -763,6 +855,112 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
             WidgetDef::CrumbsIndicator { id, count, active }
         }
         "panel" | "card" => WidgetDef::Panel { id, style },
+        "image" | "bitmap" => {
+            let source = get_string_prop(node, "src")
+                .or_else(|| get_string_prop(node, "source"))
+                .ok_or_else(|| CodegenError::MissingAttribute("image", "src".into()))?
+                .to_string();
+            let fit = get_string_prop(node, "fit")
+                .unwrap_or("stretch")
+                .to_string();
+            let mode = get_string_prop(node, "mode").unwrap_or("color").to_string();
+            let tint = get_string_prop(node, "tint").map(str::to_string);
+            WidgetDef::Image {
+                id,
+                source,
+                fit,
+                mode,
+                tint,
+            }
+        }
+        "carousel" => {
+            let mut items = Vec::new();
+            if let Some(children) = node.children() {
+                for child in children.nodes() {
+                    if matches!(child.name().value(), "option" | "item") {
+                        if let Some(text) = child.entries().first().and_then(entry_to_str) {
+                            items.push(text.to_string());
+                        }
+                    }
+                }
+            }
+            WidgetDef::Carousel {
+                id,
+                items,
+                selected: get_i64_prop(node, "selected").unwrap_or(0).max(0) as usize,
+                item_step: get_i64_prop(node, "item_step").unwrap_or(16).clamp(1, 255) as u16,
+                visible: get_i64_prop(node, "visible").unwrap_or(7).clamp(1, 31) as u8,
+                shift: get_i64_prop(node, "shift").unwrap_or(0).clamp(-4096, 4096) as i16,
+                mask_top: get_i64_prop(node, "mask_top").unwrap_or(0).clamp(0, 4096) as u16,
+                mask_bottom: get_i64_prop(node, "mask_bottom")
+                    .unwrap_or(0)
+                    .clamp(0, 4096) as u16,
+                fade: get_bool_prop(node, "fade").unwrap_or(true),
+                indicator: get_bool_prop(node, "indicator").unwrap_or(false),
+                pulse: get_i64_prop(node, "pulse").unwrap_or(255).clamp(0, 255) as u8,
+                style,
+                font: get_string_prop(node, "font").map(str::to_string),
+            }
+        }
+        "icon" | "composite_icon" => {
+            let mut parts = Vec::new();
+            if let Some(children) = node.children() {
+                for child in children.nodes() {
+                    if child.name().value() != "part" {
+                        continue;
+                    }
+                    let source = get_string_prop(child, "src")
+                        .or_else(|| get_string_prop(child, "source"))
+                        .or_else(|| child.entries().first().and_then(entry_to_str))
+                        .ok_or_else(|| CodegenError::MissingAttribute("part", "src".into()))?
+                        .to_string();
+                    parts.push(IconPartDef {
+                        source,
+                        dx: get_i64_prop(child, "x").unwrap_or(0) as i32,
+                        dy: get_i64_prop(child, "y").unwrap_or(0) as i32,
+                        visible: get_bool_prop(child, "visible").unwrap_or(true),
+                        tint: get_string_prop(child, "tint").map(str::to_string),
+                    });
+                }
+            }
+            if parts.is_empty() {
+                return Err(CodegenError::MissingAttribute(
+                    "icon",
+                    "at least one 'part' child".into(),
+                ));
+            }
+            WidgetDef::CompositeIcon {
+                id,
+                parts,
+                scale: get_i64_prop(node, "scale").unwrap_or(1).clamp(1, 16) as u8,
+                align: get_string_prop(node, "align")
+                    .unwrap_or("center")
+                    .to_string(),
+                tint: get_string_prop(node, "tint").map(str::to_string),
+                threshold: get_i64_prop(node, "threshold").unwrap_or(128).clamp(0, 255) as u8,
+                invert: get_bool_prop(node, "invert").unwrap_or(false),
+            }
+        }
+        "mesh" | "mesh3d" => {
+            let source = get_string_prop(node, "src")
+                .or_else(|| get_string_prop(node, "source"))
+                .ok_or_else(|| CodegenError::MissingAttribute("mesh", "src".into()))?
+                .to_string();
+            WidgetDef::Mesh3d {
+                id,
+                source,
+                shading: get_string_prop(node, "shading")
+                    .unwrap_or("solid")
+                    .to_string(),
+                color: get_string_prop(node, "color").map(str::to_string),
+                scale: get_f64_prop(node, "scale").unwrap_or(1.0) as f32,
+                roll: get_f64_prop(node, "roll").unwrap_or(0.0) as f32,
+                pitch: get_f64_prop(node, "pitch").unwrap_or(0.0) as f32,
+                yaw: get_f64_prop(node, "yaw").unwrap_or(0.0) as f32,
+                camera_distance: get_f64_prop(node, "camera_distance").unwrap_or(4.0) as f32,
+                fov: get_f64_prop(node, "fov").unwrap_or(1.5707964) as f32,
+            }
+        }
         "spacer" => WidgetDef::Spacer,
         "vector_path" | "path" => {
             let stroke_width = get_i64_prop(node, "stroke_width").unwrap_or(2).max(1) as u8;
@@ -868,6 +1066,29 @@ pub fn parse_kdl_screen(kdl_source: &str) -> Result<ScreenDef, CodegenError> {
     let height = get_i64_prop(screen_node, "height").unwrap_or(240).max(1) as u32;
     let theme = get_string_prop(screen_node, "theme").map(|s| s.to_string());
 
+    let mut fonts = Vec::new();
+    if let Some(children) = screen_node.children() {
+        for child in children.nodes() {
+            if child.name().value() != "font" {
+                continue;
+            }
+            let name = get_string_prop(child, "id")
+                .or_else(|| get_string_prop(child, "name"))
+                .or_else(|| child.entries().first().and_then(entry_to_str))
+                .ok_or_else(|| CodegenError::MissingAttribute("font", "id".into()))?
+                .to_string();
+            let source = get_string_prop(child, "src")
+                .or_else(|| get_string_prop(child, "source"))
+                .ok_or_else(|| CodegenError::MissingAttribute("font", "src".into()))?
+                .to_string();
+            fonts.push(FontAssetDef {
+                name,
+                source,
+                chars: get_string_prop(child, "chars").unwrap_or("").to_string(),
+            });
+        }
+    }
+
     let grid_node = screen_node
         .children()
         .and_then(|c| c.nodes().iter().find(|n| n.name().value() == "grid"))
@@ -904,6 +1125,7 @@ pub fn parse_kdl_screen(kdl_source: &str) -> Result<ScreenDef, CodegenError> {
         width,
         height,
         theme,
+        fonts,
         grid,
     })
 }
@@ -930,6 +1152,13 @@ fn style_expr(style: Option<&str>, default: &str) -> String {
         None => default.to_string(),
         Some(s) if s.starts_with("Style::") => s.to_string(),
         Some("default") | Some("label") | Some("bold") | Some("dim") => "Style::label()".into(),
+        Some("body") | Some("body-accent") | Some("body-success") | Some("body-danger")
+        | Some("body-dim") | Some("menu") => {
+            "{ let mut style = Style::label(); style.font = FontId::Scaled6x10; style }".into()
+        }
+        Some("hint") | Some("hint-dim") | Some("hint-accent") => {
+            "{ let mut style = Style::label(); style.font = FontId::Medium4x7; style }".into()
+        }
         Some("button") => "Style::button()".into(),
         Some("panel") | Some("card") => "Style::panel()".into(),
         Some("progress") => "Style::progress()".into(),
@@ -1283,6 +1512,15 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     var_name, idx, st
                 );
             }
+            WidgetDef::Image {
+                source, fit, mode, ..
+            } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_spacer(cells[{}])?; // image src={:?} fit={:?} mode={:?}; asset data is supplied by include_gui!",
+                    var_name, idx, source, fit, mode
+                );
+            }
             WidgetDef::Spacer => {
                 let _ = writeln!(
                     &mut out,
@@ -1387,6 +1625,48 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     var_name, idx
                 );
             }
+            WidgetDef::Carousel {
+                items,
+                selected,
+                style,
+                ..
+            } => {
+                let joined = items
+                    .iter()
+                    .map(|s| format!("\"{}\"", s))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let st = style_expr(style.as_deref(), "Style::label()");
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_carousel(cells[{}], &[{}], {}, {}, {})?;",
+                    var_name,
+                    idx,
+                    joined,
+                    selected,
+                    carousel_spec_expr(w),
+                    st
+                );
+            }
+            WidgetDef::CompositeIcon { parts, .. } => {
+                let sources = parts
+                    .iter()
+                    .map(|part| part.source.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_spacer(cells[{}])?; // icon parts=[{}]; asset data is supplied by include_gui!",
+                    var_name, idx, sources
+                );
+            }
+            WidgetDef::Mesh3d { source, .. } => {
+                let _ = writeln!(
+                    &mut out,
+                    "        let {} = gui.add_spacer(cells[{}])?; // mesh src={:?}; geometry is supplied by include_gui!",
+                    var_name, idx, source
+                );
+            }
         }
     }
 
@@ -1404,6 +1684,433 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
     out
 }
 
+/// Renders a [`WidgetDef::Carousel`]'s parameters as a `CarouselSpec` literal.
+fn carousel_spec_expr(widget: &WidgetDef) -> String {
+    let WidgetDef::Carousel {
+        item_step,
+        visible,
+        shift,
+        mask_top,
+        mask_bottom,
+        fade,
+        indicator,
+        pulse,
+        ..
+    } = widget
+    else {
+        return "CarouselSpec::default()".to_string();
+    };
+    format!(
+        "CarouselSpec {{ item_step: {item_step}, visible_slots: {visible}, shift: {shift}, \
+mask_top: {mask_top}, mask_bottom: {mask_bottom}, fade_edges: {fade}, indicator: {indicator}, \
+indicator_pulse: {pulse}, ..CarouselSpec::default() }}"
+    )
+}
+
+/// A 1bpp icon layer resolved by a project-aware caller.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IconAssetDef {
+    pub source: String,
+    pub bitmap: assets::MonoBitmapData,
+}
+
+/// A screen font resolved to embeddable bitmap data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontBinaryDef {
+    pub name: String,
+    pub font: assets::BitmapFontData,
+}
+
+/// Mesh geometry resolved by a project-aware caller.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeshAssetDef {
+    pub source: String,
+    pub mesh: assets::MeshData,
+}
+
+/// Everything `include_gui!` resolved off disk for one screen.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ProjectAssets {
+    pub images: Vec<ImageAssetDef>,
+    pub icons: Vec<IconAssetDef>,
+    pub fonts: Vec<FontBinaryDef>,
+    pub meshes: Vec<MeshAssetDef>,
+}
+
+/// Generates Rust code with project image nodes backed by static RGB565 arrays.
+///
+/// Plain [`generate_rust_code`] intentionally leaves image nodes as spacers
+/// because a standalone KDL string has no filesystem base. `include_gui!`
+/// resolves those files and calls this variant.
+pub fn generate_rust_code_with_image_assets(
+    screen: &ScreenDef,
+    assets: &[ImageAssetDef],
+) -> String {
+    generate_rust_code_with_assets(
+        screen,
+        &ProjectAssets {
+            images: assets.to_vec(),
+            ..ProjectAssets::default()
+        },
+    )
+}
+
+/// Generates Rust code with every project asset resolved: images, 1bpp icon
+/// parts, imported fonts, and mesh geometry.
+pub fn generate_rust_code_with_assets(screen: &ScreenDef, assets: &ProjectAssets) -> String {
+    let mut out = generate_rust_code(screen);
+    let mut declarations = String::new();
+
+    for font in &assets.fonts {
+        let const_name = font_const_name(&font.name);
+        let data = &font.font;
+        let _ = writeln!(
+            &mut declarations,
+            "static {}_GLYPHS: [u8; {}] = [",
+            const_name,
+            data.glyphs.len()
+        );
+        for chunk in data.glyphs.chunks(16) {
+            let values = chunk
+                .iter()
+                .map(|byte| format!("0x{byte:02X}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(&mut declarations, "    {},", values);
+        }
+        let _ = writeln!(&mut declarations, "];");
+        let _ = writeln!(
+            &mut declarations,
+            "static {const}: BitmapFont = BitmapFont {{ width: {w}, height: {h}, advance: {adv}, \
+        line_height: {lh}, first_char: {first}, bytes_per_row: {bpr}, glyphs: &{const}_GLYPHS }};\n",
+            const = const_name,
+            w = data.width,
+            h = data.height,
+            adv = data.advance,
+            lh = data.line_height,
+            first = data.first_char,
+            bpr = data.bytes_per_row,
+        );
+    }
+
+    // Fonts referenced by labels and carousels replace the default style font.
+    for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
+        let (font_name, var_name) = match widget {
+            WidgetDef::Label { font: Some(f), .. } | WidgetDef::Carousel { font: Some(f), .. } => (
+                f,
+                widget
+                    .id()
+                    .map(to_snake_case)
+                    .unwrap_or_else(|| format!("_w{}", idx)),
+            ),
+            _ => continue,
+        };
+        if !assets.fonts.iter().any(|f| f.name == *font_name) {
+            continue;
+        }
+        let font_expr = format!(
+            "{{ let mut style = Style::label(); style.font = FontId::Bitmap(&{}); style }}",
+            font_const_name(font_name)
+        );
+        let prefix = format!("        let {} = gui.add_", var_name);
+        out = out
+            .lines()
+            .map(|line| {
+                if !line.starts_with(&prefix) {
+                    return line.to_string();
+                }
+                // The style is always the final argument of the builder call.
+                match (line.rfind(", "), line.rfind(")?;")) {
+                    (Some(start), Some(end)) if start < end => {
+                        format!("{}, {}{}", &line[..start], font_expr, &line[end..])
+                    }
+                    _ => line.to_string(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        out.push('\n');
+    }
+
+    for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
+        let var_name = widget
+            .id()
+            .map(to_snake_case)
+            .unwrap_or_else(|| format!("widget_{}", idx));
+        match widget {
+            WidgetDef::CompositeIcon {
+                parts,
+                scale,
+                align,
+                tint,
+                ..
+            } => {
+                let mut part_exprs = Vec::new();
+                for (part_idx, part) in parts.iter().enumerate() {
+                    let Some(asset) = assets.icons.iter().find(|a| a.source == part.source) else {
+                        continue;
+                    };
+                    let bits_name = format!("__ICON_{}_{}_BITS", idx, part_idx);
+                    let _ = writeln!(
+                        &mut declarations,
+                        "static {}: [u8; {}] = [",
+                        bits_name,
+                        asset.bitmap.bits.len()
+                    );
+                    for chunk in asset.bitmap.bits.chunks(16) {
+                        let values = chunk
+                            .iter()
+                            .map(|byte| format!("0x{byte:02X}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let _ = writeln!(&mut declarations, "    {},", values);
+                    }
+                    let _ = writeln!(&mut declarations, "];\n");
+                    let tint_expr = match part.tint.as_deref().or(tint.as_deref()) {
+                        Some(color) => format!("Some({})", rgb565_expr(color)),
+                        None => "None".to_string(),
+                    };
+                    part_exprs.push(format!(
+                        "    IconPart {{ bitmap: MonoBitmap {{ width: {w}, height: {h}, bits: &{bits} }}, \
+dx: {dx}, dy: {dy}, visible: {vis}, tint: {tint} }},",
+                        w = asset.bitmap.width,
+                        h = asset.bitmap.height,
+                        bits = bits_name,
+                        dx = part.dx,
+                        dy = part.dy,
+                        vis = part.visible,
+                        tint = tint_expr,
+                    ));
+                }
+                if part_exprs.is_empty() {
+                    continue;
+                }
+                let parts_name = format!("__ICON_{}_PARTS", idx);
+                let _ = writeln!(
+                    &mut declarations,
+                    "static {}: [IconPart<'static>; {}] = [\n{}\n];\n",
+                    parts_name,
+                    part_exprs.len(),
+                    part_exprs.join("\n")
+                );
+
+                let sources = parts
+                    .iter()
+                    .map(|part| part.source.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let needle = format!(
+                    "        let {} = gui.add_spacer(cells[{}])?; // icon parts=[{}]; asset data is supplied by include_gui!",
+                    var_name, idx, sources
+                );
+                let align_expr = if align == "top_left" {
+                    "IconAlign::TopLeft"
+                } else {
+                    "IconAlign::Center"
+                };
+                let replacement = format!(
+                    "        let {} = gui.add_composite_icon(cells[{}], &{}, CompositeIconSpec {{ scale: {}, align: {}, paper: None }}, Style::default())?;",
+                    var_name, idx, parts_name, scale, align_expr
+                );
+                out = out.replace(&needle, &replacement);
+            }
+            WidgetDef::Mesh3d {
+                source,
+                shading,
+                color,
+                scale,
+                roll,
+                pitch,
+                yaw,
+                camera_distance,
+                fov,
+                ..
+            } => {
+                let Some(asset) = assets.meshes.iter().find(|a| a.source == *source) else {
+                    continue;
+                };
+                let mesh = &asset.mesh;
+                let base = format!("__MESH_{}", idx);
+                let _ = writeln!(
+                    &mut declarations,
+                    "static {}_VERTICES: [[f32; 3]; {}] = [",
+                    base,
+                    mesh.vertices.len()
+                );
+                for v in &mesh.vertices {
+                    let _ = writeln!(
+                        &mut declarations,
+                        "    [{:?}, {:?}, {:?}],",
+                        v[0], v[1], v[2]
+                    );
+                }
+                let _ = writeln!(&mut declarations, "];");
+                let _ = writeln!(
+                    &mut declarations,
+                    "static {}_FACES: [[usize; 3]; {}] = [",
+                    base,
+                    mesh.faces.len()
+                );
+                for f in &mesh.faces {
+                    let _ = writeln!(&mut declarations, "    [{}, {}, {}],", f[0], f[1], f[2]);
+                }
+                let _ = writeln!(&mut declarations, "];");
+                let _ = writeln!(
+                    &mut declarations,
+                    "static {}_NORMALS: [[f32; 3]; {}] = [",
+                    base,
+                    mesh.normals.len()
+                );
+                for n in &mesh.normals {
+                    let _ = writeln!(
+                        &mut declarations,
+                        "    [{:?}, {:?}, {:?}],",
+                        n[0], n[1], n[2]
+                    );
+                }
+                let _ = writeln!(&mut declarations, "];\n");
+
+                let shading_expr = match shading.as_str() {
+                    "points" => "MeshShading::Points",
+                    "lines" | "wireframe" => "MeshShading::Lines",
+                    "lit" => "MeshShading::Lit",
+                    _ => "MeshShading::Solid",
+                };
+                let color_expr = match color.as_deref() {
+                    Some(c) => rgb565_expr(c),
+                    None => "Rgb565::new(31, 63, 31)".to_string(),
+                };
+                // The panel is a free function rather than a widget: the 3D
+                // rasterizer needs a Z-buffer the caller owns.
+                let _ = writeln!(
+                    &mut declarations,
+                    "/// Mesh panel for the `{source}` node. Render it with\n\
+/// `embedded_gui::interop::three_d::render_mesh_panel` using the rect of the\n\
+/// `{var_name}` widget; requires embedded-gui's `embedded-3dgfx` feature.\n\
+pub fn {var_name}_mesh_panel() -> MeshPanel<'static> {{\n\
+    let mut panel = MeshPanel::new(\n\
+        Geometry {{\n\
+            vertices: &{base}_VERTICES,\n\
+            faces: &{base}_FACES,\n\
+            normals: &{base}_NORMALS,\n\
+            ..Geometry::default()\n\
+        }},\n\
+        {color_expr},\n\
+    );\n\
+    panel.shading = {shading_expr};\n\
+    panel.scale = {scale:?};\n\
+    panel.attitude = ({roll:?}, {pitch:?}, {yaw:?});\n\
+    panel.camera_distance = {camera_distance:?};\n\
+    panel.fov = {fov:?};\n\
+    panel\n\
+}}\n"
+                );
+            }
+            _ => {}
+        }
+    }
+
+    for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
+        let WidgetDef::Image {
+            source, fit, mode, ..
+        } = widget
+        else {
+            continue;
+        };
+        let Some(asset) = assets.images.iter().find(|asset| asset.source == *source) else {
+            continue;
+        };
+        let var_name = widget
+            .id()
+            .map(to_snake_case)
+            .unwrap_or_else(|| format!("widget_{}", idx));
+        let const_name = format!("__IMAGE_ASSET_{}_PIXELS", idx);
+        let _ = writeln!(&mut declarations, "const {}: &[u16] = &[", const_name);
+        for chunk in asset.pixels.chunks(12) {
+            let values = chunk
+                .iter()
+                .map(|pixel| format!("0x{pixel:04X}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(&mut declarations, "    {},", values);
+        }
+        let _ = writeln!(&mut declarations, "];\n");
+
+        let needle = format!(
+            "        let {} = gui.add_spacer(cells[{}])?; // image src={:?} fit={:?} mode={:?}; asset data is supplied by include_gui!",
+            var_name, idx, source, fit, mode
+        );
+        let fit_expr = if fit == "center" {
+            "ImageFit::Center"
+        } else {
+            "ImageFit::Stretch"
+        };
+        let replacement = format!(
+            "        let {} = gui.add_image(cells[{}], ImageRef::new({}, {}, {}), {}, Style::default())?;",
+            var_name, idx, asset.width, asset.height, const_name, fit_expr
+        );
+        out = out.replace(&needle, &replacement);
+    }
+
+    if !assets.meshes.is_empty() {
+        declarations.insert_str(
+            0,
+            "use embedded_gui::interop::three_d::{Geometry, MeshPanel, MeshShading};\n\n",
+        );
+    }
+
+    if !declarations.is_empty() {
+        let marker = "use embedded_gui::prelude::*;\n";
+        out = out.replacen(marker, &format!("{marker}\n{declarations}"), 1);
+    }
+    out
+}
+
+/// Rust-cases a font name into the identifier of its generated static.
+fn font_const_name(name: &str) -> String {
+    let mut out = String::from("__FONT_");
+    for ch in name.chars() {
+        out.push(if ch.is_ascii_alphanumeric() {
+            ch.to_ascii_uppercase()
+        } else {
+            '_'
+        });
+    }
+    out
+}
+
+/// Renders a color token (`#RRGGBB`, `#RGB`, or a palette name) as an
+/// `Rgb565::new(..)` literal.
+fn rgb565_expr(token: &str) -> String {
+    let (r, g, b) = match token.trim().trim_start_matches('#') {
+        hex if hex.len() == 6 && token.trim_start().starts_with('#') => {
+            let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0);
+            (byte(0), byte(2), byte(4))
+        }
+        hex if hex.len() == 3 && token.trim_start().starts_with('#') => {
+            let nib = |i: usize| {
+                let v = u8::from_str_radix(&hex[i..i + 1], 16).unwrap_or(0);
+                v * 17
+            };
+            (nib(0), nib(1), nib(2))
+        }
+        "black" => (0, 0, 0),
+        "red" | "danger" => (255, 0, 0),
+        "green" | "success" => (0, 255, 0),
+        "blue" => (0, 0, 255),
+        "yellow" | "warning" => (255, 255, 0),
+        "cyan" | "accent" => (0, 255, 255),
+        "magenta" => (255, 0, 255),
+        _ => (255, 255, 255),
+    };
+    format!(
+        "Rgb565::new({}, {}, {})",
+        r as u16 * 31 / 255,
+        g as u16 * 63 / 255,
+        b as u16 * 31 / 255
+    )
+}
+
 /// Serializes a `ScreenDef` back into clean, formatted KDL markup.
 pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
     let mut out = String::new();
@@ -1416,6 +2123,19 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
         "screen id=\"{}\" width={} height={}{} {{",
         screen.id, screen.width, screen.height, theme_attr
     );
+
+    for font in &screen.fonts {
+        let chars_attr = if font.chars.is_empty() {
+            String::new()
+        } else {
+            format!(" chars=\"{}\"", font.chars)
+        };
+        let _ = writeln!(
+            &mut out,
+            "    font id=\"{}\" src=\"{}\"{}",
+            font.name, font.source, chars_attr
+        );
+    }
 
     let cols_str: Vec<String> = screen
         .grid
@@ -1467,7 +2187,12 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
         };
 
         match w {
-            WidgetDef::Label { id, text, style } => {
+            WidgetDef::Label {
+                id,
+                text,
+                style,
+                font,
+            } => {
                 let id_attr = id
                     .as_ref()
                     .map(|s| format!(" id=\"{}\"", s))
@@ -1476,10 +2201,14 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
                     .as_ref()
                     .map(|s| format!(" style=\"{}\"", s))
                     .unwrap_or_default();
+                let font_attr = font
+                    .as_ref()
+                    .map(|s| format!(" font=\"{}\"", s))
+                    .unwrap_or_default();
                 let _ = writeln!(
                     &mut out,
-                    "        label{} text=\"{}\"{}{} col={} row={}",
-                    id_attr, text, style_attr, span_attrs, p.col, p.row
+                    "        label{} text=\"{}\"{}{}{} col={} row={}",
+                    id_attr, text, style_attr, font_attr, span_attrs, p.col, p.row
                 );
             }
             WidgetDef::Button {
@@ -1774,6 +2503,175 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
                     id_attr, style_attr, span_attrs, p.col, p.row
                 );
             }
+            WidgetDef::Image {
+                id,
+                source,
+                fit,
+                mode,
+                tint,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let tint_attr = tint
+                    .as_ref()
+                    .map(|s| format!(" tint=\"{}\"", s))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    &mut out,
+                    "        image{} src=\"{}\" fit=\"{}\" mode=\"{}\"{}{} col={} row={}",
+                    id_attr, source, fit, mode, tint_attr, span_attrs, p.col, p.row
+                );
+            }
+            WidgetDef::Carousel {
+                id,
+                items,
+                selected,
+                item_step,
+                visible,
+                shift,
+                mask_top,
+                mask_bottom,
+                fade,
+                indicator,
+                pulse,
+                style,
+                font,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let style_attr = style
+                    .as_ref()
+                    .map(|s| format!(" style=\"{}\"", s))
+                    .unwrap_or_default();
+                let font_attr = font
+                    .as_ref()
+                    .map(|s| format!(" font=\"{}\"", s))
+                    .unwrap_or_default();
+                let mut optional = String::new();
+                if *shift != 0 {
+                    let _ = write!(&mut optional, " shift={}", shift);
+                }
+                if *mask_top != 0 {
+                    let _ = write!(&mut optional, " mask_top={}", mask_top);
+                }
+                if *mask_bottom != 0 {
+                    let _ = write!(&mut optional, " mask_bottom={}", mask_bottom);
+                }
+                if !*fade {
+                    let _ = write!(&mut optional, " fade=false");
+                }
+                if *indicator {
+                    let _ = write!(&mut optional, " indicator=true pulse={}", pulse);
+                }
+                let _ = writeln!(
+                    &mut out,
+                    "        carousel{} selected={} item_step={} visible={}{}{}{}{} col={} row={} {{",
+                    id_attr,
+                    selected,
+                    item_step,
+                    visible,
+                    optional,
+                    style_attr,
+                    font_attr,
+                    span_attrs,
+                    p.col,
+                    p.row
+                );
+                for item in items {
+                    let _ = writeln!(&mut out, "            option \"{}\"", item);
+                }
+                let _ = writeln!(&mut out, "        }}");
+            }
+            WidgetDef::CompositeIcon {
+                id,
+                parts,
+                scale,
+                align,
+                tint,
+                threshold,
+                invert,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let tint_attr = tint
+                    .as_ref()
+                    .map(|s| format!(" tint=\"{}\"", s))
+                    .unwrap_or_default();
+                let mut optional = String::new();
+                if *threshold != 128 {
+                    let _ = write!(&mut optional, " threshold={}", threshold);
+                }
+                if *invert {
+                    let _ = write!(&mut optional, " invert=true");
+                }
+                let _ = writeln!(
+                    &mut out,
+                    "        icon{} scale={} align=\"{}\"{}{}{} col={} row={} {{",
+                    id_attr, scale, align, tint_attr, optional, span_attrs, p.col, p.row
+                );
+                for part in parts {
+                    let part_tint = part
+                        .tint
+                        .as_ref()
+                        .map(|s| format!(" tint=\"{}\"", s))
+                        .unwrap_or_default();
+                    let visible = if part.visible {
+                        String::new()
+                    } else {
+                        " visible=false".to_string()
+                    };
+                    let _ = writeln!(
+                        &mut out,
+                        "            part src=\"{}\" x={} y={}{}{}",
+                        part.source, part.dx, part.dy, visible, part_tint
+                    );
+                }
+                let _ = writeln!(&mut out, "        }}");
+            }
+            WidgetDef::Mesh3d {
+                id,
+                source,
+                shading,
+                color,
+                scale,
+                roll,
+                pitch,
+                yaw,
+                camera_distance,
+                fov,
+            } => {
+                let id_attr = id
+                    .as_ref()
+                    .map(|s| format!(" id=\"{}\"", s))
+                    .unwrap_or_default();
+                let color_attr = color
+                    .as_ref()
+                    .map(|s| format!(" color=\"{}\"", s))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    &mut out,
+                    "        mesh{} src=\"{}\" shading=\"{}\"{} scale={} roll={} pitch={} yaw={} camera_distance={} fov={}{} col={} row={}",
+                    id_attr,
+                    source,
+                    shading,
+                    color_attr,
+                    scale,
+                    roll,
+                    pitch,
+                    yaw,
+                    camera_distance,
+                    fov,
+                    span_attrs,
+                    p.col,
+                    p.row
+                );
+            }
             WidgetDef::Spacer => {
                 let _ = writeln!(
                     &mut out,
@@ -2000,6 +2898,109 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
     }
 
     #[test]
+    fn roundtrips_carousel_icon_mesh_and_fonts() {
+        let kdl = r#"screen id="Advanced" width=96 height=64 {
+    font id="sevenseg" src="assets/fonts/sevenseg30.bdf" chars="0123456789"
+    grid cols="1fr 26px" rows="12px 1fr" gap=0 padding=0 {
+        label id="count" text="042" font="sevenseg" col=0 row=0
+        carousel id="items" selected=1 item_step=16 visible=7 mask_top=14 mask_bottom=12 indicator=true pulse=96 style="body" col=0 row=1 {
+            option "ONE"
+            option "TWO"
+        }
+        icon id="battery" scale=2 align="top_left" tint="success" threshold=100 invert=true col=1 row=1 {
+            part src="assets/icons/shell.bmp" x=0 y=0
+            part src="assets/icons/bolt.bmp" x=3 y=1 visible=false tint="accent"
+        }
+        mesh id="gem" src="assets/meshes/gem.obj" shading="lit" color="accent" scale=1.5 roll=0.4 pitch=0.7 yaw=0 camera_distance=3.5 fov=1.2 col=1 row=0
+    }
+}
+"#;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        assert_eq!(screen.fonts.len(), 1);
+        assert_eq!(screen.fonts[0].chars, "0123456789");
+
+        let reparsed = parse_kdl_screen(&serialize_kdl_screen(&screen)).unwrap();
+        assert_eq!(screen, reparsed);
+    }
+
+    #[test]
+    fn generates_carousel_builder_calls() {
+        let kdl = r#"screen id="Menu" width=96 height=64 {
+    grid cols="1fr" rows="1fr" gap=0 padding=0 {
+        carousel id="items" selected=2 item_step=16 visible=7 mask_top=14 indicator=true pulse=96 col=0 row=0 {
+            option "ONE"
+            option "TWO"
+            option "THREE"
+        }
+    }
+}"#;
+        let rust_code = compile_kdl_to_rust(kdl).unwrap();
+        assert!(
+            rust_code.contains("gui.add_carousel(cells[0], &[\"ONE\", \"TWO\", \"THREE\"], 2,")
+        );
+        assert!(rust_code.contains("item_step: 16"));
+        assert!(rust_code.contains("mask_top: 14"));
+        assert!(rust_code.contains("indicator: true"));
+        assert!(rust_code.contains("indicator_pulse: 96"));
+    }
+
+    #[test]
+    fn embeds_fonts_icons_and_meshes_into_generated_code() {
+        let kdl = r##"screen id="Advanced" width=96 height=64 {
+    font id="sevenseg" src="assets/fonts/sevenseg30.bdf"
+    grid cols="1fr" rows="1fr 1fr 1fr" gap=0 padding=0 {
+        label id="count" text="42" font="sevenseg" col=0 row=0
+        icon id="battery" scale=2 col=0 row=1 {
+            part src="assets/icons/shell.bmp" x=1 y=2
+        }
+        mesh id="gem" src="assets/meshes/gem.obj" shading="lit" color="#00FF00" col=0 row=2
+    }
+}"##;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        let assets = ProjectAssets {
+            fonts: vec![FontBinaryDef {
+                name: "sevenseg".into(),
+                font: assets::BitmapFontData {
+                    width: 8,
+                    height: 8,
+                    advance: 8,
+                    line_height: 8,
+                    first_char: b'0',
+                    bytes_per_row: 1,
+                    glyphs: vec![0xFF; 16],
+                },
+            }],
+            icons: vec![IconAssetDef {
+                source: "assets/icons/shell.bmp".into(),
+                bitmap: assets::MonoBitmapData {
+                    width: 8,
+                    height: 2,
+                    bits: vec![0b1010_1010, 0b0101_0101],
+                },
+            }],
+            meshes: vec![MeshAssetDef {
+                source: "assets/meshes/gem.obj".into(),
+                mesh: assets::MeshData {
+                    vertices: vec![[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+                    faces: vec![[0, 1, 2]],
+                    normals: vec![[0.0, 0.0, 1.0]],
+                },
+            }],
+            ..ProjectAssets::default()
+        };
+
+        let rust_code = generate_rust_code_with_assets(&screen, &assets);
+        assert!(rust_code.contains("static __FONT_SEVENSEG: BitmapFont = BitmapFont {"));
+        assert!(rust_code.contains("FontId::Bitmap(&__FONT_SEVENSEG)"));
+        assert!(rust_code.contains("static __ICON_1_PARTS: [IconPart<'static>; 1]"));
+        assert!(rust_code.contains("gui.add_composite_icon(cells[1], &__ICON_1_PARTS"));
+        assert!(rust_code.contains("scale: 2"));
+        assert!(rust_code.contains("pub fn gem_mesh_panel() -> MeshPanel<'static>"));
+        assert!(rust_code.contains("panel.shading = MeshShading::Lit;"));
+        assert!(rust_code.contains("Rgb565::new(0, 63, 0)"));
+    }
+
+    #[test]
     fn test_svg_path_d_parsing_and_codegen() {
         let svg_d = "M 10 20 L 30 40 Q 50 60 70 80 C 10 20 30 40 50 60 Z";
         let verbs = parse_svg_path_d(svg_d);
@@ -2019,5 +3020,32 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         assert!(rust_code.contains("pub struct VectorAppWidgets {"));
         assert!(rust_code.contains("pub my_curve: WidgetId,"));
         assert!(rust_code.contains("let mut _path_my_curve = VectorPath::<3>::new();"));
+    }
+
+    #[test]
+    fn image_assets_round_trip_and_generate_static_rgb565() {
+        let kdl = r##"screen id="Assets" width=96 height=64 {
+    grid cols="1fr" rows="1fr" {
+        image id="logo" src="assets/logo.png" fit="center" mode="mask" tint="#00FFFF" col=0 row=0
+    }
+}"##;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        assert_eq!(
+            parse_kdl_screen(&serialize_kdl_screen(&screen)).unwrap(),
+            screen
+        );
+
+        let generated = generate_rust_code_with_image_assets(
+            &screen,
+            &[ImageAssetDef {
+                source: "assets/logo.png".into(),
+                width: 2,
+                height: 1,
+                pixels: vec![0x0000, 0xFFFF],
+            }],
+        );
+        assert!(generated.contains("const __IMAGE_ASSET_0_PIXELS: &[u16]"));
+        assert!(generated.contains("ImageRef::new(2, 1, __IMAGE_ASSET_0_PIXELS)"));
+        assert!(generated.contains("ImageFit::Center"));
     }
 }

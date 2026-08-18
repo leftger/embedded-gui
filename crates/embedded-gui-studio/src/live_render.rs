@@ -3,18 +3,23 @@
 //! silicon pixels rather than the egui preview approximation.
 
 use core::f32::consts::TAU;
+use std::collections::HashMap;
+use std::path::{Component, Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use eframe::egui::Color32;
 use embedded_graphics_core::Pixel;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::geometry::{OriginDimensions, Point, Size};
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
+use embedded_gui::interop::three_d::{Geometry, MeshPanel, MeshShading, render_mesh_panel};
 use embedded_gui::prelude::*;
 use embedded_gui::{
     BusyWheel, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
     NumberPickerWidget, PathVerb, PixelRead, ScaleMode, StatusBarWidget, StrokeStyle,
     TimePickerWidget, VectorPath,
 };
+use embedded_gui_codegen::assets::{BitmapFontData, MeshData, MonoBitmapData};
 use embedded_gui_codegen::{PathVerbDef, ScreenDef, WidgetDef};
 
 use crate::layout::compute_track_sizes;
@@ -28,6 +33,144 @@ const EVENTS: usize = 64;
 const DIRTY: usize = 256;
 const PLOT_SAMPLES: usize = 64;
 const MAX_PATH_VERBS: usize = 128;
+
+struct RawProjectImage {
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+}
+
+struct LoadedProjectImage {
+    width: u32,
+    height: u32,
+    pixels: Vec<u16>,
+}
+
+/// Fonts imported by a screen, keyed by the name KDL refers to them by.
+type ScreenFonts = HashMap<String, &'static BitmapFont>;
+
+/// Caches parsed BDF fonts for the lifetime of the process.
+///
+/// `FontId::Bitmap` borrows for `'static`, but Studio discovers fonts at
+/// runtime, so each unique (file, character set) is parsed once and leaked.
+/// The set of fonts a designer opens is small and bounded, unlike the render
+/// loop that would otherwise leak on every frame.
+fn intern_bitmap_font(key: (PathBuf, String), data: BitmapFontData) -> &'static BitmapFont {
+    static CACHE: OnceLock<Mutex<HashMap<(PathBuf, String), &'static BitmapFont>>> =
+        OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache.lock().unwrap_or_else(|err| err.into_inner());
+    if let Some(font) = cache.get(&key) {
+        return font;
+    }
+    let glyphs: &'static [u8] = Box::leak(data.glyphs.into_boxed_slice());
+    let font: &'static BitmapFont = Box::leak(Box::new(BitmapFont {
+        width: data.width,
+        height: data.height,
+        advance: data.advance,
+        line_height: data.line_height,
+        first_char: data.first_char,
+        bytes_per_row: data.bytes_per_row,
+        glyphs,
+    }));
+    cache.insert(key, font);
+    font
+}
+
+/// Resolves a project-relative asset path, rejecting anything that escapes the
+/// project root.
+fn project_asset_path(project_root: Option<&Path>, source: &str) -> Option<PathBuf> {
+    let root = project_root?;
+    let rel = Path::new(source);
+    if rel.is_absolute()
+        || rel
+            .components()
+            .any(|part| matches!(part, Component::ParentDir | Component::RootDir))
+    {
+        return None;
+    }
+    Some(root.join(rel))
+}
+
+fn load_screen_fonts(screen: &ScreenDef, project_root: Option<&Path>) -> ScreenFonts {
+    let mut fonts = ScreenFonts::new();
+    for font in &screen.fonts {
+        let Some(path) = project_asset_path(project_root, &font.source) else {
+            continue;
+        };
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let chars = (!font.chars.is_empty()).then_some(font.chars.as_str());
+        let Ok(data) = embedded_gui_codegen::assets::parse_bdf(&source, chars) else {
+            continue;
+        };
+        let interned = intern_bitmap_font((path, font.chars.clone()), data);
+        fonts.insert(font.name.clone(), interned);
+    }
+    fonts
+}
+
+/// Decodes the 1bpp parts of every composite icon on the screen, in widget order.
+fn load_icon_bitmaps(
+    screen: &ScreenDef,
+    project_root: Option<&Path>,
+) -> Vec<Vec<(MonoBitmapData, usize)>> {
+    screen
+        .grid
+        .children
+        .iter()
+        .filter_map(|(_, widget)| {
+            let WidgetDef::CompositeIcon {
+                parts,
+                threshold,
+                invert,
+                ..
+            } = widget
+            else {
+                return None;
+            };
+            let decoded = parts
+                .iter()
+                .enumerate()
+                .filter_map(|(part_idx, part)| {
+                    let path = project_asset_path(project_root, &part.source)?;
+                    let image = image::open(path).ok()?.into_rgba8();
+                    let (width, height) = image.dimensions();
+                    Some((
+                        embedded_gui_codegen::assets::mono_from_rgba(
+                            width,
+                            height,
+                            &image.into_raw(),
+                            *threshold,
+                            *invert,
+                        ),
+                        part_idx,
+                    ))
+                })
+                .collect();
+            Some(decoded)
+        })
+        .collect()
+}
+
+fn load_meshes(screen: &ScreenDef, project_root: Option<&Path>) -> Vec<Option<MeshData>> {
+    screen
+        .grid
+        .children
+        .iter()
+        .map(|(_, widget)| {
+            let WidgetDef::Mesh3d { source, .. } = widget else {
+                return None;
+            };
+            let path = project_asset_path(project_root, source)?;
+            let bytes = std::fs::read(path).ok()?;
+            let mut mesh = embedded_gui_codegen::assets::parse_mesh(source, &bytes).ok()?;
+            mesh.normalize();
+            Some(mesh)
+        })
+        .collect()
+}
 
 /// A rendered screen as a flat row-major RGB565 buffer.
 pub struct RenderedFrame {
@@ -179,10 +322,10 @@ impl Palette565 {
 
     fn token_color(&self, token: Option<&str>) -> Rgb565 {
         match token {
-            Some("accent") => self.accent,
-            Some("success") => self.success,
-            Some("danger") => self.danger,
-            Some("dim") => self.text_dim,
+            Some("accent") | Some("body-accent") | Some("hint-accent") => self.accent,
+            Some("success") | Some("body-success") => self.success,
+            Some("danger") | Some("body-danger") => self.danger,
+            Some("dim") | Some("body-dim") | Some("hint") | Some("hint-dim") => self.text_dim,
             _ => self.text_primary,
         }
     }
@@ -200,10 +343,30 @@ impl Palette565 {
             }
             other => {
                 let c = self.token_color(other);
-                s.background = Some(self.card_bg);
+                // Labels are transparent in embedded-gui. Painting every KDL
+                // label as a rounded card made compact legacy UIs look nothing
+                // like their firmware output.
+                s.background = if other == Some("card") {
+                    Some(self.card_bg)
+                } else {
+                    None
+                };
                 s.text = c;
                 s.foreground = c;
-                if other == Some("bold") {
+                if matches!(
+                    other,
+                    Some("body")
+                        | Some("body-accent")
+                        | Some("body-success")
+                        | Some("body-danger")
+                        | Some("body-dim")
+                        | Some("menu")
+                ) {
+                    s.font = FontId::Scaled6x10;
+                } else if matches!(
+                    other,
+                    Some("hint") | Some("hint-dim") | Some("hint-accent") | Some("bold")
+                ) {
                     s.font = FontId::Medium4x7;
                 }
             }
@@ -470,20 +633,37 @@ pub fn render_screen(screen: &ScreenDef, theme: DisplayTheme) -> RenderedFrame {
 /// `highlight` is the index of a widget receiving transient press feedback in
 /// Live Interactive; it draws an accent ring on that cell so a tap is visible
 /// both on the canvas and on the streamed panel.
+#[cfg(test)]
 pub fn render_screen_at(
     screen: &ScreenDef,
     theme: DisplayTheme,
     animation_phase: f32,
     highlight: Option<usize>,
 ) -> RenderedFrame {
+    render_screen_at_with_assets(screen, theme, animation_phase, highlight, None)
+}
+
+/// Renders a screen and resolves `image src="..."` nodes relative to the
+/// project root. Invalid, absolute, or escaping paths are ignored.
+pub fn render_screen_at_with_assets(
+    screen: &ScreenDef,
+    theme: DisplayTheme,
+    animation_phase: f32,
+    highlight: Option<usize>,
+    project_root: Option<&Path>,
+) -> RenderedFrame {
     let mut option_lists: Vec<Vec<&str>> = Vec::new();
     let mut table_storage: Vec<Vec<Vec<&str>>> = Vec::new();
     let mut plot_samples: Vec<Vec<f32>> = Vec::new();
+    let raw_images = load_project_images(screen, project_root);
 
     for (_, widget) in &screen.grid.children {
         match widget {
             WidgetDef::Dropdown { options, .. } | WidgetDef::Roller { options, .. } => {
                 option_lists.push(options.iter().map(String::as_str).collect());
+            }
+            WidgetDef::Carousel { items, .. } => {
+                option_lists.push(items.iter().map(String::as_str).collect());
             }
             WidgetDef::Table { headers, rows, .. } => {
                 let mut grid = Vec::new();
@@ -507,6 +687,10 @@ pub fn render_screen_at(
         .map(|table| table.iter().map(Vec::as_slice).collect())
         .collect();
 
+    let fonts = load_screen_fonts(screen, project_root);
+    let icon_bitmaps = load_icon_bitmaps(screen, project_root);
+    let meshes = load_meshes(screen, project_root);
+
     render_inner(
         screen,
         theme,
@@ -514,8 +698,44 @@ pub fn render_screen_at(
         &option_lists,
         &table_rows,
         &plot_samples,
+        &raw_images,
+        &fonts,
+        &icon_bitmaps,
+        &meshes,
         highlight,
     )
+}
+
+fn load_project_images(
+    screen: &ScreenDef,
+    project_root: Option<&Path>,
+) -> Vec<Option<RawProjectImage>> {
+    screen
+        .grid
+        .children
+        .iter()
+        .map(|(_, widget)| {
+            let WidgetDef::Image { source, .. } = widget else {
+                return None;
+            };
+            let root = project_root?;
+            let rel = Path::new(source);
+            if rel.is_absolute()
+                || rel
+                    .components()
+                    .any(|part| matches!(part, Component::ParentDir | Component::RootDir))
+            {
+                return None;
+            }
+            let decoded = image::open(root.join(rel)).ok()?.into_rgba8();
+            let (width, height) = decoded.dimensions();
+            Some(RawProjectImage {
+                width,
+                height,
+                rgba: decoded.into_raw(),
+            })
+        })
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -526,13 +746,61 @@ fn render_inner<'a>(
     option_lists: &'a [Vec<&'a str>],
     table_rows: &'a [Vec<&'a [&'a str]>],
     plot_samples: &'a [Vec<f32>],
+    raw_images: &'a [Option<RawProjectImage>],
+    fonts: &'a ScreenFonts,
+    icon_bitmaps: &'a [Vec<(MonoBitmapData, usize)>],
+    meshes: &'a [Option<MeshData>],
     highlight: Option<usize>,
 ) -> RenderedFrame {
     let width = screen.width.max(1) as u16;
     let height = screen.height.max(1) as u16;
     let palette = Palette565::for_theme(theme);
+    let loaded_images: Vec<Option<LoadedProjectImage>> = screen
+        .grid
+        .children
+        .iter()
+        .zip(raw_images)
+        .map(|((_, widget), raw)| {
+            let WidgetDef::Image { mode, tint, .. } = widget else {
+                return None;
+            };
+            raw.as_ref()
+                .map(|raw| convert_project_image(raw, mode, tint.as_deref(), &palette))
+        })
+        .collect();
     let mut pixels = vec![palette.display_bg; width as usize * height as usize];
     let cells = compute_cells(screen);
+
+    // Icon parts borrow their bitmaps, so the `IconPart` slices have to outlive
+    // the context they are handed to: declare them before it.
+    let icon_parts: Vec<Vec<IconPart<'_>>> =
+        screen
+            .grid
+            .children
+            .iter()
+            .filter_map(|(_, widget)| match widget {
+                WidgetDef::CompositeIcon { parts, tint, .. } => Some((parts, tint)),
+                _ => None,
+            })
+            .zip(icon_bitmaps)
+            .map(|((parts, tint), decoded)| {
+                decoded
+                    .iter()
+                    .map(|(bitmap, part_idx)| {
+                        let part = &parts[*part_idx];
+                        IconPart {
+                            bitmap: MonoBitmap::new(bitmap.width, bitmap.height, &bitmap.bits),
+                            dx: part.dx,
+                            dy: part.dy,
+                            visible: part.visible,
+                            tint: part.tint.as_deref().or(tint.as_deref()).map(|token| {
+                                parse_hex_color(token, palette.token_color(Some(token)))
+                            }),
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
 
     let mut gui = Box::new(GuiContext::<NODES, EVENTS, DIRTY>::new(Rect::new(
         0,
@@ -545,6 +813,7 @@ fn render_inner<'a>(
     let mut option_idx = 0usize;
     let mut table_idx = 0usize;
     let mut plot_idx = 0usize;
+    let mut icon_idx = 0usize;
 
     for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
         let Some(cell) = cells.get(idx) else { continue };
@@ -558,9 +827,13 @@ fn render_inner<'a>(
             option_lists,
             table_rows,
             plot_samples,
+            loaded_images.get(idx).and_then(Option::as_ref),
+            fonts,
+            &icon_parts,
             &mut option_idx,
             &mut table_idx,
             &mut plot_idx,
+            &mut icon_idx,
             &mut overlays,
         );
     }
@@ -572,6 +845,22 @@ fn render_inner<'a>(
             h: height as u32,
         };
         let _ = gui.render(&mut target);
+
+        // Meshes rasterize straight into the framebuffer: the 3D pipeline owns
+        // a Z-buffer and cannot go through the widget tree.
+        let mut zbuffer = Vec::new();
+        for (idx, (_, widget)) in screen.grid.children.iter().enumerate() {
+            let WidgetDef::Mesh3d { .. } = widget else {
+                continue;
+            };
+            let (Some(cell), Some(Some(mesh))) = (cells.get(idx), meshes.get(idx)) else {
+                continue;
+            };
+            let rect = Rect::new(cell.x, cell.y, cell.w, cell.h);
+            zbuffer.resize((rect.w * rect.h) as usize, 0);
+            let panel = mesh_panel_for(widget, mesh, &palette);
+            let _ = render_mesh_panel(&mut target, rect, &panel, &mut zbuffer);
+        }
 
         let viewport = Rect::new(0, 0, width as u32, height as u32);
         let mut ctx = RenderCtx::new(&mut target, viewport);
@@ -598,6 +887,97 @@ fn render_inner<'a>(
     }
 }
 
+/// Builds the 3D panel for a `mesh` node, resolving its color token against the
+/// preview palette.
+fn mesh_panel_for<'m>(
+    widget: &WidgetDef,
+    mesh: &'m MeshData,
+    palette: &Palette565,
+) -> MeshPanel<'m> {
+    let WidgetDef::Mesh3d {
+        shading,
+        color,
+        scale,
+        roll,
+        pitch,
+        yaw,
+        camera_distance,
+        fov,
+        ..
+    } = widget
+    else {
+        unreachable!("mesh_panel_for is only called for mesh nodes");
+    };
+
+    let mut panel = MeshPanel::new(
+        Geometry {
+            vertices: &mesh.vertices,
+            faces: &mesh.faces,
+            normals: &mesh.normals,
+            ..Geometry::default()
+        },
+        color
+            .as_deref()
+            .map(|token| parse_hex_color(token, palette.token_color(Some(token))))
+            .unwrap_or(palette.text_primary),
+    );
+    panel.shading = match shading.as_str() {
+        "points" => MeshShading::Points,
+        "lines" | "wireframe" => MeshShading::Lines,
+        "lit" => MeshShading::Lit,
+        _ => MeshShading::Solid,
+    };
+    panel.scale = *scale;
+    panel.attitude = (*roll, *pitch, *yaw);
+    panel.camera_distance = *camera_distance;
+    panel.fov = *fov;
+    panel
+}
+
+fn convert_project_image(
+    raw: &RawProjectImage,
+    mode: &str,
+    tint: Option<&str>,
+    palette: &Palette565,
+) -> LoadedProjectImage {
+    let tint_color = tint
+        .map(|value| parse_hex_color(value, palette.token_color(Some(value))))
+        .unwrap_or(palette.text_primary);
+    let mut pixels = Vec::with_capacity((raw.width * raw.height) as usize);
+    for rgba in raw.rgba.chunks_exact(4) {
+        let alpha = u16::from(rgba[3]);
+        let color = if mode == "mask" || mode == "mono" {
+            let luminance =
+                (u16::from(rgba[0]) * 77 + u16::from(rgba[1]) * 150 + u16::from(rgba[2]) * 29) >> 8;
+            if alpha > 0 && luminance < 128 {
+                tint_color
+            } else {
+                palette.display_bg
+            }
+        } else {
+            let bg_r = u16::from(palette.display_bg.r()) * 255 / 31;
+            let bg_g = u16::from(palette.display_bg.g()) * 255 / 63;
+            let bg_b = u16::from(palette.display_bg.b()) * 255 / 31;
+            let r = (u16::from(rgba[0]) * alpha + bg_r * (255 - alpha)) / 255;
+            let g = (u16::from(rgba[1]) * alpha + bg_g * (255 - alpha)) / 255;
+            let b = (u16::from(rgba[2]) * alpha + bg_b * (255 - alpha)) / 255;
+            Rgb565::new(
+                (r * 31 / 255) as u8,
+                (g * 63 / 255) as u8,
+                (b * 31 / 255) as u8,
+            )
+        };
+        pixels.push(
+            (u16::from(color.r()) << 11) | (u16::from(color.g()) << 5) | u16::from(color.b()),
+        );
+    }
+    LoadedProjectImage {
+        width: raw.width,
+        height: raw.height,
+        pixels,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn add_widget<'a>(
     gui: &mut GuiContext<'a, NODES, EVENTS, DIRTY>,
@@ -608,16 +988,29 @@ fn add_widget<'a>(
     option_lists: &'a [Vec<&'a str>],
     table_rows: &'a [Vec<&'a [&'a str]>],
     plot_samples: &'a [Vec<f32>],
+    image: Option<&'a LoadedProjectImage>,
+    fonts: &'a ScreenFonts,
+    icon_parts: &'a [Vec<IconPart<'a>>],
     option_idx: &mut usize,
     table_idx: &mut usize,
     plot_idx: &mut usize,
+    icon_idx: &mut usize,
     overlays: &mut Vec<Overlay<'a>>,
 ) {
     let style = p.panel(Some("card"));
     let _ = match widget {
         WidgetDef::Label {
-            text, style: token, ..
-        } => gui.add_label(rect, text.as_str(), p.label(token.as_deref())),
+            text,
+            style: token,
+            font,
+            ..
+        } => {
+            let mut label_style = p.label(token.as_deref());
+            if let Some(custom) = font.as_deref().and_then(|name| fonts.get(name)) {
+                label_style.font = FontId::Bitmap(custom);
+            }
+            gui.add_label(rect, text.as_str(), label_style)
+        }
         WidgetDef::Button {
             text, style: token, ..
         } => gui.add_button(rect, text.as_str(), p.button(token.as_deref())),
@@ -640,7 +1033,92 @@ fn add_widget<'a>(
             gui.add_progress_bar(rect, value.clamp(0.0, 1.0), p.bar(p.success))
         }
         WidgetDef::Spacer => gui.add_spacer(rect),
+        WidgetDef::Carousel {
+            selected,
+            item_step,
+            visible,
+            shift,
+            mask_top,
+            mask_bottom,
+            fade,
+            indicator,
+            pulse,
+            style: token,
+            font,
+            ..
+        } => {
+            let items = option_lists
+                .get(*option_idx)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            *option_idx += 1;
+            let mut carousel_style = p.label(token.as_deref());
+            carousel_style.background = Some(p.display_bg);
+            if let Some(custom) = font.as_deref().and_then(|name| fonts.get(name)) {
+                carousel_style.font = FontId::Bitmap(custom);
+            }
+            gui.add_carousel(
+                rect,
+                items,
+                *selected,
+                CarouselSpec {
+                    item_step: *item_step,
+                    visible_slots: *visible,
+                    shift: *shift,
+                    mask_top: *mask_top,
+                    mask_bottom: *mask_bottom,
+                    fade_edges: *fade,
+                    indicator: *indicator,
+                    indicator_pulse: *pulse,
+                    ..CarouselSpec::default()
+                },
+                carousel_style,
+            )
+        }
+        WidgetDef::CompositeIcon { scale, align, .. } => {
+            let parts = icon_parts
+                .get(*icon_idx)
+                .map(Vec::as_slice)
+                .unwrap_or(&[] as &[IconPart<'a>]);
+            *icon_idx += 1;
+            let mut icon_style = p.label(None);
+            icon_style.background = None;
+            gui.add_composite_icon(
+                rect,
+                parts,
+                CompositeIconSpec {
+                    scale: *scale,
+                    align: if align == "top_left" {
+                        IconAlign::TopLeft
+                    } else {
+                        IconAlign::Center
+                    },
+                    paper: None,
+                },
+                icon_style,
+            )
+        }
+        // Meshes are rasterized after the widget pass, straight into the
+        // framebuffer, so they only reserve their rect here.
+        WidgetDef::Mesh3d { .. } => gui.add_spacer(rect),
         WidgetDef::Panel { style: token, .. } => gui.add_panel(rect, p.panel(token.as_deref())),
+        WidgetDef::Image { fit, .. } => {
+            if let Some(image) = image {
+                let fit = if fit == "center" {
+                    ImageFit::Center
+                } else {
+                    ImageFit::Stretch
+                };
+                gui.add_image(
+                    rect,
+                    ImageRef::new(image.width, image.height, &image.pixels),
+                    fit,
+                    Style::default(),
+                )
+            } else {
+                gui.add_spacer(rect)
+            }
+        }
         WidgetDef::Dropdown { selected, .. } => {
             let items = option_lists
                 .get(*option_idx)
@@ -1236,5 +1714,149 @@ mod tests {
         assert_eq!(frame.width, 320);
         assert_eq!(frame.height, 480);
         assert!(frame.pixels.iter().any(|p| *p != frame.pixels[0]));
+    }
+
+    fn demo_project_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/ssd1357-demo")
+    }
+
+    fn render_demo_screen(name: &str) -> RenderedFrame {
+        let root = demo_project_root();
+        let source = std::fs::read_to_string(root.join("screens").join(name)).unwrap();
+        let screen = parse_kdl_screen(&source).unwrap();
+        render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root))
+    }
+
+    #[test]
+    fn carousel_dims_rows_away_from_the_selection() {
+        let frame = render_demo_screen("menu.kdl");
+        // The selected row is centered and full brightness; neighbours fall off.
+        let brightest = |row: u32| {
+            (0..frame.width as u32)
+                .map(|x| {
+                    let px = frame.at(x, row);
+                    u16::from(px.r()) + u16::from(px.g()) + u16::from(px.b())
+                })
+                .max()
+                .unwrap_or(0)
+        };
+        let center = (28..36).map(brightest).max().unwrap();
+        let neighbour = (44..52).map(brightest).max().unwrap();
+        assert!(
+            center > neighbour,
+            "center {center} <= neighbour {neighbour}"
+        );
+        assert!(neighbour > 0, "neighbouring row was not drawn at all");
+    }
+
+    #[test]
+    fn carousel_masks_hide_overhang_behind_the_header() {
+        let frame = render_demo_screen("menu.kdl");
+        // Row 4 sits inside the 14px header band the carousel masks out, so
+        // anything there is either backdrop or the header label drawn after.
+        let backdrop = frame.at(0, 4);
+        let ink = (0..frame.width as u32)
+            .filter(|x| frame.at(*x, 4) != backdrop)
+            .count();
+        assert!(
+            ink < frame.width as usize / 3,
+            "carousel rows bled through the masked band: {ink} px"
+        );
+    }
+
+    #[test]
+    fn counter_screen_draws_font_icon_and_mesh() {
+        let frame = render_demo_screen("counter.kdl");
+        assert_eq!((frame.width, frame.height), (96, 64));
+
+        // Big BDF digits occupy the middle band on the left.
+        let digits = (0..70)
+            .flat_map(|x| (16..46).map(move |y| (x, y)))
+            .filter(|(x, y)| frame.at(*x, *y) != Rgb565::BLACK)
+            .count();
+        assert!(digits > 100, "seven-segment digits missing: {digits} px");
+
+        // The battery icon occupies the right-hand column.
+        let lit = (70..96)
+            .flat_map(|x| (16..46).map(move |y| (x, y)))
+            .filter(|(x, y)| frame.at(*x, *y) != Rgb565::BLACK)
+            .count();
+        assert!(lit > 20, "composite icon missing: {lit} px");
+
+        // The mesh rasterizes into the bottom band.
+        let mesh = (0..96)
+            .flat_map(|x| (50..64).map(move |y| (x, y)))
+            .filter(|(x, y)| frame.at(*x, *y) != Rgb565::BLACK)
+            .count();
+        assert!(mesh > 20, "mesh did not rasterize: {mesh} px");
+    }
+
+    #[test]
+    fn renders_a_mesh_exported_as_binary_stl() {
+        // CAD tools export STL, so a project should be able to point a mesh
+        // node straight at the file the artist already has.
+        let root = std::env::temp_dir().join(format!("egs-stl-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("assets/meshes")).unwrap();
+
+        let corners: [[[f32; 3]; 3]; 2] = [
+            [[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0]],
+            [[-1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+        ];
+        let mut stl = vec![0u8; 80];
+        stl.extend_from_slice(&(corners.len() as u32).to_le_bytes());
+        for triangle in corners {
+            stl.extend_from_slice(&[0u8; 12]);
+            for corner in triangle {
+                for axis in corner {
+                    stl.extend_from_slice(&axis.to_le_bytes());
+                }
+            }
+            stl.extend_from_slice(&[0u8; 2]);
+        }
+        std::fs::write(root.join("assets/meshes/quad.stl"), &stl).unwrap();
+
+        let kdl = r##"screen id="Stl" width=96 height=64 {
+            grid cols="1fr" rows="1fr" gap=0 padding=0 {
+                mesh id="quad" src="assets/meshes/quad.stl" shading="solid" color="#00FF00" scale=1.0 camera_distance=3.0 fov=1.2 col=0 row=0
+            }
+        }"##;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        let frame =
+            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+
+        let lit = frame
+            .pixels
+            .iter()
+            .filter(|px| **px != Rgb565::BLACK)
+            .count();
+        std::fs::remove_dir_all(&root).ok();
+        assert!(lit > 100, "STL mesh did not rasterize: {lit} px");
+    }
+
+    #[test]
+    fn hidden_icon_parts_are_not_drawn() {
+        let root = demo_project_root();
+        let source = std::fs::read_to_string(root.join("screens/counter.kdl")).unwrap();
+        let mut screen = parse_kdl_screen(&source).unwrap();
+        let with_bolt_hidden =
+            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+
+        for (_, widget) in &mut screen.grid.children {
+            if let WidgetDef::CompositeIcon { parts, .. } = widget {
+                for part in parts {
+                    part.visible = true;
+                }
+            }
+        }
+        let with_bolt_shown =
+            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+
+        let changed = with_bolt_hidden
+            .pixels
+            .iter()
+            .zip(&with_bolt_shown.pixels)
+            .filter(|(hidden, shown)| hidden != shown)
+            .count();
+        assert!(changed > 10, "toggling a part changed {changed} pixels");
     }
 }
