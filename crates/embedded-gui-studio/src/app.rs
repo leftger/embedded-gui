@@ -14,6 +14,10 @@ use embedded_gui_codegen::{
 use crate::curve_visualizer::render_curve_graph;
 use crate::inspector::render_inspector_panel;
 use crate::presets::*;
+
+/// How long a tapped widget keeps its accent ring after activation. Long enough
+/// to register a brief board tap, short enough not to linger.
+const PRESS_FLASH_SECS: f32 = 0.25;
 use crate::types::{
     ActiveDrag, DisplayTheme, HardwareProfile, ScreenTransition, StudioMode, StudioTab,
     TransitionStyle,
@@ -59,6 +63,20 @@ pub struct EmbeddedGuiStudio {
     pub selected_widget_idx: Option<usize>,
     pub active_drag: ActiveDrag,
     pub pressed_widget: Option<usize>,
+
+    // On-glass touch reported by the display agent, in panel framebuffer
+    // coordinates. `None` when no finger is down. Drives Live Interactive
+    // alongside the mouse.
+    pub board_touch: Option<(u16, u16)>,
+    /// True for the single frame a board touch transitions to pressed, so
+    /// edge-triggered widgets (buttons, toggles) fire exactly once per tap.
+    pub board_touch_pressed_edge: bool,
+    board_touch_was_pressed: bool,
+
+    /// Widget index flashing with transient press feedback, plus seconds left.
+    /// Set when a widget is activated (mouse or board) so a tap is visible on
+    /// the canvas and the streamed panel even after the finger lifts.
+    pub interaction_flash: Option<(usize, f32)>,
 
     // Animation playback state
     pub is_playing: bool,
@@ -138,6 +156,10 @@ impl EmbeddedGuiStudio {
             playback_speed: 1.0,
             loop_duration: 4.0,
             selected_easing: EasingCurve::EaseInOutCubic,
+            board_touch: None,
+            board_touch_pressed_edge: false,
+            board_touch_was_pressed: false,
+            interaction_flash: None,
             animation_stream_accumulator: 0.0,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -210,6 +232,7 @@ impl EmbeddedGuiStudio {
             &screen,
             self.display_theme,
             self.animation_phase(),
+            self.active_highlight(),
         );
         // The agent advertises its panel size during the handshake. Fitting here
         // keeps an oversized screen centered instead of losing its right and
@@ -359,6 +382,57 @@ impl EmbeddedGuiStudio {
         if self.live_stream && self.device_link.is_some() {
             self.push_live_frame();
         }
+    }
+
+    /// Pulls any touch samples the agent reported and folds them into the
+    /// current board-touch state. The firmware only emits on press, move, or
+    /// release, so a held-still finger produces no samples and the last known
+    /// position persists.
+    pub fn drain_board_touches(&mut self) {
+        self.board_touch_pressed_edge = false;
+        let Some(link) = self.device_link.as_ref() else {
+            self.board_touch = None;
+            self.board_touch_was_pressed = false;
+            return;
+        };
+        let samples = link.take_touches();
+        let Some(last) = samples.last().copied() else {
+            return;
+        };
+        if last.pressed {
+            self.board_touch = Some((last.x, last.y));
+            if !self.board_touch_was_pressed {
+                self.board_touch_pressed_edge = true;
+            }
+            self.board_touch_was_pressed = true;
+        } else {
+            self.board_touch = None;
+            self.board_touch_was_pressed = false;
+        }
+    }
+
+    /// Maps the current board touch (panel framebuffer space) into a canvas
+    /// position inside `display_rect`. Assumes the active screen matches the
+    /// panel size, which the auto-detect path enforces; otherwise the mapping
+    /// scales proportionally.
+    fn board_canvas_pos(&self, display_rect: Rect, screen: &ScreenDef) -> Option<Pos2> {
+        let (px, py) = self.board_touch?;
+        let sx = display_rect.width() / screen.width.max(1) as f32;
+        let sy = display_rect.height() / screen.height.max(1) as f32;
+        Some(Pos2::new(
+            display_rect.min.x + px as f32 * sx,
+            display_rect.min.y + py as f32 * sy,
+        ))
+    }
+
+    /// Widget index that should render with transient press feedback: whatever
+    /// is held right now, or the last-tapped widget while its flash decays.
+    fn active_highlight(&self) -> Option<usize> {
+        if self.mode != StudioMode::Interactive {
+            return None;
+        }
+        self.pressed_widget
+            .or(self.interaction_flash.map(|(idx, _)| idx))
     }
 
     fn animation_phase(&self) -> f32 {
@@ -652,6 +726,7 @@ impl EmbeddedGuiStudio {
             screen,
             self.display_theme,
             self.animation_phase(),
+            self.active_highlight(),
         );
         let mut preview_rgb = Vec::with_capacity(preview_frame.pixels.len() * 3);
         for pixel in &preview_frame.pixels {
@@ -748,9 +823,22 @@ impl EmbeddedGuiStudio {
                 .map(|y| display_rect.min.y + y * zoom)
                 .collect();
 
-            let pointer_pos = ui.input(|i| i.pointer.interact_pos());
-            let primary_down = ui.input(|i| i.pointer.primary_down());
-            let primary_pressed = ui.input(|i| i.pointer.primary_pressed());
+            let mouse_pos = ui.input(|i| i.pointer.interact_pos());
+            let mouse_down = ui.input(|i| i.pointer.primary_down());
+            let mouse_pressed = ui.input(|i| i.pointer.primary_pressed());
+
+            // In Live Interactive, on-glass touches drive the same hit-testing
+            // as the mouse: the board acts as a second pointer. Design mode
+            // ignores the board so editing is never disturbed by a stray touch.
+            let board_pos = if self.mode == StudioMode::Interactive {
+                self.board_canvas_pos(display_rect, screen)
+            } else {
+                None
+            };
+            let pointer_pos = board_pos.or(mouse_pos);
+            let primary_down = mouse_down || board_pos.is_some();
+            let primary_pressed =
+                mouse_pressed || (board_pos.is_some() && self.board_touch_pressed_edge);
 
             if !primary_down {
                 self.active_drag = ActiveDrag::None;
@@ -803,6 +891,15 @@ impl EmbeddedGuiStudio {
                                 Rect::from_min_size(Pos2::new(x0, y0), Vec2::new(w_px, h_px));
 
                             if w_rect.contains(pos) {
+                                // Transient press feedback for any widget under
+                                // the pointer, so mouse and board taps both
+                                // flash the touched cell.
+                                if primary_down {
+                                    self.pressed_widget = Some(idx);
+                                }
+                                if primary_pressed {
+                                    self.interaction_flash = Some((idx, PRESS_FLASH_SECS));
+                                }
                                 match w {
                                     embedded_gui_codegen::WidgetDef::Button {
                                         text,
@@ -1294,6 +1391,17 @@ impl EmbeddedGuiStudio {
                 }
             }
 
+            // Show where the physical panel is being touched, so the operator
+            // can correlate on-glass taps with the live canvas.
+            if let Some(pos) = board_pos {
+                painter.circle_stroke(
+                    pos,
+                    12.0,
+                    Stroke::new(2.0_f32, Color32::from_rgb(80, 220, 255)),
+                );
+                painter.circle_filled(pos, 3.0, Color32::from_rgb(80, 220, 255));
+            }
+
             if did_mutate {
                 self.sync_from_screen(&mutated_screen);
             }
@@ -1317,6 +1425,14 @@ impl eframe::App for EmbeddedGuiStudio {
             self.device_handshake_seen = false;
         }
 
+        // Fold in any on-glass touches the agent reported this frame so Live
+        // Interactive reacts to the board, then keep repainting while a finger
+        // is held (held-still touches send no new samples).
+        self.drain_board_touches();
+        if self.board_touch.is_some() {
+            ctx.request_repaint();
+        }
+
         // Handle Timers
         let dt = ctx.input(|i| i.stable_dt);
         if self.copied_toast_timer > 0.0 {
@@ -1327,6 +1443,17 @@ impl eframe::App for EmbeddedGuiStudio {
             if *timer <= 0.0 {
                 self.action_toast = None;
             }
+        }
+        if let Some((_, timer)) = &mut self.interaction_flash {
+            *timer -= dt;
+            if *timer <= 0.0 {
+                self.interaction_flash = None;
+            }
+            // Keep repainting and restreaming so the ring appears and then
+            // clears on the board even without further input. The final tick
+            // (now None) streams the frame that erases the ring.
+            ctx.request_repaint();
+            self.stream_if_live();
         }
 
         // Advance Screen Transition animation

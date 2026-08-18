@@ -462,14 +462,19 @@ pub fn has_animated_content(screen: &ScreenDef) -> bool {
 /// playback clock.
 #[cfg(test)]
 pub fn render_screen(screen: &ScreenDef, theme: DisplayTheme) -> RenderedFrame {
-    render_screen_at(screen, theme, 0.0)
+    render_screen_at(screen, theme, 0.0, None)
 }
 
 /// Renders `screen` at a normalized animation phase in `0.0..1.0`.
+///
+/// `highlight` is the index of a widget receiving transient press feedback in
+/// Live Interactive; it draws an accent ring on that cell so a tap is visible
+/// both on the canvas and on the streamed panel.
 pub fn render_screen_at(
     screen: &ScreenDef,
     theme: DisplayTheme,
     animation_phase: f32,
+    highlight: Option<usize>,
 ) -> RenderedFrame {
     let mut option_lists: Vec<Vec<&str>> = Vec::new();
     let mut table_storage: Vec<Vec<Vec<&str>>> = Vec::new();
@@ -509,9 +514,11 @@ pub fn render_screen_at(
         &option_lists,
         &table_rows,
         &plot_samples,
+        highlight,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_inner<'a>(
     screen: &'a ScreenDef,
     theme: DisplayTheme,
@@ -519,6 +526,7 @@ fn render_inner<'a>(
     option_lists: &'a [Vec<&'a str>],
     table_rows: &'a [Vec<&'a [&'a str]>],
     plot_samples: &'a [Vec<f32>],
+    highlight: Option<usize>,
 ) -> RenderedFrame {
     let width = screen.width.max(1) as u16;
     let height = screen.height.max(1) as u16;
@@ -569,6 +577,17 @@ fn render_inner<'a>(
         let mut ctx = RenderCtx::new(&mut target, viewport);
         for overlay in &overlays {
             paint_overlay(&mut ctx, overlay, &palette);
+        }
+
+        // Transient press feedback: a two-pixel accent ring around the touched
+        // cell. Drawn last so it sits above the widget it belongs to.
+        if let Some(cell) = highlight.and_then(|idx| cells.get(idx)) {
+            let outer = Rect::new(cell.x, cell.y, cell.w, cell.h);
+            let _ = ctx.stroke_rounded_rect(outer, 3, Border::one(palette.accent));
+            if cell.w > 2 && cell.h > 2 {
+                let inner = Rect::new(cell.x + 1, cell.y + 1, cell.w - 2, cell.h - 2);
+                let _ = ctx.stroke_rounded_rect(inner, 3, Border::one(palette.accent));
+            }
         }
     }
 
@@ -826,7 +845,11 @@ where
             }
         }
         Overlay::StatusBar { rect, time } => {
-            let bar = StatusBarWidget::new(time);
+            let mut bar = StatusBarWidget::new(time);
+            bar.background_color = p.card_bg;
+            bar.foreground_color = p.text_primary;
+            bar.accent_color = p.accent;
+            bar.separator_color = Some(p.border);
             let _ = bar.render(ctx, *rect);
         }
         Overlay::TimePicker {
@@ -1038,8 +1061,8 @@ mod tests {
         let screen = parse_kdl_screen(kdl).unwrap();
         assert!(has_animated_content(&screen));
 
-        let first = render_screen_at(&screen, DisplayTheme::DarkTft, 0.1);
-        let second = render_screen_at(&screen, DisplayTheme::DarkTft, 0.7);
+        let first = render_screen_at(&screen, DisplayTheme::DarkTft, 0.1, None);
+        let second = render_screen_at(&screen, DisplayTheme::DarkTft, 0.7, None);
         assert!(
             !changed_tiles(&first, &second, 40, 40).is_empty(),
             "different timeline phases must produce dirty tiles"
@@ -1148,6 +1171,29 @@ mod tests {
             8.0 * zoom,
         );
         assert_ne!(zoomed[0], geometry.col_sizes[0] * zoom);
+    }
+
+    #[test]
+    fn status_bar_follows_display_theme() {
+        let kdl = r#"screen id="Dock" width=160 height=40 {
+            grid cols="1fr" rows="1fr" gap=0 padding=0 {
+                status_bar time="12:00" col=0 row=0
+            }
+        }"#;
+        let screen = parse_kdl_screen(kdl).unwrap();
+        let dark = render_screen(&screen, DisplayTheme::DarkTft);
+        let light = render_screen(&screen, DisplayTheme::LightTft);
+        let amber = render_screen(&screen, DisplayTheme::AmberPhosphor);
+
+        // The dock fills the whole screen, so theme-colored pixels must differ.
+        assert_ne!(
+            dark.pixels, light.pixels,
+            "status bar should leave Dark TFT when Light TFT is selected"
+        );
+        assert_ne!(
+            dark.pixels, amber.pixels,
+            "status bar should leave Dark TFT when Amber Phosphor is selected"
+        );
     }
 
     #[test]
