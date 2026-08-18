@@ -34,6 +34,7 @@ pub use motion as cinematic;
 pub use motion as screen_transition;
 pub use motion as transition_preset;
 pub use motion as widget_animation;
+pub mod i18n;
 pub mod present;
 pub mod render;
 pub mod round;
@@ -49,6 +50,7 @@ pub mod widget;
 pub mod widgets;
 
 pub use haptics::{HapticPattern, HapticSequencer};
+pub use i18n::{LanguageId, TranslationEntry, TranslationTable};
 
 pub use visual_widgets::{BusyWheel, GaugeWidget};
 #[cfg(feature = "embedded-dsp")]
@@ -196,7 +198,7 @@ pub mod prelude {
         GradientDirection, GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel,
         HapticPattern, HapticSequencer, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit,
         ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe,
-        KeyframeTrack, KeyframeTrackCallbacks, LayerState, LayoutItem, Length, Line,
+        KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
         LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract, ModelChange,
         MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
         PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming,
@@ -211,14 +213,14 @@ pub mod prelude {
         StyleTransition, SurfaceState, TableWidget, TabsState, Text, TextAlign, TextDirection,
         TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper, TextStyle, TextWrap, Theme,
         TileMode, TileRef, TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D,
-        TransitionPreset, Tween, UiEvent, UiEventFilter, VectorPath, VerticalAlign, VisualState,
-        WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy,
-        WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings,
-        WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind, WidgetNode, WidgetPropertyKeyframe,
-        WidgetStateMachine, WidgetStyle, animate_glance_focus, animate_peek_reveal,
-        apply_carddeck_visibility, apply_easing, lerp_style, presets, render_transition_pair,
-        setup_card_story, setup_launcher_glance, setup_launcher_glance_with_tokens,
-        setup_peek_timeline, setup_peek_timeline_with_tokens,
+        TransitionPreset, TranslationEntry, TranslationTable, Tween, UiEvent, UiEventFilter,
+        VectorPath, VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError,
+        WidgetAnimator, WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
+        WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState,
+        WidgetKind, WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine, WidgetStyle,
+        animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility, apply_easing,
+        lerp_style, presets, render_transition_pair, setup_card_story, setup_launcher_glance,
+        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
     };
 
     #[cfg(all(feature = "std", feature = "image-decode"))]

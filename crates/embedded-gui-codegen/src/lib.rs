@@ -1679,6 +1679,26 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
     let _ = writeln!(&mut out, "            }},");
     let _ = writeln!(&mut out, "        }})");
     let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out);
+    let _ = writeln!(
+        &mut out,
+        "    pub fn apply_theme<'a, const N: usize, const E: usize, const D: usize>("
+    );
+    let _ = writeln!(&mut out, "        &self,");
+    let _ = writeln!(&mut out, "        _gui: &mut GuiContext<'a, N, E, D>,");
+    let _ = writeln!(&mut out, "        _theme: Theme,");
+    let _ = writeln!(&mut out, "    ) {{");
+    let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out);
+    let _ = writeln!(
+        &mut out,
+        "    pub fn set_language<'a, const N: usize, const E: usize, const D: usize>("
+    );
+    let _ = writeln!(&mut out, "        &self,");
+    let _ = writeln!(&mut out, "        _gui: &mut GuiContext<'a, N, E, D>,");
+    let _ = writeln!(&mut out, "        _table: &TranslationTable,");
+    let _ = writeln!(&mut out, "    ) {{");
+    let _ = writeln!(&mut out, "    }}");
     let _ = writeln!(&mut out, "}}");
 
     out
