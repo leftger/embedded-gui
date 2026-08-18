@@ -1839,6 +1839,7 @@ pub fn generate_rust_code_with_assets(screen: &ScreenDef, assets: &ProjectAssets
             .unwrap_or_else(|| format!("widget_{}", idx));
         match widget {
             WidgetDef::CompositeIcon {
+                id,
                 parts,
                 scale,
                 align,
@@ -1886,13 +1887,41 @@ dx: {dx}, dy: {dy}, visible: {vis}, tint: {tint} }},",
                     continue;
                 }
                 let parts_name = format!("__ICON_{}_PARTS", idx);
+                // `pub` so firmware can copy into a mutable buffer and flip
+                // `visible`/`tint` without rebuilding the screen. Prefer the
+                // widget id when present so call sites read as `WEAPON_PARTS`.
+                let pub_alias = id.as_ref().map(|name| {
+                    let upper = name
+                        .chars()
+                        .map(|c| {
+                            if c.is_ascii_alphanumeric() {
+                                c.to_ascii_uppercase()
+                            } else {
+                                '_'
+                            }
+                        })
+                        .collect::<String>();
+                    format!("{upper}_PARTS")
+                });
                 let _ = writeln!(
                     &mut declarations,
-                    "static {}: [IconPart<'static>; {}] = [\n{}\n];\n",
+                    "pub static {}: [IconPart<'static>; {}] = [\n{}\n];\n",
                     parts_name,
                     part_exprs.len(),
                     part_exprs.join("\n")
                 );
+                if let Some(alias) = pub_alias.as_ref() {
+                    if alias != &parts_name {
+                        let _ = writeln!(
+                            &mut declarations,
+                            "/// Seed for a firmware-owned mutable copy of the `{id}` icon parts.\n\
+pub static {alias}: [IconPart<'static>; {n}] = {parts};\n",
+                            id = id.as_deref().unwrap_or("icon"),
+                            n = part_exprs.len(),
+                            parts = parts_name,
+                        );
+                    }
+                }
 
                 let sources = parts
                     .iter()
@@ -2992,7 +3021,8 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         let rust_code = generate_rust_code_with_assets(&screen, &assets);
         assert!(rust_code.contains("static __FONT_SEVENSEG: BitmapFont = BitmapFont {"));
         assert!(rust_code.contains("FontId::Bitmap(&__FONT_SEVENSEG)"));
-        assert!(rust_code.contains("static __ICON_1_PARTS: [IconPart<'static>; 1]"));
+        assert!(rust_code.contains("pub static __ICON_1_PARTS: [IconPart<'static>; 1]"));
+        assert!(rust_code.contains("pub static BATTERY_PARTS: [IconPart<'static>; 1]"));
         assert!(rust_code.contains("gui.add_composite_icon(cells[1], &__ICON_1_PARTS"));
         assert!(rust_code.contains("scale: 2"));
         assert!(rust_code.contains("pub fn gem_mesh_panel() -> MeshPanel<'static>"));
