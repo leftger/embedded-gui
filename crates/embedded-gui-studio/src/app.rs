@@ -92,6 +92,11 @@ pub struct EmbeddedGuiStudio {
     /// Accumulates UI time so USB animation submission is capped independently
     /// of the monitor/egui repaint rate.
     pub animation_stream_accumulator: f32,
+    /// Set when the inspector's "▶ Preview" button replays a single widget's
+    /// entrance/exit animation on demand, as `(widget_idx, elapsed_seconds)`.
+    /// Independent of `timeline_time` so it doesn't restart every other
+    /// animated widget on the screen.
+    pub widget_preview: Option<(usize, f32)>,
 
     // Simulated Signals & Reactive State
     pub mock_playground: crate::playground::MockPlaygroundState,
@@ -179,6 +184,7 @@ impl EmbeddedGuiStudio {
             board_touch_was_pressed: false,
             interaction_flash: None,
             animation_stream_accumulator: 0.0,
+            widget_preview: None,
             mock_playground: crate::playground::MockPlaygroundState::default(),
             preview_visual_state: None,
             command_palette_open: false,
@@ -297,6 +303,7 @@ impl EmbeddedGuiStudio {
             self.animation_phase(),
             self.active_highlight(),
             self.project_root.as_deref(),
+            self.widget_preview_override(),
         );
         // The agent advertises its panel size during the handshake. Fitting here
         // keeps an oversized screen centered instead of losing its right and
@@ -785,6 +792,31 @@ impl EmbeddedGuiStudio {
         }
     }
 
+    /// Total seconds one full play-through (all repeats) of widget `idx`'s
+    /// animation takes, or `None` if it has no animation.
+    fn widget_animation_total_secs(&self, idx: usize) -> Option<f32> {
+        let screen = self.parsed_screen.as_ref().ok()?;
+        let (placement, _) = screen.grid.children.get(idx)?;
+        let animation = placement.animation.as_ref()?;
+        let plays = if animation.repeat == 0 {
+            1.0
+        } else {
+            animation.repeat as f32
+        };
+        Some(
+            ((animation.duration_ms as f32 + animation.delay_ms as f32) / 1000.0 * plays)
+                .max(0.001),
+        )
+    }
+
+    /// The `(widget_idx, phase)` override for the on-demand animation preview
+    /// triggered from the inspector, if one is running.
+    fn widget_preview_override(&self) -> Option<(usize, f32)> {
+        let (idx, elapsed) = self.widget_preview?;
+        let total = self.widget_animation_total_secs(idx)?;
+        Some((idx, (elapsed / total).clamp(0.0, 1.0)))
+    }
+
     /// Inserts a new widget into the active screen layout and synchronizes KDL source.
     pub fn insert_widget(&mut self, widget: WidgetDef) {
         if let Ok(mut screen) = self.parsed_screen.clone() {
@@ -1208,6 +1240,7 @@ impl EmbeddedGuiStudio {
             self.animation_phase(),
             self.active_highlight(),
             self.project_root.as_deref(),
+            self.widget_preview_override(),
         );
         let mut preview_rgb = Vec::with_capacity(preview_frame.pixels.len() * 3);
         for pixel in &preview_frame.pixels {
@@ -2114,6 +2147,17 @@ impl eframe::App for EmbeddedGuiStudio {
             } else {
                 self.transition_state = Some(trans);
                 ctx.request_repaint();
+            }
+        }
+
+        // Advance the inspector's one-click widget animation preview
+        if let Some((idx, elapsed)) = self.widget_preview {
+            match self.widget_animation_total_secs(idx) {
+                Some(total) if elapsed + dt < total => {
+                    self.widget_preview = Some((idx, elapsed + dt));
+                    ctx.request_repaint();
+                }
+                _ => self.widget_preview = None,
             }
         }
 
@@ -3094,14 +3138,36 @@ impl eframe::App for EmbeddedGuiStudio {
                         .iter()
                         .map(|(name, _)| name.clone())
                         .collect();
-                    let modified =
-                        render_inspector_panel(ui, &mut screen, &mut sel_idx, &available_screens);
+                    let mut preview_widget = None;
+                    let mut preview_transition = false;
+                    let modified = render_inspector_panel(
+                        ui,
+                        &mut screen,
+                        &mut sel_idx,
+                        &available_screens,
+                        &mut preview_widget,
+                        &mut preview_transition,
+                    );
                     self.selected_widget_idx = sel_idx;
                     if modified {
                         if (screen.width, screen.height) != previous_size {
                             self.hardware_profile = HardwareProfile::Custom;
                         }
                         self.sync_from_screen(&screen);
+                    }
+                    if let Some(idx) = preview_widget {
+                        self.widget_preview = Some((idx, 0.0));
+                    }
+                    if preview_transition {
+                        if let Some(transition) = &screen.transition {
+                            self.transition_state = Some(ScreenTransition {
+                                target_screen_idx: self.active_screen_idx,
+                                progress: 0.0,
+                                duration: (transition.duration_ms as f32 / 1000.0).max(0.001),
+                                style: TransitionStyle::from_preset(&transition.preset),
+                                easing: transition.easing.clone(),
+                            });
+                        }
                     }
                 } else {
                     ui.label("Fix KDL syntax errors to use the Inspector.");

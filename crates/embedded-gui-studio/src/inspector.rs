@@ -1,6 +1,7 @@
 //! Visual inspector sidebar panel for properties, tracks, and screen settings.
 
-use eframe::egui::{self, DragValue};
+use eframe::egui::{self, Color32, CornerRadius, DragValue, Pos2, Stroke, StrokeKind, Vec2};
+use embedded_gui::motion::{Easing, apply_easing};
 use embedded_gui_codegen::{
     GridPlacementDef, ScreenDef, ScreenTransitionDef, WidgetAnimationDef, WidgetDef,
 };
@@ -18,15 +19,65 @@ const WIDGET_ANIMATION_PRESETS: &[(&str, &str)] = &[
     ("shake", "Shake"),
 ];
 
-const EASINGS: &[(&str, &str)] = &[
-    ("linear", "Linear"),
-    ("in_sine", "Ease In"),
-    ("out_sine", "Ease Out"),
-    ("in_out_sine", "Ease In/Out"),
-    ("out_cubic", "Smooth Decelerate"),
-    ("out_back", "Overshoot"),
-    ("out_bounce", "Bounce"),
-    ("moook", "Moook"),
+/// `(code, label, description)` for one easing choice.
+type EasingEntry = (&'static str, &'static str, &'static str);
+
+/// Easing choices grouped by feel, each with the plain-language description shown as a tooltip
+/// and under the picker. Groups are ordered from calmest to most energetic.
+const EASING_GROUPS: &[(&str, &[EasingEntry])] = &[
+    (
+        "Gentle",
+        &[
+            (
+                "linear",
+                "Linear",
+                "Constant speed throughout, no acceleration. Feels mechanical.",
+            ),
+            (
+                "in_sine",
+                "Ease In",
+                "Starts slow and gently speeds up into the motion.",
+            ),
+            (
+                "out_sine",
+                "Ease Out",
+                "Starts fast and gently glides to a stop.",
+            ),
+            (
+                "in_out_sine",
+                "Ease In/Out",
+                "Gentle acceleration and deceleration on both ends. Safe default.",
+            ),
+        ],
+    ),
+    (
+        "Snappy",
+        &[(
+            "out_cubic",
+            "Smooth Decelerate",
+            "Quick start with a decisive, smooth stop. Great for widget entrances.",
+        )],
+    ),
+    (
+        "Bouncy / Springy",
+        &[
+            (
+                "out_back",
+                "Overshoot",
+                "Shoots past the target, then eases back. Adds a touch of energy.",
+            ),
+            (
+                "out_bounce",
+                "Bounce",
+                "Bounces like a dropped ball before settling. Playful and attention-grabbing.",
+            ),
+            (
+                "moook",
+                "Moook",
+                "Physical rubber-band curve. Used for screen push/pop transitions.",
+            ),
+        ],
+    ),
 ];
 
 fn named_value<'a>(value: &str, choices: &'a [(&str, &str)]) -> &'a str {
@@ -36,7 +87,107 @@ fn named_value<'a>(value: &str, choices: &'a [(&str, &str)]) -> &'a str {
         .unwrap_or("Custom")
 }
 
-fn render_widget_animation(ui: &mut egui::Ui, animation: &mut Option<WidgetAnimationDef>) -> bool {
+fn easing_lookup(code: &str) -> (&'static str, &'static str) {
+    EASING_GROUPS
+        .iter()
+        .flat_map(|(_, items)| items.iter())
+        .find_map(|(c, label, desc)| (*c == code).then_some((*label, *desc)))
+        .unwrap_or(("Custom", "A hand-edited easing value not in the picker."))
+}
+
+fn easing_code_to_enum(code: &str) -> Easing {
+    match code {
+        "in_sine" => Easing::InSine,
+        "out_sine" => Easing::OutSine,
+        "in_out_sine" => Easing::InOutSine,
+        "out_cubic" => Easing::OutCubic,
+        "out_back" => Easing::OutBack,
+        "out_bounce" => Easing::OutBounce,
+        "moook" => Easing::Moook,
+        _ => Easing::Linear,
+    }
+}
+
+/// Draws a small static graph of the easing curve's shape, with a faint linear
+/// reference diagonal for comparison.
+fn render_easing_thumbnail(ui: &mut egui::Ui, code: &str, size: Vec2) {
+    let (response, painter) = ui.allocate_painter(size, egui::Sense::hover());
+    let rect = response.rect;
+
+    painter.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(18, 20, 26));
+    painter.rect_stroke(
+        rect,
+        CornerRadius::same(3),
+        Stroke::new(1.0f32, Color32::from_rgb(45, 52, 65)),
+        StrokeKind::Inside,
+    );
+
+    let graph_rect = rect.shrink2(Vec2::new(4.0, 4.0));
+    painter.line_segment(
+        [
+            Pos2::new(graph_rect.min.x, graph_rect.max.y),
+            Pos2::new(graph_rect.max.x, graph_rect.min.y),
+        ],
+        Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(80, 90, 110, 80)),
+    );
+
+    let easing = easing_code_to_enum(code);
+    let steps = 32;
+    let points: Vec<Pos2> = (0..=steps)
+        .map(|i| {
+            let x_norm = i as f32 / steps as f32;
+            let y_val = apply_easing(x_norm, easing).clamp(-0.3, 1.3);
+            Pos2::new(
+                graph_rect.min.x + x_norm * graph_rect.width(),
+                graph_rect.max.y - y_val * graph_rect.height(),
+            )
+        })
+        .collect();
+    for w in points.windows(2) {
+        painter.line_segment(
+            [w[0], w[1]],
+            Stroke::new(1.5f32, Color32::from_rgb(60, 180, 255)),
+        );
+    }
+}
+
+/// Renders a grouped, tooltip-annotated easing dropdown plus a live curve thumbnail
+/// and description underneath, so the shape and feel of a curve are visible without
+/// leaving the inspector. Returns true if `current` was changed.
+fn render_easing_picker(ui: &mut egui::Ui, id_salt: &str, current: &mut String) -> bool {
+    let mut modified = false;
+    let (selected_label, _) = easing_lookup(current);
+    ui.horizontal(|ui| {
+        ui.label("Timing:");
+        egui::ComboBox::from_id_salt(id_salt)
+            .selected_text(selected_label)
+            .show_ui(ui, |ui| {
+                for (group_name, items) in EASING_GROUPS {
+                    ui.label(egui::RichText::new(*group_name).small().weak());
+                    for (code, label, desc) in *items {
+                        if ui
+                            .selectable_value(current, (*code).to_string(), *label)
+                            .on_hover_text(*desc)
+                            .changed()
+                        {
+                            modified = true;
+                        }
+                    }
+                    ui.separator();
+                }
+            });
+        render_easing_thumbnail(ui, current, Vec2::new(48.0, 22.0));
+    });
+    let (_, description) = easing_lookup(current);
+    ui.label(egui::RichText::new(description).small().weak());
+    modified
+}
+
+fn render_widget_animation(
+    ui: &mut egui::Ui,
+    animation: &mut Option<WidgetAnimationDef>,
+    preview_requested: &mut bool,
+) -> bool {
     let mut modified = false;
     egui::CollapsingHeader::new(egui::RichText::new("✨ Animation").strong())
         .default_open(true)
@@ -123,24 +274,10 @@ fn render_widget_animation(ui: &mut egui::Ui, animation: &mut Option<WidgetAnima
                     modified = true;
                 }
             });
+            if render_easing_picker(ui, "widget_animation_easing", &mut animation.easing) {
+                modified = true;
+            }
             ui.horizontal(|ui| {
-                ui.label("Timing:");
-                egui::ComboBox::from_id_salt("widget_animation_easing")
-                    .selected_text(named_value(&animation.easing, EASINGS))
-                    .show_ui(ui, |ui| {
-                        for (code, label) in EASINGS {
-                            if ui
-                                .selectable_value(
-                                    &mut animation.easing,
-                                    (*code).to_string(),
-                                    *label,
-                                )
-                                .changed()
-                            {
-                                modified = true;
-                            }
-                        }
-                    });
                 ui.label("Repeat:");
                 if ui
                     .add(
@@ -158,12 +295,23 @@ fn render_widget_animation(ui: &mut egui::Ui, animation: &mut Option<WidgetAnima
                 {
                     modified = true;
                 }
+                if ui
+                    .button("▶ Preview")
+                    .on_hover_text("Replay this widget's animation now, in isolation")
+                    .clicked()
+                {
+                    *preview_requested = true;
+                }
             });
         });
     modified
 }
 
-fn render_screen_transition(ui: &mut egui::Ui, screen: &mut ScreenDef) -> bool {
+fn render_screen_transition(
+    ui: &mut egui::Ui,
+    screen: &mut ScreenDef,
+    preview_requested: &mut bool,
+) -> bool {
     let mut modified = false;
     egui::CollapsingHeader::new(egui::RichText::new("🎬 Screen Transition").strong())
         .default_open(true)
@@ -219,24 +367,17 @@ fn render_screen_transition(ui: &mut egui::Ui, screen: &mut ScreenDef) -> bool {
                 {
                     modified = true;
                 }
-                ui.label("Timing:");
-                egui::ComboBox::from_id_salt("screen_transition_easing")
-                    .selected_text(named_value(&transition.easing, EASINGS))
-                    .show_ui(ui, |ui| {
-                        for (code, label) in EASINGS {
-                            if ui
-                                .selectable_value(
-                                    &mut transition.easing,
-                                    (*code).to_string(),
-                                    *label,
-                                )
-                                .changed()
-                            {
-                                modified = true;
-                            }
-                        }
-                    });
             });
+            if render_easing_picker(ui, "screen_transition_easing", &mut transition.easing) {
+                modified = true;
+            }
+            if ui
+                .button("▶ Preview")
+                .on_hover_text("Replay this screen's transition now, in place")
+                .clicked()
+            {
+                *preview_requested = true;
+            }
             ui.horizontal(|ui| {
                 ui.label("Origin:");
                 egui::ComboBox::from_id_salt("screen_transition_origin")
@@ -320,11 +461,18 @@ fn push_vector_asset(
 }
 
 /// Renders the visual property inspector sidebar for the selected widget or screen.
+///
+/// `preview_widget` is set to the selected widget's index when its "▶ Preview"
+/// button is clicked; `preview_transition` is set when the screen transition's
+/// "▶ Preview" button is clicked. Both let the caller replay the animation on
+/// demand in the live canvas.
 pub fn render_inspector_panel(
     ui: &mut egui::Ui,
     screen: &mut ScreenDef,
     selected_widget_idx: &mut Option<usize>,
     available_screens: &[String],
+    preview_widget: &mut Option<usize>,
+    preview_transition: &mut bool,
 ) -> bool {
     let mut modified = false;
     let current_screen_id = screen.id.clone();
@@ -377,8 +525,12 @@ pub fn render_inspector_panel(
 
             ui.separator();
 
-            if render_widget_animation(ui, &mut placement.animation) {
+            let mut widget_preview_clicked = false;
+            if render_widget_animation(ui, &mut placement.animation, &mut widget_preview_clicked) {
                 modified = true;
+            }
+            if widget_preview_clicked {
+                *preview_widget = Some(idx);
             }
             ui.separator();
 
@@ -1360,7 +1512,7 @@ pub fn render_inspector_panel(
         });
 
         ui.separator();
-        if render_screen_transition(ui, screen) {
+        if render_screen_transition(ui, screen, preview_transition) {
             modified = true;
         }
         ui.separator();
@@ -1998,6 +2150,8 @@ mod tests {
         let screen = std::cell::RefCell::new(screen);
         let selected = std::cell::RefCell::new(None);
         let modified = std::cell::Cell::new(true);
+        let preview_widget = std::cell::RefCell::new(None);
+        let preview_transition = std::cell::RefCell::new(false);
 
         egui::__run_test_ui(|ui| {
             modified.set(render_inspector_panel(
@@ -2005,6 +2159,8 @@ mod tests {
                 &mut screen.borrow_mut(),
                 &mut selected.borrow_mut(),
                 &[],
+                &mut preview_widget.borrow_mut(),
+                &mut preview_transition.borrow_mut(),
             ));
         });
 

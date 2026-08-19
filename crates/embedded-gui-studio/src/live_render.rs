@@ -744,17 +744,24 @@ pub fn render_screen_at(
     animation_phase: f32,
     highlight: Option<usize>,
 ) -> RenderedFrame {
-    render_screen_at_with_assets(screen, theme, animation_phase, highlight, None)
+    render_screen_at_with_assets(screen, theme, animation_phase, highlight, None, None)
 }
 
 /// Renders a screen and resolves `image src="..."` nodes relative to the
 /// project root. Invalid, absolute, or escaping paths are ignored.
+///
+/// `widget_override` lets a single widget (by grid child index) be sampled at
+/// its own independent phase, overriding the shared `animation_phase` for that
+/// widget only. Used by the inspector's one-click animation preview so
+/// replaying one widget doesn't restart every other animated widget sharing
+/// the screen's timeline.
 pub fn render_screen_at_with_assets(
     screen: &ScreenDef,
     theme: DisplayTheme,
     animation_phase: f32,
     highlight: Option<usize>,
     project_root: Option<&Path>,
+    widget_override: Option<(usize, f32)>,
 ) -> RenderedFrame {
     let mut option_lists: Vec<Vec<&str>> = Vec::new();
     let mut table_storage: Vec<Vec<Vec<&str>>> = Vec::new();
@@ -807,6 +814,7 @@ pub fn render_screen_at_with_assets(
         &icon_bitmaps,
         &meshes,
         highlight,
+        widget_override,
     )
 }
 
@@ -855,6 +863,7 @@ fn render_inner<'a>(
     icon_bitmaps: &'a [Vec<(MonoBitmapData, usize)>],
     meshes: &'a [Option<MeshData>],
     highlight: Option<usize>,
+    widget_override: Option<(usize, f32)>,
 ) -> RenderedFrame {
     let width = screen.width.max(1) as u16;
     let height = screen.height.max(1) as u16;
@@ -883,7 +892,11 @@ fn render_inner<'a>(
         .enumerate()
     {
         if let Some(animation) = &placement.animation {
-            let (animated, opacity) = sample_widget_animation(animation, animation_phase, cell);
+            let phase = match widget_override {
+                Some((override_idx, override_phase)) if override_idx == idx => override_phase,
+                _ => animation_phase,
+            };
+            let (animated, opacity) = sample_widget_animation(animation, phase, cell);
             *cell = animated;
             widget_opacities[idx] = opacity;
         }
@@ -1866,7 +1879,7 @@ mod tests {
         let root = demo_project_root();
         let source = std::fs::read_to_string(root.join("screens").join(name)).unwrap();
         let screen = parse_kdl_screen(&source).unwrap();
-        render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root))
+        render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root), None)
     }
 
     #[test]
@@ -1963,8 +1976,14 @@ mod tests {
             }
         }"##;
         let screen = parse_kdl_screen(kdl).unwrap();
-        let frame =
-            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+        let frame = render_screen_at_with_assets(
+            &screen,
+            DisplayTheme::DarkTft,
+            0.0,
+            None,
+            Some(&root),
+            None,
+        );
 
         let lit = frame
             .pixels
@@ -1980,8 +1999,14 @@ mod tests {
         let root = demo_project_root();
         let source = std::fs::read_to_string(root.join("screens/counter.kdl")).unwrap();
         let mut screen = parse_kdl_screen(&source).unwrap();
-        let with_bolt_hidden =
-            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+        let with_bolt_hidden = render_screen_at_with_assets(
+            &screen,
+            DisplayTheme::DarkTft,
+            0.0,
+            None,
+            Some(&root),
+            None,
+        );
 
         for (_, widget) in &mut screen.grid.children {
             if let WidgetDef::CompositeIcon { parts, .. } = widget {
@@ -1990,8 +2015,14 @@ mod tests {
                 }
             }
         }
-        let with_bolt_shown =
-            render_screen_at_with_assets(&screen, DisplayTheme::DarkTft, 0.0, None, Some(&root));
+        let with_bolt_shown = render_screen_at_with_assets(
+            &screen,
+            DisplayTheme::DarkTft,
+            0.0,
+            None,
+            Some(&root),
+            None,
+        );
 
         let changed = with_bolt_hidden
             .pixels
