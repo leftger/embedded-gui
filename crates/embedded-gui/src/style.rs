@@ -198,6 +198,21 @@ pub fn lerp_rgb565_public(a: Rgb565, b: Rgb565, t: u8) -> Rgb565 {
     Rgb565::new(r as u8, g as u8, bb as u8)
 }
 
+/// Blends `color` toward white by `amount` (0 leaves it unchanged, 255 yields pure white).
+///
+/// Used to derive shades (e.g. card backgrounds from a screen background) procedurally
+/// instead of hand-authoring every tint as a separate constant.
+#[inline]
+pub fn lighten(color: Rgb565, amount: u8) -> Rgb565 {
+    lerp_rgb565_public(color, Rgb565::WHITE, amount)
+}
+
+/// Blends `color` toward black by `amount` (0 leaves it unchanged, 255 yields pure black).
+#[inline]
+pub fn darken(color: Rgb565, amount: u8) -> Rgb565 {
+    lerp_rgb565_public(color, Rgb565::BLACK, amount)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Style {
     pub background: Option<Rgb565>,
@@ -785,6 +800,126 @@ impl Theme {
             focus_ring: Rgb565::WHITE,
         }
     }
+
+    /// Light, rounded-card look with soft drop shadows and generous padding —
+    /// closer to what most desktop/mobile design systems ship as their default,
+    /// versus this crate's other retro/CRT-leaning presets.
+    ///
+    /// Shades are derived procedurally from two seed colors via [`lighten`]/[`darken`]
+    /// rather than hand-authored per state, trading exact color-step parity with any
+    /// particular reference theme for far less code.
+    pub fn soft_ui() -> Self {
+        let screen_bg = Rgb565::new(29, 60, 30);
+        let primary = Rgb565::new(7, 31, 26);
+        let ink = Rgb565::new(4, 9, 5);
+
+        let card_bg = lighten(screen_bg, 250);
+        let border = darken(card_bg, 30);
+        let shadow_color = darken(card_bg, 235);
+        let track_bg = darken(card_bg, 15);
+
+        let button_shadow = Some(Shadow {
+            color: shadow_color,
+            opacity: 110,
+            offset_x: 0,
+            offset_y: 2,
+            spread: 2,
+        });
+
+        let button = Style {
+            background: Some(card_bg),
+            gradient: None,
+            font: FontId::Scaled6x10,
+            foreground: ink,
+            text: ink,
+            accent: primary,
+            opacity: 255,
+            corner_radius: 10,
+            shadow: button_shadow,
+            border: Border::one(border),
+            padding: EdgeInsets::symmetric(10, 6),
+        };
+
+        let panel = Style {
+            background: Some(card_bg),
+            gradient: None,
+            font: FontId::Scaled6x10,
+            foreground: ink,
+            text: ink,
+            accent: primary,
+            opacity: 255,
+            corner_radius: 8,
+            shadow: None,
+            border: Border::one(border),
+            padding: EdgeInsets::all(8),
+        };
+
+        let label = Style {
+            background: None,
+            gradient: None,
+            font: FontId::Scaled6x10,
+            foreground: ink,
+            text: ink,
+            accent: primary,
+            opacity: 255,
+            corner_radius: 0,
+            shadow: None,
+            border: Border::none(),
+            padding: EdgeInsets::zero(),
+        };
+
+        let progress = Style {
+            background: Some(track_bg),
+            gradient: None,
+            font: FontId::Medium4x7,
+            foreground: primary,
+            text: ink,
+            accent: primary,
+            opacity: 255,
+            corner_radius: 8,
+            shadow: None,
+            border: Border::one(border),
+            padding: EdgeInsets::all(2),
+        };
+
+        let dialog = Style {
+            background: Some(card_bg),
+            gradient: None,
+            font: FontId::Scaled6x10,
+            foreground: ink,
+            text: ink,
+            accent: primary,
+            opacity: 255,
+            corner_radius: 12,
+            shadow: Some(Shadow {
+                color: shadow_color,
+                opacity: 140,
+                offset_x: 0,
+                offset_y: 3,
+                spread: 4,
+            }),
+            border: Border::one(border),
+            padding: EdgeInsets::all(10),
+        };
+
+        Self {
+            panel,
+            label,
+            button,
+            progress,
+            toggle: button,
+            checkbox: button,
+            slider: button,
+            value_label: label,
+            icon_button: button,
+            list: button,
+            dialog,
+            toast: dialog,
+            tabs: button,
+            meter: progress,
+            focus_ring: primary,
+        }
+    }
 }
 
 impl Default for Theme {
@@ -1101,6 +1236,25 @@ mod tests {
         transition.tick(50);
         let current_style = transition.style(widget_style);
         assert_eq!(current_style.corner_radius, 4);
+    }
+
+    #[test]
+    fn test_lighten_darken() {
+        let color = Rgb565::new(10, 20, 10);
+        assert_eq!(lighten(color, 0), color);
+        assert_eq!(darken(color, 0), color);
+        assert_eq!(lighten(color, 255), Rgb565::WHITE);
+        assert_eq!(darken(color, 255), Rgb565::BLACK);
+    }
+
+    #[test]
+    fn test_soft_ui_theme() {
+        let theme = Theme::soft_ui();
+        assert!(theme.button.corner_radius > 0);
+        assert!(theme.button.shadow.is_some());
+        assert!(theme.panel.border.width > 0);
+        // Card background should be lighter than the screen background it's derived from.
+        assert!(theme.panel.background.unwrap().g() > 30);
     }
 
     #[test]

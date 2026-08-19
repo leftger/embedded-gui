@@ -24,6 +24,7 @@ pub enum DisplayTheme {
     AmberPhosphor,
     EmeraldGreen,
     MonochromeOled,
+    SoftUi,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

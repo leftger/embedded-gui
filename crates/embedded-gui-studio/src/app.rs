@@ -887,6 +887,7 @@ impl EmbeddedGuiStudio {
                     DisplayTheme::AmberPhosphor => "Amber CRT",
                     DisplayTheme::EmeraldGreen => "Emerald Matrix",
                     DisplayTheme::MonochromeOled => "Monochrome OLED",
+                    DisplayTheme::SoftUi => "Soft UI",
                 })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.display_theme, DisplayTheme::DarkTft, "Dark TFT");
@@ -910,6 +911,7 @@ impl EmbeddedGuiStudio {
                         DisplayTheme::MonochromeOled,
                         "Monochrome OLED",
                     );
+                    ui.selectable_value(&mut self.display_theme, DisplayTheme::SoftUi, "Soft UI");
                 });
             if self.display_theme != prev_theme && self.live_stream {
                 self.push_live_frame();

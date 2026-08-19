@@ -255,6 +255,7 @@ fn parse_theme(s: &str) -> Option<DisplayTheme> {
         "amber" | "amber_phosphor" => Some(DisplayTheme::AmberPhosphor),
         "emerald" | "emerald_green" => Some(DisplayTheme::EmeraldGreen),
         "mono" | "monochrome" | "monochrome_oled" => Some(DisplayTheme::MonochromeOled),
+        "soft_ui" | "soft" => Some(DisplayTheme::SoftUi),
         _ => None,
     }
 }
@@ -266,6 +267,7 @@ fn theme_slug(theme: DisplayTheme) -> &'static str {
         DisplayTheme::AmberPhosphor => "amber",
         DisplayTheme::EmeraldGreen => "emerald",
         DisplayTheme::MonochromeOled => "mono",
+        DisplayTheme::SoftUi => "soft_ui",
     }
 }
 

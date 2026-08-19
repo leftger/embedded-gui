@@ -69,6 +69,7 @@ pub fn render_command_palette(app: &mut EmbeddedGuiStudio, ctx: &egui::Context) 
                         ("Theme: Amber CRT", DisplayTheme::AmberPhosphor, "📟"),
                         ("Theme: Emerald Matrix", DisplayTheme::EmeraldGreen, "🟢"),
                         ("Theme: Monochrome OLED", DisplayTheme::MonochromeOled, "⚪"),
+                        ("Theme: Soft UI", DisplayTheme::SoftUi, "🔲"),
                     ];
                     for (tname, theme, icon) in themes {
                         if query.is_empty() || tname.to_lowercase().contains(&query) {

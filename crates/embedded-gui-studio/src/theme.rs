@@ -68,6 +68,16 @@ impl ThemePalette {
                 success: Color32::WHITE,
                 danger: Color32::WHITE,
             },
+            DisplayTheme::SoftUi => Self {
+                display_bg: Color32::from_rgb(238, 243, 247),
+                card_bg: Color32::from_rgb(250, 251, 252),
+                border: Color32::from_rgb(220, 221, 222),
+                text_primary: Color32::from_rgb(33, 36, 41),
+                text_dim: Color32::from_rgb(120, 126, 135),
+                accent: Color32::from_rgb(58, 125, 214),
+                success: Color32::from_rgb(34, 170, 94),
+                danger: Color32::from_rgb(214, 62, 62),
+            },
         }
     }
 }
