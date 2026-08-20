@@ -55,8 +55,8 @@ embedded-draw-target = { version = "0.1", default-features = false }
 embedded-graphics-framebuf = "0.3"
 critical-section = "1.1"
 heapless = "0.9"
-embassy-time = { version = "0.5", default-features = false, optional = true }
-embassy-sync = { version = "0.8", default-features = false, optional = true }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", default-features = false, optional = true }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", default-features = false, optional = true }
 libm = {version = "0.2", optional = true}
 micromath = {version = "2.1", optional = true}
 embedded-graphics = { version = "0.8", optional = true }
