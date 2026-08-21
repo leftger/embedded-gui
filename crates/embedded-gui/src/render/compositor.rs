@@ -13,16 +13,13 @@ pub enum BlendMode {
     Screen,
 }
 
-pub trait PixelRead: DrawTarget {
-    fn get_pixel(&self, point: Point) -> Self::Color;
-}
+/// Re-exported from [`embedded_draw_target`] so that a buffer implementing it
+/// once is accepted by every crate in the ecosystem that needs readback,
+/// rather than by this one alone.
+pub use embedded_draw_target::PixelRead;
 
-pub trait WindowedDrawTarget: DrawTarget {
-    fn set_window(
-        &mut self,
-        area: &embedded_graphics_core::primitives::Rectangle,
-    ) -> Result<(), Self::Error>;
-}
+/// Re-exported from [`embedded_draw_target`].
+pub use embedded_draw_target::WindowedDrawTarget;
 
 pub trait Compositor<D: DrawTarget<Color = Rgb565>> {
     fn plot(
