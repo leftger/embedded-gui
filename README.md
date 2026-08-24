@@ -1,5 +1,9 @@
 # embedded-gui
 
+<p align="center">
+  <img src="assets/aztec_rustacean.png" alt="embedded-gui" width="100%">
+</p>
+
 [![crates.io](https://img.shields.io/crates/v/embedded-gui.svg)](https://crates.io/crates/embedded-gui)
 [![docs.rs](https://img.shields.io/docsrs/embedded-gui)](https://docs.rs/embedded-gui)
 [![CI](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml/badge.svg)](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml)
