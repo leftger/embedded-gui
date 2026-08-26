@@ -656,19 +656,34 @@ where
             }
             GradientDirection::Horizontal => {
                 let denom = rect.w.saturating_sub(1).max(1);
-                for y in draw.y..draw.bottom() {
-                    let is_middle_row = r == 0 || (y >= rect.y + r && y < rect.bottom() - r);
-                    for x in draw.x..draw.right() {
-                        if is_middle_row || in_rounded_rect(x, y, rect, radius) {
-                            let numer = ((x - rect.x).max(0) as u32).min(denom);
-                            let mut t = ((numer * 255) / denom) as u8;
-                            t = match self.quality {
-                                RenderQuality::Low => 128,
-                                RenderQuality::Medium => (t / 64) * 64,
-                                RenderQuality::High => t,
-                            };
-                            let color = lerp_rgb565(gradient.start, gradient.end, t);
-                            self.pixel(x, y, color, opacity)?;
+                for x in draw.x..draw.right() {
+                    let numer = ((x - rect.x).max(0) as u32).min(denom);
+                    let mut t = ((numer * 255) / denom) as u8;
+                    t = match self.quality {
+                        RenderQuality::Low => 128,
+                        RenderQuality::Medium => (t / 64) * 64,
+                        RenderQuality::High => t,
+                    };
+                    let color = lerp_rgb565(gradient.start, gradient.end, t);
+
+                    let is_middle_col = r == 0 || (x >= rect.x + r && x < rect.right() - r);
+                    if is_middle_col {
+                        if fast_solid {
+                            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                                Point::new(x, draw.y),
+                                embedded_graphics_core::geometry::Size::new(1, draw.h),
+                            );
+                            self.target.fill_solid(&eg_rect, color)?;
+                        } else {
+                            for y in draw.y..draw.bottom() {
+                                self.pixel(x, y, color, opacity)?;
+                            }
+                        }
+                    } else {
+                        for y in draw.y..draw.bottom() {
+                            if in_rounded_rect(x, y, rect, radius) {
+                                self.pixel(x, y, color, opacity)?;
+                            }
                         }
                     }
                 }
@@ -2634,5 +2649,51 @@ mod tests {
         // not the one directly below it.
         assert_eq!(buf.pixel_at(40, 25), Some(Rgb565::RED));
         assert_eq!(buf.pixel_at(25, 40), Some(Rgb565::BLACK));
+    }
+
+    #[test]
+    fn test_horizontal_gradient_fill_column_major_equivalence() {
+        let grad = LinearGradient::horizontal(Rgb565::RED, Rgb565::BLUE);
+        let rect = Rect::new(4, 4, 40, 40);
+
+        for radius in [0u8, 6u8] {
+            for opacity in [255u8, 200u8] {
+                let mut buf_opt = crate::test_buffer::TestBuffer::new(48, 48);
+                let mut ctx_opt = RenderCtx::new(&mut buf_opt, Rect::new(0, 0, 48, 48));
+                ctx_opt
+                    .fill_rounded_rect_gradient_alpha(rect, radius, grad, opacity)
+                    .unwrap();
+
+                let mut buf_ref = crate::test_buffer::TestBuffer::new(48, 48);
+                let mut ctx_ref = RenderCtx::new(&mut buf_ref, Rect::new(0, 0, 48, 48));
+
+                // Reference row-major per-pixel draw
+                let draw = ctx_ref.visible_rect(rect);
+                let r = radius as i32;
+                let denom = rect.w.saturating_sub(1).max(1);
+                for y in draw.y..draw.bottom() {
+                    let is_middle_row = r == 0 || (y >= rect.y + r && y < rect.bottom() - r);
+                    for x in draw.x..draw.right() {
+                        if is_middle_row || in_rounded_rect(x, y, rect, radius) {
+                            let numer = ((x - rect.x).max(0) as u32).min(denom);
+                            let mut t = ((numer * 255) / denom) as u8;
+                            t = match ctx_ref.quality {
+                                RenderQuality::Low => 128,
+                                RenderQuality::Medium => (t / 64) * 64,
+                                RenderQuality::High => t,
+                            };
+                            let color = lerp_rgb565(grad.start, grad.end, t);
+                            ctx_ref.pixel(x, y, color, opacity).unwrap();
+                        }
+                    }
+                }
+
+                assert_eq!(
+                    buf_opt.digest(),
+                    buf_ref.digest(),
+                    "Horizontal gradient mismatch at radius={radius}, opacity={opacity}"
+                );
+            }
+        }
     }
 }
