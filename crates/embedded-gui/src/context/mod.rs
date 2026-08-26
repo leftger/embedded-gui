@@ -99,4 +99,24 @@ mod tests {
                 .any(|e| matches!(e, UiEvent::Clicked(id) if id == &btn))
         );
     }
+
+    #[test]
+    fn test_render_dirty_buffered() {
+        use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
+        let viewport = Rect::new(0, 0, 320, 240);
+        let mut ctx: GuiContext<32, 16, 16> = GuiContext::new(viewport);
+        let btn = ctx
+            .add_themed_button(Rect::new(10, 10, 80, 30), "Buffered")
+            .unwrap();
+
+        let mut display = crate::test_buffer::TestBuffer::new(320, 240);
+        let mut scratch = [Rgb565::BLACK; 256];
+
+        // Mark button dirty
+        ctx.dirty.add(Rect::new(10, 10, 80, 30)).unwrap();
+        ctx.render_dirty_buffered(&mut display, &mut scratch)
+            .unwrap();
+
+        assert!(ctx.node(btn).is_some());
+    }
 }

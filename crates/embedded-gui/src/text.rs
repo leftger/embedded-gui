@@ -325,3 +325,103 @@ impl TextShaper for BasicTextShaper {
         }
     }
 }
+
+/// A compact reference into a [`StringArena`] text slab.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextSlice {
+    pub offset: u16,
+    pub len: u16,
+}
+
+impl TextSlice {
+    pub const fn empty() -> Self {
+        Self { offset: 0, len: 0 }
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+/// An allocation-free, fixed-capacity UTF-8 text arena / slab.
+///
+/// Stores string data compactly in a single contiguous byte buffer,
+/// avoiding per-node or per-widget fixed string storage overhead.
+#[derive(Clone, Debug)]
+pub struct StringArena<const CAP: usize = 1024> {
+    buffer: heapless::Vec<u8, CAP>,
+}
+
+impl<const CAP: usize> Default for StringArena<CAP> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const CAP: usize> StringArena<CAP> {
+    pub const fn new() -> Self {
+        Self {
+            buffer: heapless::Vec::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        CAP
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
+
+    /// Allocates a string slice into the arena, returning a compact [`TextSlice`].
+    pub fn push_str(&mut self, s: &str) -> Option<TextSlice> {
+        let offset = self.buffer.len();
+        let len = s.len();
+        if offset + len > CAP || offset > u16::MAX as usize || len > u16::MAX as usize {
+            return None;
+        }
+        self.buffer.extend_from_slice(s.as_bytes()).ok()?;
+        Some(TextSlice {
+            offset: offset as u16,
+            len: len as u16,
+        })
+    }
+
+    /// Retrieves a string reference using a [`TextSlice`].
+    pub fn get(&self, slice: TextSlice) -> Option<&str> {
+        let start = slice.offset as usize;
+        let end = start + slice.len as usize;
+        if end <= self.buffer.len() {
+            core::str::from_utf8(&self.buffer[start..end]).ok()
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_string_arena_push_and_get() {
+        let mut arena: StringArena<128> = StringArena::new();
+        let s1 = arena.push_str("Hello").unwrap();
+        let s2 = arena.push_str("World!").unwrap();
+
+        assert_eq!(arena.get(s1), Some("Hello"));
+        assert_eq!(arena.get(s2), Some("World!"));
+        assert_eq!(arena.len(), 11);
+
+        arena.clear();
+        assert_eq!(arena.len(), 0);
+    }
+}

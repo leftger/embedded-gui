@@ -94,6 +94,103 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         Ok(())
     }
 
+    /// Renders dirty regions into a small caller-provided scratch pixel buffer, then
+    /// contiguously flushes each region to the display target.
+    ///
+    /// This eliminates visual flicker and dramatically speeds up partial updates on
+    /// SPI/I2C displays without requiring a full RAM framebuffer.
+    pub fn render_dirty_buffered<D>(
+        &self,
+        target: &mut D,
+        scratch_buffer: &mut [Rgb565],
+    ) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        let slice = self.dirty.as_slice();
+        if slice.is_empty() || scratch_buffer.is_empty() {
+            return Ok(());
+        }
+
+        for &dirty in slice {
+            if dirty.is_empty() {
+                continue;
+            }
+            let total_pixels = (dirty.w as usize).saturating_mul(dirty.h as usize);
+            if total_pixels <= scratch_buffer.len() {
+                // Entire dirty rect fits in the scratch buffer
+                let mut fb =
+                    crate::framebuffer::FramebufferSlice::new(scratch_buffer, dirty.w, dirty.h);
+                let bg = self.theme.panel.background.unwrap_or(Rgb565::new(0, 0, 0));
+                fb.clear_color(bg);
+                let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, dirty.w, dirty.h));
+                ctx.set_quality(self.render_quality);
+                let _ = self.render_into(&mut ctx, -dirty.x, -dirty.y, 255);
+
+                let area = embedded_graphics_core::primitives::Rectangle::new(
+                    embedded_graphics_core::geometry::Point::new(dirty.x, dirty.y),
+                    embedded_graphics_core::geometry::Size::new(dirty.w, dirty.h),
+                );
+                target.fill_contiguous(&area, scratch_buffer[..total_pixels].iter().copied())?;
+            } else if scratch_buffer.len() >= dirty.w as usize {
+                // Buffer can fit at least one row: render in vertical bands
+                let band_height = (scratch_buffer.len() / dirty.w as usize) as u32;
+                let mut y = dirty.y;
+                let bottom = dirty.bottom();
+                while y < bottom {
+                    let h = band_height.min((bottom - y) as u32);
+                    let band_pixels = (dirty.w * h) as usize;
+                    let mut fb =
+                        crate::framebuffer::FramebufferSlice::new(scratch_buffer, dirty.w, h);
+                    let bg = self.theme.panel.background.unwrap_or(Rgb565::new(0, 0, 0));
+                    fb.clear_color(bg);
+                    let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, dirty.w, h));
+                    ctx.set_quality(self.render_quality);
+                    let _ = self.render_into(&mut ctx, -dirty.x, -y, 255);
+
+                    let area = embedded_graphics_core::primitives::Rectangle::new(
+                        embedded_graphics_core::geometry::Point::new(dirty.x, y),
+                        embedded_graphics_core::geometry::Size::new(dirty.w, h),
+                    );
+                    target.fill_contiguous(&area, scratch_buffer[..band_pixels].iter().copied())?;
+                    y += h as i32;
+                }
+            } else {
+                // Micro-scratch buffer (smaller than 1 scanline): chunk sub-row rectangles
+                let chunk_w = scratch_buffer.len() as u32;
+                let mut y = dirty.y;
+                let bottom = dirty.bottom();
+                while y < bottom {
+                    let mut x = dirty.x;
+                    let right = dirty.right();
+                    while x < right {
+                        let w = chunk_w.min((right - x) as u32);
+                        let chunk_pixels = w as usize;
+                        let mut fb =
+                            crate::framebuffer::FramebufferSlice::new(scratch_buffer, w, 1);
+                        let bg = self.theme.panel.background.unwrap_or(Rgb565::new(0, 0, 0));
+                        fb.clear_color(bg);
+                        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, w, 1));
+                        ctx.set_quality(self.render_quality);
+                        let _ = self.render_into(&mut ctx, -x, -y, 255);
+
+                        let area = embedded_graphics_core::primitives::Rectangle::new(
+                            embedded_graphics_core::geometry::Point::new(x, y),
+                            embedded_graphics_core::geometry::Size::new(w, 1),
+                        );
+                        target.fill_contiguous(
+                            &area,
+                            scratch_buffer[..chunk_pixels].iter().copied(),
+                        )?;
+                        x += w as i32;
+                    }
+                    y += 1;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn render_with_offset<D>(
         &self,
         target: &mut D,

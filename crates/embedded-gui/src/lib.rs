@@ -45,9 +45,14 @@ pub mod swapchain;
 #[cfg(feature = "std")]
 pub mod test_buffer;
 pub mod text;
+pub mod view;
 pub mod visual_widgets;
 pub mod widget;
 pub mod widgets;
+
+pub use geometry::FluentBuilder;
+pub use text::{StringArena, TextSlice};
+pub use view::{FlexBuilder, Render, ViewContext};
 
 pub use haptics::{HapticPattern, HapticSequencer};
 pub use i18n::{LanguageId, TranslationEntry, TranslationTable};
@@ -95,7 +100,9 @@ pub use embedded_graphics_framebuf::{
     backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
 };
 pub use font::{BitmapFont, Font, FontId, PackedFont};
-pub use framebuffer::{Framebuffer, FramebufferGray8, FramebufferRgba8888, Rgba8888};
+pub use framebuffer::{
+    Framebuffer, FramebufferGray8, FramebufferRgba8888, FramebufferSlice, Rgba8888,
+};
 pub use geometry::{Anchor, DirtyTracker, EdgeInsets, HorizontalAlign, Rect};
 #[cfg(all(feature = "std", feature = "image-decode"))]
 pub use image::{
@@ -194,35 +201,37 @@ pub mod prelude {
         ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
         ComposedAnimationStatus, CompositeIconSpec, CompositionControls, CompositionMode,
         Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
-        EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FocusGroupId,
-        Font, FontId, Framebuffer, FramebufferGray8, FramebufferRgba8888, GlanceTileSpec,
-        GradientDirection, GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel,
-        HapticPattern, HapticSequencer, Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas,
-        ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction,
-        KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState,
-        LayoutItem, Length, Line, LineBufferRenderer, LinearGradient, LinearLayout, ListState,
-        MenuContract, ModelChange, MonoBitmap, MotionTokens, NotificationLevel, PackedFont,
-        PathAnimator, PathPoint, PathVerb, PeekRevealSpec, PixelRead, PointerButton, PointerState,
-        PresentRegion, PressTiming, PropertySignal, Rect, ReelFrame, ReelPlayer, RenderBackendCaps,
-        RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
+        EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FlexBuilder,
+        FluentBuilder, FocusGroupId, Font, FontId, Framebuffer, FramebufferGray8,
+        FramebufferRgba8888, FramebufferSlice, GlanceTileSpec, GradientDirection, GridLayout,
+        GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer,
+        Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit,
+        ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe,
+        KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
+        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract, ModelChange,
+        MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
+        PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming,
+        PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps, RenderCtx,
+        RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
         ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
         ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
         ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
         SequencePlayer, SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph,
         ShapingConfig, Signal, SliceModel, SliderState, Software2DAccelerator, Span, SpinboxWidget,
-        SpringAnimator, SpriteSheet, StateStyle, StateTransition, StatefulWidget, StrokeCap,
-        StrokeDash, StrokeJoin, StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState,
-        TableWidget, TabsState, Text, TextAlign, TextDirection, TextMetrics, TextOverflow,
-        TextOverflowPolicy, TextShaper, TextStyle, TextWrap, Theme, TileMode, TileRef,
-        TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset,
-        TranslationEntry, TranslationTable, Tween, UiEvent, UiEventFilter, VectorPath,
-        VerticalAlign, VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
-        WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
-        WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
-        WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine, WidgetStyle, animate_glance_focus,
-        animate_peek_reveal, apply_carddeck_visibility, apply_easing, lerp_style, presets,
-        render_transition_pair, setup_card_story, setup_launcher_glance,
-        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
+        SpringAnimator, SpriteSheet, StateStyle, StateTransition, StatefulWidget, StringArena,
+        StrokeCap, StrokeDash, StrokeJoin, StrokeStyle, Style, StyleClassId, StyleTransition,
+        SurfaceState, TableWidget, TabsState, Text, TextAlign, TextDirection, TextMetrics,
+        TextOverflow, TextOverflowPolicy, TextShaper, TextSlice, TextStyle, TextWrap, Theme,
+        TileMode, TileRef, TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D,
+        TransitionPreset, TranslationEntry, TranslationTable, Tween, UiEvent, UiEventFilter,
+        VectorPath, VerticalAlign, ViewContext, VisualState, WidgetAnimationCallbacks,
+        WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter,
+        WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy,
+        WidgetKeyframeState, WidgetKind, WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine,
+        WidgetStyle, animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility,
+        apply_easing, lerp_style, presets, render_transition_pair, setup_card_story,
+        setup_launcher_glance, setup_launcher_glance_with_tokens, setup_peek_timeline,
+        setup_peek_timeline_with_tokens,
     };
 
     #[cfg(all(feature = "std", feature = "image-decode"))]

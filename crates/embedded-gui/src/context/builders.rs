@@ -88,6 +88,11 @@ where
     }
 }
 
+impl<'a, 'ctx, W, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
+    crate::geometry::FluentBuilder for WidgetBuilder<'a, 'ctx, W, NODES, EVENTS, DIRTY>
+{
+}
+
 impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     GuiContext<'a, NODES, EVENTS, DIRTY>
 {

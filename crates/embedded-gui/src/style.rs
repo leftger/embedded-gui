@@ -443,6 +443,9 @@ impl From<StateStyle> for WidgetStyle {
     }
 }
 
+impl crate::geometry::FluentBuilder for Style {}
+impl crate::geometry::FluentBuilder for WidgetStyle {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {
     pub panel: Style,

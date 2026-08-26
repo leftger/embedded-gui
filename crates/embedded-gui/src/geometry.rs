@@ -203,6 +203,15 @@ pub struct EdgeInsets {
 }
 
 impl EdgeInsets {
+    pub const fn new(top: i16, right: i16, bottom: i16, left: i16) -> Self {
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+
     pub const fn zero() -> Self {
         Self {
             left: 0,
@@ -230,6 +239,153 @@ impl EdgeInsets {
         }
     }
 }
+
+impl From<i16> for EdgeInsets {
+    fn from(v: i16) -> Self {
+        Self::all(v)
+    }
+}
+
+impl From<u16> for EdgeInsets {
+    fn from(v: u16) -> Self {
+        Self::all(v as i16)
+    }
+}
+
+impl From<i32> for EdgeInsets {
+    fn from(v: i32) -> Self {
+        Self::all(v as i16)
+    }
+}
+
+impl From<u32> for EdgeInsets {
+    fn from(v: u32) -> Self {
+        Self::all(v as i16)
+    }
+}
+
+impl From<(i16, i16)> for EdgeInsets {
+    fn from((vertical, horizontal): (i16, i16)) -> Self {
+        Self::symmetric(horizontal, vertical)
+    }
+}
+
+impl From<(u16, u16)> for EdgeInsets {
+    fn from((vertical, horizontal): (u16, u16)) -> Self {
+        Self::symmetric(horizontal as i16, vertical as i16)
+    }
+}
+
+impl From<(i32, i32)> for EdgeInsets {
+    fn from((vertical, horizontal): (i32, i32)) -> Self {
+        Self::symmetric(horizontal as i16, vertical as i16)
+    }
+}
+
+impl From<(u32, u32)> for EdgeInsets {
+    fn from((vertical, horizontal): (u32, u32)) -> Self {
+        Self::symmetric(horizontal as i16, vertical as i16)
+    }
+}
+
+impl From<(i16, i16, i16)> for EdgeInsets {
+    fn from((top, horizontal, bottom): (i16, i16, i16)) -> Self {
+        Self {
+            top,
+            right: horizontal,
+            bottom,
+            left: horizontal,
+        }
+    }
+}
+
+impl From<(u16, u16, u16)> for EdgeInsets {
+    fn from((top, horizontal, bottom): (u16, u16, u16)) -> Self {
+        Self {
+            top: top as i16,
+            right: horizontal as i16,
+            bottom: bottom as i16,
+            left: horizontal as i16,
+        }
+    }
+}
+
+impl From<(i16, i16, i16, i16)> for EdgeInsets {
+    fn from((top, right, bottom, left): (i16, i16, i16, i16)) -> Self {
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+}
+
+impl From<(u16, u16, u16, u16)> for EdgeInsets {
+    fn from((top, right, bottom, left): (u16, u16, u16, u16)) -> Self {
+        Self {
+            top: top as i16,
+            right: right as i16,
+            bottom: bottom as i16,
+            left: left as i16,
+        }
+    }
+}
+
+/// Fluent combinator trait for conditional and mapping transformations on builders.
+pub trait FluentBuilder {
+    /// Imperatively transform self with the provided closure.
+    fn map<U>(self, f: impl FnOnce(Self) -> U) -> U
+    where
+        Self: Sized,
+    {
+        f(self)
+    }
+
+    /// Conditionally transform self when `condition` is true.
+    fn when(self, condition: bool, then: impl FnOnce(Self) -> Self) -> Self
+    where
+        Self: Sized,
+    {
+        if condition { then(self) } else { self }
+    }
+
+    /// Conditionally transform self with `then` if `condition` is true, otherwise with `else_fn`.
+    fn when_else(
+        self,
+        condition: bool,
+        then: impl FnOnce(Self) -> Self,
+        else_fn: impl FnOnce(Self) -> Self,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        if condition { then(self) } else { else_fn(self) }
+    }
+
+    /// Conditionally unwrap and transform self if `option` is `Some(val)`.
+    fn when_some<T>(self, option: Option<T>, then: impl FnOnce(Self, T) -> Self) -> Self
+    where
+        Self: Sized,
+    {
+        if let Some(val) = option {
+            then(self, val)
+        } else {
+            self
+        }
+    }
+
+    /// Conditionally transform self if `option` is `None`.
+    fn when_none<T>(self, option: &Option<T>, then: impl FnOnce(Self) -> Self) -> Self
+    where
+        Self: Sized,
+    {
+        if option.is_none() { then(self) } else { self }
+    }
+}
+
+impl FluentBuilder for Rect {}
+impl FluentBuilder for EdgeInsets {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirtyError {

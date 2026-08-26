@@ -924,9 +924,121 @@ impl<const N: usize> PixelRead for FramebufferGray8<N> {
     }
 }
 
+/// A RAM-backed framebuffer borrowing an arbitrary slice of pixels `&'a mut [Rgb565]`.
+///
+/// Ideal for partial-frame, band-buffer, or scratch-buffer rendering without static const sizing.
+pub struct FramebufferSlice<'a> {
+    pixels: &'a mut [Rgb565],
+    width: u32,
+    height: u32,
+}
+
+impl<'a> FramebufferSlice<'a> {
+    pub fn new(buffer: &'a mut [Rgb565], width: u32, height: u32) -> Self {
+        assert!(
+            (width as usize) * (height as usize) <= buffer.len(),
+            "Buffer slice too small for width * height"
+        );
+        Self {
+            pixels: buffer,
+            width,
+            height,
+        }
+    }
+
+    pub fn clear_color(&mut self, color: Rgb565) {
+        let len = (self.width as usize) * (self.height as usize);
+        self.pixels[..len].fill(color);
+    }
+
+    pub fn pixels(&self) -> &[Rgb565] {
+        &self.pixels[..(self.width as usize) * (self.height as usize)]
+    }
+
+    pub fn pixels_mut(&mut self) -> &mut [Rgb565] {
+        let len = (self.width as usize) * (self.height as usize);
+        &mut self.pixels[..len]
+    }
+
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+
+    #[inline]
+    fn index(&self, x: i32, y: i32) -> Option<usize> {
+        if x < 0 || y < 0 || x as u32 >= self.width || y as u32 >= self.height {
+            return None;
+        }
+        Some((y as usize) * (self.width as usize) + (x as usize))
+    }
+}
+
+impl<'a> OriginDimensions for FramebufferSlice<'a> {
+    fn size(&self) -> Size {
+        Size::new(self.width, self.height)
+    }
+}
+
+impl<'a> DrawTarget for FramebufferSlice<'a> {
+    type Color = Rgb565;
+    type Error = core::convert::Infallible;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        for Pixel(point, color) in pixels {
+            if let Some(idx) = self.index(point.x, point.y) {
+                self.pixels[idx] = color;
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
+        let intersect = area.intersection(&Rectangle::new(Point::zero(), self.size()));
+        if intersect.is_zero_sized() {
+            return Ok(());
+        }
+        let x0 = intersect.top_left.x as usize;
+        let y0 = intersect.top_left.y as usize;
+        let w = intersect.size.width as usize;
+        let h = intersect.size.height as usize;
+        let stride = self.width as usize;
+
+        for row in 0..h {
+            let start = (y0 + row) * stride + x0;
+            self.pixels[start..start + w].fill(color);
+        }
+        Ok(())
+    }
+}
+
+impl<'a> PixelRead for FramebufferSlice<'a> {
+    fn get_pixel(&self, point: Point) -> Rgb565 {
+        match self.index(point.x, point.y) {
+            Some(idx) => self.pixels[idx],
+            None => Rgb565::BLACK,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_framebuffer_slice_draw() {
+        let mut buf = [Rgb565::BLACK; 64];
+        let mut slice = FramebufferSlice::new(&mut buf, 8, 8);
+        slice.clear_color(Rgb565::WHITE);
+        assert_eq!(slice.pixels()[0], Rgb565::WHITE);
+        assert_eq!(slice.get_pixel(Point::new(0, 0)), Rgb565::WHITE);
+    }
 
     #[test]
     fn test_iir_blur_rgb565() {

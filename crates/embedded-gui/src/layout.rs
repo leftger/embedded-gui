@@ -67,8 +67,8 @@ impl LinearLayout {
         self
     }
 
-    pub const fn with_padding(mut self, padding: EdgeInsets) -> Self {
-        self.padding = padding;
+    pub fn with_padding(mut self, padding: impl Into<EdgeInsets>) -> Self {
+        self.padding = padding.into();
         self
     }
 
@@ -681,8 +681,8 @@ impl<const COLS: usize, const ROWS: usize> GridLayout<COLS, ROWS> {
         self
     }
 
-    pub const fn with_padding(mut self, padding: EdgeInsets) -> Self {
-        self.padding = padding;
+    pub fn with_padding(mut self, padding: impl Into<EdgeInsets>) -> Self {
+        self.padding = padding.into();
         self
     }
 
@@ -805,6 +805,12 @@ impl<const COLS: usize, const ROWS: usize> GridLayout<COLS, ROWS> {
 
         count
     }
+}
+
+impl crate::geometry::FluentBuilder for LinearLayout {}
+impl<const COLS: usize, const ROWS: usize> crate::geometry::FluentBuilder
+    for GridLayout<COLS, ROWS>
+{
 }
 
 #[cfg(test)]

@@ -18,12 +18,13 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 ## Key Capabilities
 
 - **Zero-Allocation (`no_std`)**: Built entirely on fixed-capacity data structures (`heapless`) with strict memory bounds and deterministic execution times.
+- **Pure-Rust Declarative Component DSL**: Build fluid UI trees directly in Rust using the `Render` trait and `ViewContext` (`cx.column()`, `cx.row()`, `cx.button()`, `.when()`, `.when_some()`) without manual widget management.
 - **Declarative KDL GUI Markup & Codegen**: Author complex UI screens in clean [KDL markup](https://kdl.dev) and compile directly into zero-allocation `#![no_std]` Rust code at build time with `include_gui!` or `gui_kdl!`.
-- **2D Grid Layout Engine**: CSS-style track resolution (`"140px 1fr 2fr auto"`), cell placement, and multi-track spans (`col_span`, `row_span`).
+- **2D Grid & Flex Layout Engines**: CSS-style track resolution (`"140px 1fr 2fr auto"`), cell placement, multi-track spans (`col_span`, `row_span`), flex rows/columns, gap spacing, and CSS-shorthand insets (`(vertical, horizontal)`, `(top, right, bottom, left)`).
 - **Rich Built-in Widgets**: Buttons, Sliders, Dropdowns, Toggles, Checkboxes, Gauges, Meters, Sweeping Arcs, Plotters/Charts, TextAreas, On-Screen Keyboards, and Circular Lists.
-- **Native Custom Widgets**: Extensible third-party widget support via type-erased `WidgetStorage<'a>` and object-safe `Widget` trait contracts.
+- **Memory-Efficient String Slab Arena**: Flat `StringArena` text packing to eliminate per-widget buffer bloat while supporting dynamic formatted text slices.
 - **Unified Motion Engine**: Tactile spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
-- **Decoupled Rendering Engine**: Bounding-box dirty tracking, opacity layering, software IIR blur, subpixel anti-aliasing, and custom display backends.
+- **Decoupled & Buffered Rendering Engine**: Bounding-box dirty tracking, adaptive scratch-buffer rendering (`render_dirty_buffered`) for zero-flicker SPI updates, opacity layering, software IIR blur, subpixel anti-aliasing, and custom display backends.
 - **Async DMA & Double/Triple Buffering**: Zero-copy presentation via `CompletionSlot` and `StandardSwapChain`, fully compatible with Embassy `async/await` or bare-metal superloop polling.
 - **Multi-Target Tested**: Continuously verified across ARM Cortex-M0/M0+ (`thumbv6m`), Cortex-M4F/M7F (`thumbv7em`), Cortex-M33/M55 (`thumbv8m.main`), and RISC-V (`riscv32imac`).
 
@@ -31,7 +32,46 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 
 ## Quick Start
 
-### 1. Declarative KDL Markup (New in v0.2.1)
+### 1. Pure-Rust Declarative View DSL (New in v0.2.6)
+
+Compose zero-allocation declarative components with CSS insets and conditional chaining:
+
+```rust
+use embedded_gui::prelude::*;
+
+struct ClimateCard {
+    title: &'static str,
+    is_eco: bool,
+}
+
+impl Render for ClimateCard {
+    fn render<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>(
+        &self,
+        cx: &mut ViewContext<'a, 'ctx, NODES, EVENTS, DIRTY>,
+    ) -> Result<WidgetId, GuiError> {
+        cx.column(|col| {
+            col.padding((8, 12)) // CSS vertical/horizontal shorthand
+                .gap(6)
+                .child(|c| c.label(self.title))?
+                .child(|c| c.button("SET AUTO"))?
+                .when_child(self.is_eco, |c| c.label("ECO ACTIVE"))?
+                .build()
+        })
+    }
+}
+
+fn main() {
+    let mut gui = GuiContext::<32, 16, 16>::new(Rect::new(0, 0, 320, 240));
+    let view = ClimateCard { title: "Living Room", is_eco: true };
+    gui.render_view(&view).expect("failed to render view");
+
+    // Zero-flicker buffered rendering with small 512-pixel SRAM scratch buffer:
+    let mut scratch = [Rgb565::CSS_BLACK; 512];
+    gui.render_dirty_buffered(&mut display, &mut scratch).unwrap();
+}
+```
+
+### 2. Declarative KDL Markup & Build-Time Codegen
 
 Author your UI screen in declarative KDL (`ui/dashboard.kdl`):
 ```kdl
@@ -73,10 +113,9 @@ fn main() {
 
 *For complete syntax, full widget catalog, and styling options, see the [Declarative KDL GUI Codegen Guide](./docs/kdl-gui-codegen-guide.md).*
 
-### 2. Programmatic Fluent Builder API
+### 3. Programmatic Fluent Builder API
 
 ```rust
-use embedded_graphics::pixelcolor::Rgb565;
 use embedded_gui::prelude::*;
 
 // 1. Create a fixed-capacity GUI context (Max Widgets, Focus Group Capacity, Dirty Rects)
@@ -93,7 +132,7 @@ let status_label = gui.spawn(
 gui.set_widget_property(status_label, PropertyKey::Text, PropertyValue::Text("SYSTEM OK"))?;
 
 // 4. Render only dirty regions to your embedded-graphics DrawTarget
-gui.render(&mut display)?;
+gui.render_dirty(&mut display)?;
 ```
 
 ---
