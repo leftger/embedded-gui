@@ -23,18 +23,18 @@ documentation = "https://docs.rs/embedded-gui"
 readme = "README.md"
 
 [workspace.dependencies]
-embedded-gui = { path = "crates/embedded-gui", version = "0.2.4" }
+embedded-gui = { path = "crates/embedded-gui", version = "0.2.5" }
 embedded-gui-codegen = { path = "crates/embedded-gui-codegen", version = "0.2.4" }
 embedded-gui-live = { path = "crates/embedded-gui-live", version = "0.2.4" }
-embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.4" }
+embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.3" }
 
 embedded-graphics-core = "0.4.1"
 embedded-draw-target = "0.1.1"
 embedded-graphics-framebuf = "0.3"
 critical-section = "1.1"
 heapless = "0.9"
-embassy-time = { git = "https://github.com/embassy-rs/embassy", default-features = false }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy", default-features = false }
+embassy-time = { version = "0.5", git = "https://github.com/embassy-rs/embassy", default-features = false }
+embassy-sync = { version = "0.8", git = "https://github.com/embassy-rs/embassy", default-features = false }
 libm = { version = "0.2" }
 micromath = { version = "2.1" }
 embedded-graphics = { version = "0.8" }

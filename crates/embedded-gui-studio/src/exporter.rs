@@ -44,6 +44,7 @@ pub fn export_standalone_crate_dialog(
     fs::create_dir_all(&src_dir).map_err(|e| e.to_string())?;
 
     // 1. Cargo.toml
+    let gui_version = env!("CARGO_PKG_VERSION");
     let cargo_toml = format!(
         r#"[package]
 name = "{crate_name}"
@@ -51,7 +52,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-embedded-gui = "0.2.4"
+embedded-gui = "{gui_version}"
 embedded-graphics = "0.8"
 embedded-graphics-simulator = "0.6"
 "#

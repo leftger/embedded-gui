@@ -1354,7 +1354,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "criterion",
  "critical-section",
