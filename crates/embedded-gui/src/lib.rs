@@ -4,6 +4,7 @@
 extern crate std;
 
 pub mod block;
+pub mod colors;
 pub mod completion;
 pub mod context;
 pub mod display_backend;
@@ -229,7 +230,7 @@ pub mod prelude {
         WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy,
         WidgetKeyframeState, WidgetKind, WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine,
         WidgetStyle, animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility,
-        apply_easing, lerp_style, presets, render_transition_pair, setup_card_story,
+        apply_easing, colors, lerp_style, presets, render_transition_pair, setup_card_story,
         setup_launcher_glance, setup_launcher_glance_with_tokens, setup_peek_timeline,
         setup_peek_timeline_with_tokens,
     };

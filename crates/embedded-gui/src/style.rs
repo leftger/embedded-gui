@@ -332,6 +332,76 @@ impl Style {
         self
     }
 
+    pub const fn with_background(mut self, background: Option<Rgb565>) -> Self {
+        self.background = background;
+        self
+    }
+
+    pub const fn with_bg(mut self, bg: Rgb565) -> Self {
+        self.background = Some(bg);
+        self
+    }
+
+    pub const fn with_gradient(mut self, gradient: Option<LinearGradient>) -> Self {
+        self.gradient = gradient;
+        self
+    }
+
+    pub const fn with_foreground(mut self, foreground: Rgb565) -> Self {
+        self.foreground = foreground;
+        self
+    }
+
+    pub const fn with_fg(mut self, fg: Rgb565) -> Self {
+        self.foreground = fg;
+        self
+    }
+
+    pub const fn with_text(mut self, text: Rgb565) -> Self {
+        self.text = text;
+        self
+    }
+
+    pub const fn with_text_color(mut self, text: Rgb565) -> Self {
+        self.text = text;
+        self
+    }
+
+    pub const fn with_accent(mut self, accent: Rgb565) -> Self {
+        self.accent = accent;
+        self
+    }
+
+    pub const fn with_opacity(mut self, opacity: u8) -> Self {
+        self.opacity = opacity;
+        self
+    }
+
+    pub const fn with_corner_radius(mut self, corner_radius: u8) -> Self {
+        self.corner_radius = corner_radius;
+        self
+    }
+
+    pub const fn with_shadow(mut self, shadow: Option<Shadow>) -> Self {
+        self.shadow = shadow;
+        self
+    }
+
+    pub const fn with_border(mut self, border: Border) -> Self {
+        self.border = border;
+        self
+    }
+
+    pub const fn with_border_color(mut self, color: Rgb565) -> Self {
+        self.border = Border::one(color);
+        self
+    }
+
+    pub const fn with_padding(mut self, padding: EdgeInsets) -> Self {
+        self.padding = padding;
+        self
+    }
+
     pub const fn with_font_id(mut self, font: FontId) -> Self {
         self.font = font;
         self
@@ -390,6 +460,115 @@ impl WidgetStyle {
         }
     }
 
+    pub const fn button() -> Self {
+        Self::new(Style::button())
+    }
+
+    pub const fn label() -> Self {
+        Self::new(Style::label())
+    }
+
+    pub const fn panel() -> Self {
+        Self::new(Style::panel())
+    }
+
+    pub const fn progress() -> Self {
+        Self::new(Style::progress())
+    }
+
+    pub const fn with_normal(mut self, normal: Style) -> Self {
+        self.normal = normal;
+        self
+    }
+
+    pub const fn with_bg(mut self, bg: Rgb565) -> Self {
+        self.normal.background = Some(bg);
+        self
+    }
+
+    pub const fn with_fg(mut self, fg: Rgb565) -> Self {
+        self.normal.foreground = fg;
+        self
+    }
+
+    pub const fn with_text(mut self, text: Rgb565) -> Self {
+        self.normal.text = text;
+        self
+    }
+
+    pub const fn with_pressed_bg(mut self, bg: Rgb565) -> Self {
+        self.pressed.background = Some(bg);
+        self
+    }
+
+    pub const fn with_pressed_fg(mut self, fg: Rgb565) -> Self {
+        self.pressed.foreground = fg;
+        self
+    }
+
+    pub const fn with_pressed_text(mut self, text: Rgb565) -> Self {
+        self.pressed.text = text;
+        self
+    }
+
+    pub const fn with_focused_bg(mut self, bg: Rgb565) -> Self {
+        self.focused.background = Some(bg);
+        self
+    }
+
+    pub const fn with_focused_fg(mut self, fg: Rgb565) -> Self {
+        self.focused.foreground = fg;
+        self
+    }
+
+    pub const fn with_focused_text(mut self, text: Rgb565) -> Self {
+        self.focused.text = text;
+        self
+    }
+
+    pub const fn with_disabled_bg(mut self, bg: Rgb565) -> Self {
+        self.disabled.background = Some(bg);
+        self
+    }
+
+    pub const fn with_disabled_fg(mut self, fg: Rgb565) -> Self {
+        self.disabled.foreground = fg;
+        self
+    }
+
+    pub const fn with_disabled_text(mut self, text: Rgb565) -> Self {
+        self.disabled.text = text;
+        self
+    }
+
+    pub const fn with_border(mut self, border: Border) -> Self {
+        self.normal.border = border;
+        self.focused.border = border;
+        self.pressed.border = border;
+        self.disabled.border = border;
+        self
+    }
+
+    pub const fn with_border_color(self, color: Rgb565) -> Self {
+        self.with_border(Border::one(color))
+    }
+
+    pub const fn with_corner_radius(mut self, radius: u8) -> Self {
+        self.normal.corner_radius = radius;
+        self.focused.corner_radius = radius;
+        self.pressed.corner_radius = radius;
+        self.disabled.corner_radius = radius;
+        self
+    }
+
+    pub const fn with_font(mut self, font: FontId) -> Self {
+        self.normal.font = font;
+        self.focused.font = font;
+        self.pressed.font = font;
+        self.disabled.font = font;
+        self
+    }
+
     pub const fn with_focused(mut self, focused: Style) -> Self {
         self.focused = focused;
         self
@@ -428,6 +607,12 @@ impl WidgetStyle {
         let a = self.resolve(from);
         let b = self.resolve(to);
         lerp_style(a, b, t)
+    }
+}
+
+impl Default for WidgetStyle {
+    fn default() -> Self {
+        Self::new(Style::default())
     }
 }
 

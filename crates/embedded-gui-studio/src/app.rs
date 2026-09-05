@@ -2558,6 +2558,20 @@ impl eframe::App for EmbeddedGuiStudio {
                             text: "CLICK ME".to_string(),
                             on_click: None,
                             style: None,
+                            bg: None,
+                            fg: None,
+                            text_color: None,
+                            pressed_bg: None,
+                            pressed_fg: None,
+                            pressed_text: None,
+                            disabled_bg: None,
+                            disabled_fg: None,
+                            disabled_text: None,
+                            focused_bg: None,
+                            focused_fg: None,
+                            focused_text: None,
+                            border_color: None,
+                            corner_radius: None,
                         });
                         ui.close_menu();
                     }

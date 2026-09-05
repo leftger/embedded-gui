@@ -111,6 +111,7 @@ pub enum PathVerbDef {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum WidgetDef {
     Label {
         id: Option<String>,
@@ -124,6 +125,20 @@ pub enum WidgetDef {
         text: String,
         on_click: Option<String>,
         style: Option<String>,
+        bg: Option<String>,
+        fg: Option<String>,
+        text_color: Option<String>,
+        pressed_bg: Option<String>,
+        pressed_fg: Option<String>,
+        pressed_text: Option<String>,
+        disabled_bg: Option<String>,
+        disabled_fg: Option<String>,
+        disabled_text: Option<String>,
+        focused_bg: Option<String>,
+        focused_fg: Option<String>,
+        focused_text: Option<String>,
+        border_color: Option<String>,
+        corner_radius: Option<u8>,
     },
     Toggle {
         id: Option<String>,
@@ -749,11 +764,74 @@ pub fn parse_widget(node: &KdlNode) -> Result<(GridPlacementDef, WidgetDef), Cod
             let on_click = get_string_prop(node, "on_click")
                 .or_else(|| get_string_prop(node, "onClick"))
                 .map(|s| s.to_string());
+            let bg = get_string_prop(node, "bg")
+                .or_else(|| get_string_prop(node, "background"))
+                .map(|s| s.to_string());
+            let fg = get_string_prop(node, "fg")
+                .or_else(|| get_string_prop(node, "foreground"))
+                .map(|s| s.to_string());
+            let text_color = get_string_prop(node, "text_color")
+                .or_else(|| get_string_prop(node, "textColor"))
+                .or_else(|| get_string_prop(node, "color"))
+                .map(|s| s.to_string());
+            let pressed_bg = get_string_prop(node, "pressed_bg")
+                .or_else(|| get_string_prop(node, "pressedBg"))
+                .map(|s| s.to_string());
+            let pressed_fg = get_string_prop(node, "pressed_fg")
+                .or_else(|| get_string_prop(node, "pressedFg"))
+                .map(|s| s.to_string());
+            let pressed_text = get_string_prop(node, "pressed_text")
+                .or_else(|| get_string_prop(node, "pressedText"))
+                .or_else(|| get_string_prop(node, "pressedColor"))
+                .map(|s| s.to_string());
+            let disabled_bg = get_string_prop(node, "disabled_bg")
+                .or_else(|| get_string_prop(node, "disabledBg"))
+                .map(|s| s.to_string());
+            let disabled_fg = get_string_prop(node, "disabled_fg")
+                .or_else(|| get_string_prop(node, "disabledFg"))
+                .map(|s| s.to_string());
+            let disabled_text = get_string_prop(node, "disabled_text")
+                .or_else(|| get_string_prop(node, "disabledText"))
+                .or_else(|| get_string_prop(node, "disabledColor"))
+                .map(|s| s.to_string());
+            let focused_bg = get_string_prop(node, "focused_bg")
+                .or_else(|| get_string_prop(node, "focusedBg"))
+                .map(|s| s.to_string());
+            let focused_fg = get_string_prop(node, "focused_fg")
+                .or_else(|| get_string_prop(node, "focusedFg"))
+                .map(|s| s.to_string());
+            let focused_text = get_string_prop(node, "focused_text")
+                .or_else(|| get_string_prop(node, "focusedText"))
+                .or_else(|| get_string_prop(node, "focusedColor"))
+                .map(|s| s.to_string());
+            let border_color = get_string_prop(node, "border_color")
+                .or_else(|| get_string_prop(node, "borderColor"))
+                .or_else(|| get_string_prop(node, "border"))
+                .map(|s| s.to_string());
+            let corner_radius = get_i64_prop(node, "corner_radius")
+                .or_else(|| get_i64_prop(node, "cornerRadius"))
+                .or_else(|| get_i64_prop(node, "radius"))
+                .map(|v| v as u8);
+
             WidgetDef::Button {
                 id,
                 text,
                 on_click,
                 style,
+                bg,
+                fg,
+                text_color,
+                pressed_bg,
+                pressed_fg,
+                pressed_text,
+                disabled_bg,
+                disabled_fg,
+                disabled_text,
+                focused_bg,
+                focused_fg,
+                focused_text,
+                border_color,
+                corner_radius,
             }
         }
         "toggle" => {
@@ -1233,10 +1311,212 @@ fn to_snake_case(s: &str) -> String {
     out
 }
 
+pub fn parse_hex_to_rgb565(s: &str) -> Option<(u8, u8, u8)> {
+    let s = s.trim().trim_start_matches('#').trim_start_matches("0x");
+    if s.len() == 6 {
+        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+        Some((r >> 3, g >> 2, b >> 3))
+    } else if s.len() == 3 {
+        let r = u8::from_str_radix(&s[0..1], 16).ok()?;
+        let g = u8::from_str_radix(&s[1..2], 16).ok()?;
+        let b = u8::from_str_radix(&s[2..3], 16).ok()?;
+        Some(((r * 17) >> 3, ((g * 17) >> 2), ((b * 17) >> 3)))
+    } else {
+        None
+    }
+}
+
+pub fn parse_color_name_rgb565(s: &str) -> Option<(u8, u8, u8)> {
+    let norm = s.to_ascii_lowercase();
+    let norm = norm.replace(['-', '_', ' '], "");
+    match norm.as_str() {
+        "aliceblue" => Some((29, 61, 31)),
+        "antiquewhite" => Some((30, 58, 26)),
+        "aqua" => Some((0, 63, 31)),
+        "aquamarine" => Some((15, 63, 26)),
+        "azure" => Some((29, 63, 31)),
+        "beige" => Some((30, 61, 27)),
+        "bisque" => Some((31, 56, 24)),
+        "black" => Some((0, 0, 0)),
+        "blanchedalmond" => Some((31, 58, 25)),
+        "blue" => Some((0, 0, 31)),
+        "blueviolet" => Some((17, 11, 27)),
+        "brown" => Some((20, 10, 5)),
+        "burlywood" => Some((27, 45, 16)),
+        "cadetblue" => Some((12, 39, 19)),
+        "chartreuse" => Some((15, 63, 0)),
+        "chocolate" => Some((26, 26, 4)),
+        "coral" => Some((31, 31, 10)),
+        "cornflowerblue" => Some((12, 37, 29)),
+        "cornsilk" => Some((31, 61, 27)),
+        "crimson" => Some((27, 5, 7)),
+        "cyan" => Some((0, 63, 31)),
+        "darkblue" => Some((0, 0, 17)),
+        "darkcyan" => Some((0, 34, 17)),
+        "darkgoldenrod" => Some((22, 33, 1)),
+        "darkgray" => Some((21, 42, 21)),
+        "darkgreen" => Some((0, 25, 0)),
+        "darkgrey" => Some((21, 42, 21)),
+        "darkkhaki" => Some((23, 45, 13)),
+        "darkmagenta" => Some((17, 0, 17)),
+        "darkolivegreen" => Some((10, 26, 6)),
+        "darkorange" => Some((31, 35, 0)),
+        "darkorchid" => Some((19, 12, 25)),
+        "darkred" => Some((17, 0, 0)),
+        "darksalmon" => Some((28, 37, 15)),
+        "darkseagreen" => Some((17, 46, 17)),
+        "darkslateblue" => Some((9, 15, 17)),
+        "darkslategray" => Some((6, 20, 10)),
+        "darkslategrey" => Some((6, 20, 10)),
+        "darkturquoise" => Some((0, 51, 25)),
+        "darkviolet" => Some((18, 0, 26)),
+        "deeppink" => Some((31, 5, 18)),
+        "deepskyblue" => Some((0, 47, 31)),
+        "dimgray" => Some((13, 26, 13)),
+        "dimgrey" => Some((13, 26, 13)),
+        "dodgerblue" => Some((4, 36, 31)),
+        "firebrick" => Some((22, 8, 4)),
+        "floralwhite" => Some((31, 62, 29)),
+        "forestgreen" => Some((4, 34, 4)),
+        "fuchsia" => Some((31, 0, 31)),
+        "gainsboro" => Some((27, 54, 27)),
+        "ghostwhite" => Some((30, 61, 31)),
+        "gold" => Some((31, 53, 0)),
+        "goldenrod" => Some((27, 41, 4)),
+        "gray" => Some((16, 32, 16)),
+        "green" => Some((0, 32, 0)),
+        "greenyellow" => Some((21, 63, 6)),
+        "grey" => Some((16, 32, 16)),
+        "honeydew" => Some((29, 63, 29)),
+        "hotpink" => Some((31, 26, 22)),
+        "indianred" => Some((25, 23, 11)),
+        "indigo" => Some((9, 0, 16)),
+        "ivory" => Some((31, 63, 29)),
+        "khaki" => Some((29, 57, 17)),
+        "lavender" => Some((28, 57, 30)),
+        "lavenderblush" => Some((31, 59, 30)),
+        "lawngreen" => Some((15, 62, 0)),
+        "lemonchiffon" => Some((31, 62, 25)),
+        "lightblue" => Some((21, 53, 28)),
+        "lightcoral" => Some((29, 32, 16)),
+        "lightcyan" => Some((27, 63, 31)),
+        "lightgoldenrodyellow" => Some((30, 62, 26)),
+        "lightgray" => Some((26, 52, 26)),
+        "lightgreen" => Some((18, 59, 18)),
+        "lightgrey" => Some((26, 52, 26)),
+        "lightpink" => Some((31, 45, 23)),
+        "lightsalmon" => Some((31, 40, 15)),
+        "lightseagreen" => Some((4, 44, 21)),
+        "lightskyblue" => Some((16, 51, 30)),
+        "lightslategray" => Some((14, 34, 19)),
+        "lightslategrey" => Some((14, 34, 19)),
+        "lightsteelblue" => Some((21, 48, 27)),
+        "lightyellow" => Some((31, 63, 27)),
+        "lime" => Some((0, 63, 0)),
+        "limegreen" => Some((6, 51, 6)),
+        "linen" => Some((30, 59, 28)),
+        "magenta" => Some((31, 0, 31)),
+        "maroon" => Some((16, 0, 0)),
+        "mediumaquamarine" => Some((12, 51, 21)),
+        "mediumblue" => Some((0, 0, 25)),
+        "mediumorchid" => Some((23, 21, 26)),
+        "mediumpurple" => Some((18, 28, 27)),
+        "mediumseagreen" => Some((7, 44, 14)),
+        "mediumslateblue" => Some((15, 26, 29)),
+        "mediumspringgreen" => Some((0, 62, 19)),
+        "mediumturquoise" => Some((9, 52, 25)),
+        "mediumvioletred" => Some((24, 5, 16)),
+        "midnightblue" => Some((3, 6, 14)),
+        "mintcream" => Some((30, 63, 30)),
+        "mistyrose" => Some((31, 56, 27)),
+        "moccasin" => Some((31, 56, 22)),
+        "navajowhite" => Some((31, 55, 21)),
+        "navy" => Some((0, 0, 16)),
+        "oldlace" => Some((31, 61, 28)),
+        "olive" => Some((16, 32, 0)),
+        "olivedrab" => Some((13, 35, 4)),
+        "orange" => Some((31, 41, 0)),
+        "orangered" => Some((31, 17, 0)),
+        "orchid" => Some((27, 28, 26)),
+        "palegoldenrod" => Some((29, 57, 21)),
+        "palegreen" => Some((18, 62, 18)),
+        "paleturquoise" => Some((21, 59, 29)),
+        "palevioletred" => Some((27, 28, 18)),
+        "papayawhip" => Some((31, 59, 26)),
+        "peachpuff" => Some((31, 54, 22)),
+        "peru" => Some((25, 33, 8)),
+        "pink" => Some((31, 47, 25)),
+        "plum" => Some((27, 40, 27)),
+        "powderblue" => Some((21, 55, 28)),
+        "purple" => Some((16, 0, 16)),
+        "red" => Some((31, 0, 0)),
+        "rosybrown" => Some((23, 35, 17)),
+        "royalblue" => Some((8, 26, 27)),
+        "saddlebrown" => Some((17, 17, 2)),
+        "salmon" => Some((30, 32, 14)),
+        "sandybrown" => Some((30, 41, 12)),
+        "seagreen" => Some((6, 34, 11)),
+        "seashell" => Some((31, 61, 29)),
+        "sienna" => Some((19, 20, 5)),
+        "silver" => Some((23, 47, 23)),
+        "skyblue" => Some((16, 51, 29)),
+        "slateblue" => Some((13, 22, 25)),
+        "slategray" => Some((14, 32, 18)),
+        "slategrey" => Some((14, 32, 18)),
+        "snow" => Some((31, 62, 30)),
+        "springgreen" => Some((0, 63, 15)),
+        "steelblue" => Some((9, 32, 22)),
+        "tan" => Some((26, 44, 17)),
+        "teal" => Some((0, 32, 16)),
+        "thistle" => Some((26, 47, 26)),
+        "tomato" => Some((31, 24, 9)),
+        "turquoise" => Some((8, 55, 25)),
+        "violet" => Some((29, 32, 29)),
+        "wheat" => Some((30, 55, 22)),
+        "white" => Some((31, 63, 31)),
+        "whitesmoke" => Some((30, 61, 30)),
+        "yellow" => Some((31, 63, 0)),
+        "yellowgreen" => Some((19, 51, 6)),
+        _ => None,
+    }
+}
+
+pub fn color_to_rust_expr(s: &str) -> String {
+    let s = s.trim();
+    if s.starts_with("Rgb565::") {
+        s.to_string()
+    } else if let Some((r, g, b)) = parse_hex_to_rgb565(s) {
+        format!("Rgb565::new({}, {}, {})", r, g, b)
+    } else if let Some((r, g, b)) = parse_color_name_rgb565(s) {
+        format!("Rgb565::new({}, {}, {})", r, g, b)
+    } else {
+        match s.to_lowercase().as_str() {
+            "white" => "Rgb565::WHITE".into(),
+            "black" => "Rgb565::BLACK".into(),
+            "red" => "Rgb565::RED".into(),
+            "green" => "Rgb565::GREEN".into(),
+            "blue" => "Rgb565::BLUE".into(),
+            "yellow" => "Rgb565::YELLOW".into(),
+            "cyan" => "Rgb565::CYAN".into(),
+            "magenta" => "Rgb565::MAGENTA".into(),
+            _ => "Rgb565::WHITE".into(),
+        }
+    }
+}
+
 fn style_expr(style: Option<&str>, default: &str) -> String {
     match style {
         None => default.to_string(),
-        Some(s) if s.starts_with("Style::") => s.to_string(),
+        Some(s)
+            if s.starts_with("Style::")
+                || s.starts_with("WidgetStyle::")
+                || s.starts_with('{')
+                || s.starts_with("crate::") =>
+        {
+            s.to_string()
+        }
         Some("default") | Some("label") | Some("bold") | Some("dim") => "Style::label()".into(),
         Some("body") | Some("body-accent") | Some("body-success") | Some("body-danger")
         | Some("body-dim") | Some("menu") => {
@@ -1253,7 +1533,10 @@ fn style_expr(style: Option<&str>, default: &str) -> String {
         Some("accent") | Some("success") | Some("danger") | Some("inverted") => {
             "Style::label()".into()
         }
-        Some(_) => default.to_string(),
+        Some(s) if s.starts_with('#') || s.starts_with("0x") => {
+            format!("WidgetStyle::button().with_bg({})", color_to_rust_expr(s))
+        }
+        Some(s) => s.to_string(),
     }
 }
 
@@ -1421,8 +1704,97 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
                     var_name, idx, text, st
                 );
             }
-            WidgetDef::Button { text, style, .. } => {
-                let st = style_expr(style.as_deref(), "Style::button()");
+            WidgetDef::Button {
+                text,
+                style,
+                bg,
+                fg,
+                text_color,
+                pressed_bg,
+                pressed_fg,
+                pressed_text,
+                disabled_bg,
+                disabled_fg,
+                disabled_text,
+                focused_bg,
+                focused_fg,
+                focused_text,
+                border_color,
+                corner_radius,
+                ..
+            } => {
+                let has_custom_props = bg.is_some()
+                    || fg.is_some()
+                    || text_color.is_some()
+                    || pressed_bg.is_some()
+                    || pressed_fg.is_some()
+                    || pressed_text.is_some()
+                    || disabled_bg.is_some()
+                    || disabled_fg.is_some()
+                    || disabled_text.is_some()
+                    || focused_bg.is_some()
+                    || focused_fg.is_some()
+                    || focused_text.is_some()
+                    || border_color.is_some()
+                    || corner_radius.is_some();
+
+                let mut st = match style {
+                    Some(s)
+                        if s.starts_with("WidgetStyle::")
+                            || s.starts_with("Style::")
+                            || s.starts_with('{') =>
+                    {
+                        s.clone()
+                    }
+                    Some(s) if !has_custom_props => style_expr(Some(s.as_str()), "Style::button()"),
+                    _ => "WidgetStyle::button()".to_string(),
+                };
+
+                if has_custom_props {
+                    if let Some(c) = bg {
+                        st.push_str(&format!(".with_bg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = fg {
+                        st.push_str(&format!(".with_fg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = text_color {
+                        st.push_str(&format!(".with_text({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = pressed_bg {
+                        st.push_str(&format!(".with_pressed_bg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = pressed_fg {
+                        st.push_str(&format!(".with_pressed_fg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = pressed_text {
+                        st.push_str(&format!(".with_pressed_text({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = disabled_bg {
+                        st.push_str(&format!(".with_disabled_bg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = disabled_fg {
+                        st.push_str(&format!(".with_disabled_fg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = disabled_text {
+                        st.push_str(&format!(".with_disabled_text({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = focused_bg {
+                        st.push_str(&format!(".with_focused_bg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = focused_fg {
+                        st.push_str(&format!(".with_focused_fg({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = focused_text {
+                        st.push_str(&format!(".with_focused_text({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(c) = border_color {
+                        st.push_str(&format!(".with_border_color({})", color_to_rust_expr(c)));
+                    }
+                    if let Some(r) = corner_radius {
+                        st.push_str(&format!(".with_corner_radius({})", r));
+                    }
+                }
+
                 let _ = writeln!(
                     &mut out,
                     "        let {} = gui.add_button(cells[{}], \"{}\", {})?;",
@@ -2607,6 +2979,20 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
                 text,
                 on_click,
                 style,
+                bg,
+                fg,
+                text_color,
+                pressed_bg,
+                pressed_fg,
+                pressed_text,
+                disabled_bg,
+                disabled_fg,
+                disabled_text,
+                focused_bg,
+                focused_fg,
+                focused_text,
+                border_color,
+                corner_radius,
             } => {
                 let id_attr = id
                     .as_ref()
@@ -2620,10 +3006,53 @@ pub fn serialize_kdl_screen(screen: &ScreenDef) -> String {
                     .as_ref()
                     .map(|s| format!(" on_click=\"{}\"", s))
                     .unwrap_or_default();
+                let mut extra_props = String::new();
+                if let Some(c) = bg {
+                    extra_props.push_str(&format!(" bg=\"{}\"", c));
+                }
+                if let Some(c) = fg {
+                    extra_props.push_str(&format!(" fg=\"{}\"", c));
+                }
+                if let Some(c) = text_color {
+                    extra_props.push_str(&format!(" text_color=\"{}\"", c));
+                }
+                if let Some(c) = pressed_bg {
+                    extra_props.push_str(&format!(" pressed_bg=\"{}\"", c));
+                }
+                if let Some(c) = pressed_fg {
+                    extra_props.push_str(&format!(" pressed_fg=\"{}\"", c));
+                }
+                if let Some(c) = pressed_text {
+                    extra_props.push_str(&format!(" pressed_text=\"{}\"", c));
+                }
+                if let Some(c) = disabled_bg {
+                    extra_props.push_str(&format!(" disabled_bg=\"{}\"", c));
+                }
+                if let Some(c) = disabled_fg {
+                    extra_props.push_str(&format!(" disabled_fg=\"{}\"", c));
+                }
+                if let Some(c) = disabled_text {
+                    extra_props.push_str(&format!(" disabled_text=\"{}\"", c));
+                }
+                if let Some(c) = focused_bg {
+                    extra_props.push_str(&format!(" focused_bg=\"{}\"", c));
+                }
+                if let Some(c) = focused_fg {
+                    extra_props.push_str(&format!(" focused_fg=\"{}\"", c));
+                }
+                if let Some(c) = focused_text {
+                    extra_props.push_str(&format!(" focused_text=\"{}\"", c));
+                }
+                if let Some(c) = border_color {
+                    extra_props.push_str(&format!(" border_color=\"{}\"", c));
+                }
+                if let Some(r) = corner_radius {
+                    extra_props.push_str(&format!(" corner_radius={}", r));
+                }
                 let _ = writeln!(
                     &mut out,
-                    "        button{} text=\"{}\"{}{}{} col={} row={}",
-                    id_attr, text, style_attr, click_attr, span_attrs, p.col, p.row
+                    "        button{} text=\"{}\"{}{}{}{} col={} row={}",
+                    id_attr, text, style_attr, click_attr, extra_props, span_attrs, p.col, p.row
                 );
             }
             WidgetDef::Toggle { id, label, checked } => {
@@ -3468,5 +3897,22 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         assert!(generated.contains("const __IMAGE_ASSET_0_PIXELS: &[u16]"));
         assert!(generated.contains("ImageRef::new(2, 1, __IMAGE_ASSET_0_PIXELS)"));
         assert!(generated.contains("ImageFit::Center"));
+    }
+
+    #[test]
+    fn test_custom_button_styling_declarative_and_named_colors() {
+        let kdl = r##"screen id="HackswellScreen" width=320 height=240 {
+    grid cols="1fr" rows="1fr" {
+        button id="Opt1" text="Hackswell" bg="#0A1A06" pressed_bg="#19170B" disabled_bg="forestgreen" disabled_text="crimson" col=0 row=0
+    }
+}"##;
+        let _screen = parse_kdl_screen(kdl).unwrap();
+        let rust_code = compile_kdl_to_rust(kdl).unwrap();
+        assert!(rust_code.contains("gui.add_button"));
+        assert!(rust_code.contains("WidgetStyle::button()"));
+        assert!(rust_code.contains(".with_bg(Rgb565::new(1, 6, 0))"));
+        assert!(rust_code.contains(".with_pressed_bg(Rgb565::new(3, 5, 1))"));
+        assert!(rust_code.contains(".with_disabled_bg(Rgb565::new(4, 34, 4))")); // forestgreen
+        assert!(rust_code.contains(".with_disabled_text(Rgb565::new(27, 5, 7))")); // crimson
     }
 }

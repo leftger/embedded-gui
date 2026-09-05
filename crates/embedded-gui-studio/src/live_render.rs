@@ -292,7 +292,7 @@ fn to_rgb565(c: Color32) -> Rgb565 {
 }
 
 fn parse_hex_color(hex: &str, fallback: Rgb565) -> Rgb565 {
-    let h = hex.trim().trim_start_matches('#');
+    let h = hex.trim().trim_start_matches('#').trim_start_matches("0x");
     if h.len() == 6 {
         if let (Ok(r), Ok(g), Ok(b)) = (
             u8::from_str_radix(&h[0..2], 16),
@@ -301,6 +301,17 @@ fn parse_hex_color(hex: &str, fallback: Rgb565) -> Rgb565 {
         ) {
             return Rgb565::new(r >> 3, g >> 2, b >> 3);
         }
+    } else if h.len() == 3 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&h[0..1], 16),
+            u8::from_str_radix(&h[1..2], 16),
+            u8::from_str_radix(&h[2..3], 16),
+        ) {
+            return Rgb565::new((r * 17) >> 3, (g * 17) >> 2, (b * 17) >> 3);
+        }
+    }
+    if let Some((r, g, b)) = embedded_gui_codegen::parse_color_name_rgb565(hex) {
+        return Rgb565::new(r, g, b);
     }
     fallback
 }
@@ -1151,8 +1162,82 @@ fn add_widget<'a>(
             gui.add_label(rect, text.as_str(), label_style)
         }
         WidgetDef::Button {
-            text, style: token, ..
-        } => gui.add_button(rect, text.as_str(), p.button(token.as_deref())),
+            text,
+            style: token,
+            bg,
+            fg,
+            text_color,
+            pressed_bg,
+            pressed_fg,
+            pressed_text,
+            disabled_bg,
+            disabled_fg,
+            disabled_text,
+            focused_bg,
+            focused_fg,
+            focused_text,
+            border_color,
+            corner_radius,
+            ..
+        } => {
+            let base_style = p.button(token.as_deref());
+            let mut ws = WidgetStyle::new(base_style);
+            if let Some(c) = bg {
+                ws = ws.with_bg(parse_hex_color(
+                    c,
+                    ws.normal.background.unwrap_or(p.card_bg),
+                ));
+            }
+            if let Some(c) = fg {
+                ws = ws.with_fg(parse_hex_color(c, ws.normal.foreground));
+            }
+            if let Some(c) = text_color {
+                ws = ws.with_text(parse_hex_color(c, ws.normal.text));
+            }
+            if let Some(c) = pressed_bg {
+                ws = ws.with_pressed_bg(parse_hex_color(
+                    c,
+                    ws.pressed.background.unwrap_or(p.card_bg),
+                ));
+            }
+            if let Some(c) = pressed_fg {
+                ws = ws.with_pressed_fg(parse_hex_color(c, ws.pressed.foreground));
+            }
+            if let Some(c) = pressed_text {
+                ws = ws.with_pressed_text(parse_hex_color(c, ws.pressed.text));
+            }
+            if let Some(c) = disabled_bg {
+                ws = ws.with_disabled_bg(parse_hex_color(
+                    c,
+                    ws.disabled.background.unwrap_or(p.card_bg),
+                ));
+            }
+            if let Some(c) = disabled_fg {
+                ws = ws.with_disabled_fg(parse_hex_color(c, ws.disabled.foreground));
+            }
+            if let Some(c) = disabled_text {
+                ws = ws.with_disabled_text(parse_hex_color(c, ws.disabled.text));
+            }
+            if let Some(c) = focused_bg {
+                ws = ws.with_focused_bg(parse_hex_color(
+                    c,
+                    ws.focused.background.unwrap_or(p.card_bg),
+                ));
+            }
+            if let Some(c) = focused_fg {
+                ws = ws.with_focused_fg(parse_hex_color(c, ws.focused.foreground));
+            }
+            if let Some(c) = focused_text {
+                ws = ws.with_focused_text(parse_hex_color(c, ws.focused.text));
+            }
+            if let Some(c) = border_color {
+                ws = ws.with_border_color(parse_hex_color(c, p.border));
+            }
+            if let Some(r) = corner_radius {
+                ws = ws.with_corner_radius(*r);
+            }
+            gui.add_button(rect, text.as_str(), ws)
+        }
         WidgetDef::Toggle { label, checked, .. } => {
             gui.add_toggle(rect, label.as_str(), *checked, p.toggle(*checked))
         }

@@ -90,3 +90,34 @@ fn test_fluent_widget_builder_spawn() {
     assert_eq!(gui.widgets().len(), 1);
     assert_eq!(btn_id.raw(), 1);
 }
+
+#[test]
+fn test_style_and_widget_style_fluent_builders() {
+    let style = Style::button()
+        .with_bg(Rgb565::new(0x0A, 0x1A, 0x06))
+        .with_fg(Rgb565::new(0x00, 0x33, 0x19))
+        .with_text(Rgb565::new(0x00, 0x33, 0x19))
+        .with_corner_radius(4)
+        .with_border_color(Rgb565::new(0x12, 0x24, 0x1C));
+
+    assert_eq!(style.background, Some(Rgb565::new(0x0A, 0x1A, 0x06)));
+    assert_eq!(style.foreground, Rgb565::new(0x00, 0x33, 0x19));
+    assert_eq!(style.text, Rgb565::new(0x00, 0x33, 0x19));
+    assert_eq!(style.corner_radius, 4);
+
+    let ws = WidgetStyle::button()
+        .with_bg(Rgb565::new(0x0A, 0x1A, 0x06))
+        .with_pressed_bg(Rgb565::new(0x19, 0x17, 0x0B))
+        .with_disabled_bg(Rgb565::new(0x0A, 0x1A, 0x06))
+        .with_disabled_fg(Rgb565::new(0x00, 0x33, 0x19))
+        .with_disabled_text(Rgb565::new(0x00, 0x33, 0x19));
+
+    assert_eq!(ws.normal.background, Some(Rgb565::new(0x0A, 0x1A, 0x06)));
+    assert_eq!(ws.pressed.background, Some(Rgb565::new(0x19, 0x17, 0x0B)));
+    assert_eq!(ws.disabled.background, Some(Rgb565::new(0x0A, 0x1A, 0x06)));
+    assert_eq!(ws.disabled.foreground, Rgb565::new(0x00, 0x33, 0x19));
+    assert_eq!(ws.disabled.text, Rgb565::new(0x00, 0x33, 0x19));
+
+    assert_eq!(colors::from_name("forestgreen"), Some(colors::FORESTGREEN));
+    assert_eq!(colors::from_name("crimson"), Some(colors::CRIMSON));
+}

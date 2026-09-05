@@ -593,6 +593,14 @@ pub fn render_inspector_panel(
                     text,
                     on_click,
                     style,
+                    bg,
+                    text_color,
+                    pressed_bg,
+                    disabled_bg,
+                    disabled_text,
+                    border_color,
+                    corner_radius,
+                    ..
                 } => {
                     ui.horizontal(|ui| {
                         ui.label("ID:");
@@ -623,6 +631,69 @@ pub fn render_inspector_panel(
                             };
                             modified = true;
                         }
+                    });
+
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("🎨 Colors & Theme Overrides").strong());
+                        ui.horizontal(|ui| {
+                            ui.label("Background:");
+                            let mut s = bg.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *bg = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Text Color:");
+                            let mut s = text_color.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *text_color = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Pressed BG:");
+                            let mut s = pressed_bg.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *pressed_bg = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Disabled BG:");
+                            let mut s = disabled_bg.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *disabled_bg = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Disabled Text:");
+                            let mut s = disabled_text.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *disabled_text = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Border Color:");
+                            let mut s = border_color.clone().unwrap_or_default();
+                            if ui.text_edit_singleline(&mut s).changed() {
+                                *border_color = if s.trim().is_empty() { None } else { Some(s) };
+                                modified = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Radius:");
+                            let mut r_val = corner_radius.unwrap_or(0);
+                            if ui
+                                .add(egui::DragValue::new(&mut r_val).range(0..=16))
+                                .changed()
+                            {
+                                *corner_radius = if r_val > 0 { Some(r_val) } else { None };
+                                modified = true;
+                            }
+                        });
                     });
 
                     // 1-Click Action Trigger & Screen Navigation Selector
@@ -1562,6 +1633,20 @@ pub fn render_inspector_panel(
                                     text: "Click".into(),
                                     on_click: None,
                                     style: Some("accent".into()),
+                                    bg: None,
+                                    fg: None,
+                                    text_color: None,
+                                    pressed_bg: None,
+                                    pressed_fg: None,
+                                    pressed_text: None,
+                                    disabled_bg: None,
+                                    disabled_fg: None,
+                                    disabled_text: None,
+                                    focused_bg: None,
+                                    focused_fg: None,
+                                    focused_text: None,
+                                    border_color: None,
+                                    corner_radius: None,
                                 },
                                 selected_widget_idx,
                             );

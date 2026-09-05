@@ -130,7 +130,16 @@ The `grid` container uses a 2D track sizing algorithm supporting pixels (`px`), 
 
 #### Button
 ```kdl
+// Standard button
 button id="SaveBtn" col=0 row=0 text="SAVE" on_click="handle_save"
+
+// Custom styled button using hex colors and state overrides
+button id="ActionBtn" col=0 row=1 text="APPLY" \
+    bg="#0A1A06" \
+    pressed_bg="#19170B" \
+    disabled_bg="forestgreen" \
+    disabled_text="crimson" \
+    corner_radius=4
 ```
 
 #### Toggle Switch
