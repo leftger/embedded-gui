@@ -14,6 +14,7 @@ pub mod embassy;
 pub mod font;
 pub mod framebuffer;
 pub mod geometry;
+pub mod gradient;
 pub mod haptics;
 pub mod image;
 pub mod input;
@@ -27,8 +28,10 @@ pub mod layout;
 mod math;
 pub mod mono;
 pub mod motion;
+pub mod nine_slice;
 pub mod palette;
 pub mod pdc;
+pub mod spline;
 pub use motion as animation;
 pub use motion as animation_timeline;
 pub use motion as animation_timing;
@@ -80,6 +83,11 @@ pub use animation_timing::{
     PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, interpolate_moook, moook_curve, moook_duration_ms,
     timing_half_phase, timing_scaled, timing_shutter_phase,
 };
+pub use colors::ColorOps;
+pub use gradient::{ColorStop, MultiStopGradient};
+pub use motion::stopwatch::{PlaybackMode, Stopwatch};
+pub use nine_slice::{BorderRect, NineSlice, NineSliceLayout, SlicePair, SliceScaleMode};
+pub use spline::CatmullRomSpline;
 
 /// Canonical pixel color type for the active target configuration.
 ///
@@ -220,9 +228,10 @@ pub mod prelude {
         AnimatedProperty, Animation, AnimationConflictPolicy, AnimationError, AnimationGroup,
         AnimationHandlers, AnimationId, AnimationManager, AnimationManagerCallbacks,
         AnimationSequence, AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot,
-        BitmapFont, Blend, BlendMode, Block, Border, CallbackSlot, CanvasColor, CardDeckDirection,
-        CardDeckState, CardStory, CardStoryTransition, CarouselSpec, ChartMode, CinematicPreset,
-        ColorConvertedDrawTarget, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
+        BitmapFont, Blend, BlendMode, Block, Border, BorderRect, CallbackSlot, CanvasColor,
+        CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, CarouselSpec,
+        CatmullRomSpline, ChartMode, CinematicPreset, ColorConvertedDrawTarget, ColorFormat,
+        ColorOps, ColorStop, ComposedAnimation, ComposedAnimationCallbacks,
         ComposedAnimationPlayer, ComposedAnimationStatus, CompositeIconSpec, CompositionControls,
         CompositionMode, Compositor, Constraint, DirtyTracker, Dither, DrawTargetColorExt, Easing,
         EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
@@ -233,28 +242,29 @@ pub mod prelude {
         ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout,
         Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem,
         Length, Line, LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract,
-        ModelChange, MonoBitmap, MotionTokens, NavDirection, NotificationLevel, PackedFont,
-        PathAnimator, PathPoint, PathVerb, PeekRevealSpec, PixelRead, PointerButton, PointerState,
-        PresentRegion, PressTiming, PropertySignal, Rect, ReelFrame, ReelPlayer, Render,
-        RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888,
-        ScaleMode, ScaleWidget, ScanlineTarget, Screen, ScreenCommand, ScreenId,
-        ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
-        ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
-        ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SequencePlayer,
-        SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph, ShapingConfig, Signal,
-        SliceModel, SliderState, Software2DAccelerator, Span, SpinboxWidget, SpringAnimator,
-        SpriteSheet, StateStyle, StateTransition, StatefulWidget, StringArena, StrokeCap,
-        StrokeDash, StrokeJoin, StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState,
-        TableWidget, TabsState, Text, TextAlign, TextDirection, TextMetrics, TextOverflow,
-        TextOverflowPolicy, TextShaper, TextSlice, TextStyle, TextWrap, Theme, TileMode, TileRef,
-        TimelineError, TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset,
-        TranslationEntry, TranslationTable, Tween, UiEvent, UiEventFilter, VectorPath,
-        VerticalAlign, ViewContext, VisualState, WidgetAnimationCallbacks, WidgetAnimationError,
-        WidgetAnimator, WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind,
-        WidgetFlags, WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState,
-        WidgetKind, WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine, WidgetStyle,
-        animate_glance_focus, animate_peek_reveal, apply_carddeck_visibility, apply_easing, colors,
-        lerp_style, presets, render_transition_pair, setup_card_story, setup_launcher_glance,
+        ModelChange, MonoBitmap, MotionTokens, MultiStopGradient, NavDirection, NineSlice,
+        NineSliceLayout, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
+        PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState, PresentRegion,
+        PressTiming, PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps,
+        RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
+        ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
+        ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
+        ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
+        SequencePlayer, SequencePlayerStatus, SequenceRepeatMode, Shadow, ShapedGlyph,
+        ShapingConfig, Signal, SliceModel, SlicePair, SliceScaleMode, SliderState,
+        Software2DAccelerator, Span, SpinboxWidget, SpringAnimator, SpriteSheet, StateStyle,
+        StateTransition, StatefulWidget, Stopwatch, StringArena, StrokeCap, StrokeDash, StrokeJoin,
+        StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TableWidget, TabsState,
+        Text, TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
+        TextSlice, TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError,
+        TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset, TranslationEntry,
+        TranslationTable, Tween, UiEvent, UiEventFilter, VectorPath, VerticalAlign, ViewContext,
+        VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
+        WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
+        WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
+        WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine, WidgetStyle, animate_glance_focus,
+        animate_peek_reveal, apply_carddeck_visibility, apply_easing, colors, lerp_style, presets,
+        render_transition_pair, setup_card_story, setup_launcher_glance,
         setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
     };
 

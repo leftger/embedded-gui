@@ -2,9 +2,79 @@
 //!
 //! Provides all 148 standard CSS named colors mapped directly to [`Rgb565`].
 
+pub mod css;
 pub mod tailwind;
 
 use embedded_graphics_core::pixelcolor::Rgb565;
+
+/// Operations for tinting, blending, and lighting colors without floating-point math.
+///
+/// Adapted from `bevy_color::color_ops` (`Luminance`, `Mix`) for deterministic,
+/// fixed-point `#![no_std]` execution.
+pub trait ColorOps: Sized {
+    /// Darkens the color by `factor` where 0 leaves the color unchanged and 255 is pure black.
+    fn darker(self, factor: u8) -> Self;
+
+    /// Lightens the color by `factor` where 0 leaves the color unchanged and 255 is pure white.
+    fn lighter(self, factor: u8) -> Self;
+
+    /// Linearly interpolates between `self` and `other` where `factor == 0` is `self`
+    /// and `factor == 255` is `other`.
+    fn lerp(self, other: Self, factor: u8) -> Self;
+
+    /// Alpha blends `foreground` over `self` with alpha in `0..=255`.
+    fn blend(self, foreground: Self, alpha: u8) -> Self;
+
+    /// Calculates relative luminance in `0..=255` using standard Rec.601 integer coefficients.
+    fn luminance(&self) -> u8;
+}
+
+impl ColorOps for Rgb565 {
+    #[inline]
+    fn darker(self, factor: u8) -> Self {
+        self.lerp(Rgb565::new(0, 0, 0), factor)
+    }
+
+    #[inline]
+    fn lighter(self, factor: u8) -> Self {
+        self.lerp(Rgb565::new(31, 63, 31), factor)
+    }
+
+    #[inline]
+    fn lerp(self, other: Self, factor: u8) -> Self {
+        use embedded_graphics_core::pixelcolor::RgbColor;
+        let r0 = self.r() as u16;
+        let g0 = self.g() as u16;
+        let b0 = self.b() as u16;
+
+        let r1 = other.r() as u16;
+        let g1 = other.g() as u16;
+        let b1 = other.b() as u16;
+
+        let inv = 255 - factor as u16;
+        let f = factor as u16;
+
+        let r = ((r0 * inv + r1 * f + 127) / 255) as u8;
+        let g = ((g0 * inv + g1 * f + 127) / 255) as u8;
+        let b = ((b0 * inv + b1 * f + 127) / 255) as u8;
+
+        Rgb565::new(r.min(31), g.min(63), b.min(31))
+    }
+
+    #[inline]
+    fn blend(self, foreground: Self, alpha: u8) -> Self {
+        self.lerp(foreground, alpha)
+    }
+
+    #[inline]
+    fn luminance(&self) -> u8 {
+        use embedded_graphics_core::pixelcolor::RgbColor;
+        let r8 = (self.r() as u32 * 527 + 23) >> 6;
+        let g8 = (self.g() as u32 * 259 + 33) >> 6;
+        let b8 = (self.b() as u32 * 527 + 23) >> 6;
+        ((77 * r8 + 150 * g8 + 29 * b8) >> 8) as u8
+    }
+}
 
 /// Converts a 16-bit packed RGB565 raw value into [`Rgb565`].
 #[inline]
@@ -343,12 +413,16 @@ pub fn from_name(name: &str) -> Option<Rgb565> {
         }
         i += 1;
     }
+    if let Some(c) = css::from_name(name) {
+        return Some(c);
+    }
     tailwind::from_name(name)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use embedded_graphics_core::pixelcolor::RgbColor;
 
     #[test]
     fn test_css_colors_lookup() {
@@ -357,6 +431,12 @@ mod tests {
         assert_eq!(from_name("forestgreen"), Some(FORESTGREEN));
         assert_eq!(from_name("crimson"), Some(CRIMSON));
         assert_eq!(from_name("notacolor"), None);
+        assert_eq!(css::from_name("alice-blue"), Some(css::ALICE_BLUE));
+        assert_eq!(
+            css::from_name("CORNFLOWER_BLUE"),
+            Some(css::CORNFLOWER_BLUE)
+        );
+        assert_eq!(from_name("cornflower-blue"), Some(css::CORNFLOWER_BLUE));
     }
 
     #[test]
@@ -369,5 +449,24 @@ mod tests {
         );
         assert_eq!(from_name("emerald-600"), Some(tailwind::EMERALD_600));
         assert_eq!(from_name("amber-400"), Some(tailwind::AMBER_400));
+    }
+
+    #[test]
+    fn test_color_ops_rgb565() {
+        let white = Rgb565::new(31, 63, 31);
+        let black = Rgb565::new(0, 0, 0);
+
+        assert_eq!(white.darker(255), black);
+        assert_eq!(black.lighter(255), white);
+        assert_eq!(white.darker(0), white);
+        assert_eq!(black.lighter(0), black);
+
+        let mid = black.lerp(white, 128);
+        assert_eq!(mid.r(), 16);
+        assert_eq!(mid.g(), 32);
+        assert_eq!(mid.b(), 16);
+
+        assert_eq!(black.luminance(), 0);
+        assert_eq!(white.luminance(), 255);
     }
 }
