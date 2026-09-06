@@ -86,11 +86,20 @@ pub use animation_timing::{
 /// Defaults to [`Rgb565`], but can be selected at compile time via the
 /// `color-rgb888` or `color-gray8` feature flags for zero-cost hardware specialization.
 #[cfg(feature = "color-rgb888")]
-pub type Pixel = embedded_graphics_core::pixelcolor::Rgb888;
+pub type ActiveColor = embedded_graphics_core::pixelcolor::Rgb888;
 #[cfg(all(feature = "color-gray8", not(feature = "color-rgb888")))]
-pub type Pixel = embedded_graphics_core::pixelcolor::Gray8;
+pub type ActiveColor = embedded_graphics_core::pixelcolor::Gray8;
 #[cfg(not(any(feature = "color-rgb888", feature = "color-gray8")))]
-pub type Pixel = embedded_graphics_core::pixelcolor::Rgb565;
+pub type ActiveColor = embedded_graphics_core::pixelcolor::Rgb565;
+
+/// Alias for [`ActiveColor`].
+pub type CanvasColor = ActiveColor;
+
+/// Alias for [`ActiveColor`].
+///
+/// Note: Omitted from [`prelude`] to avoid colliding with [`embedded_graphics_core::drawable::Pixel`]
+/// when both preludes are glob-imported in the same module.
+pub type Pixel = ActiveColor;
 
 pub use block::Block;
 pub use cinematic::{
@@ -207,27 +216,27 @@ pub mod prelude {
     pub use embedded_graphics_core::pixelcolor::Rgb565;
 
     pub use crate::{
-        ActiveScreenTransition, Align, AlphaLinearGradient, AlphaRadialGradient, AnimatedProperty,
-        Animation, AnimationConflictPolicy, AnimationError, AnimationGroup, AnimationHandlers,
-        AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
-        AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, BitmapFont, Blend,
-        BlendMode, Block, Border, CallbackSlot, CardDeckDirection, CardDeckState, CardStory,
-        CardStoryTransition, CarouselSpec, ChartMode, CinematicPreset, ColorConvertedDrawTarget,
-        ColorFormat, ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
-        ComposedAnimationStatus, CompositeIconSpec, CompositionControls, CompositionMode,
-        Compositor, Constraint, DirtyTracker, Dither, DrawTargetColorExt, Easing, EdgeInsets,
-        EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState,
-        FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId, Framebuffer, FramebufferGray8,
-        FramebufferRgba8888, FramebufferSlice, GlanceTileSpec, GradientDirection, GridLayout,
-        GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer,
-        Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit,
-        ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout, Keyframe,
-        KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
-        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract, ModelChange,
-        MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
-        PeekRevealSpec, Pixel, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming,
-        PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps, RenderCtx,
-        RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
+        ActiveColor, ActiveScreenTransition, Align, AlphaLinearGradient, AlphaRadialGradient,
+        AnimatedProperty, Animation, AnimationConflictPolicy, AnimationError, AnimationGroup,
+        AnimationHandlers, AnimationId, AnimationManager, AnimationManagerCallbacks,
+        AnimationSequence, AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot,
+        BitmapFont, Blend, BlendMode, Block, Border, CallbackSlot, CanvasColor, CardDeckDirection,
+        CardDeckState, CardStory, CardStoryTransition, CarouselSpec, ChartMode, CinematicPreset,
+        ColorConvertedDrawTarget, ColorFormat, ComposedAnimation, ComposedAnimationCallbacks,
+        ComposedAnimationPlayer, ComposedAnimationStatus, CompositeIconSpec, CompositionControls,
+        CompositionMode, Compositor, Constraint, DirtyTracker, Dither, DrawTargetColorExt, Easing,
+        EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
+        FeedTimelineState, FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId, Framebuffer,
+        FramebufferGray8, FramebufferRgba8888, FramebufferSlice, GlanceTileSpec, GradientDirection,
+        GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern,
+        HapticSequencer, Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry,
+        ImageFit, ImageRef, InertiaAnimator, InputEvent, KeyBindingAction, KeyboardLayout,
+        Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem,
+        Length, Line, LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract,
+        ModelChange, MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator,
+        PathPoint, PathVerb, PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion,
+        PressTiming, PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps,
+        RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
         ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
         ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
         ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
