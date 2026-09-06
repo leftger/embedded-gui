@@ -208,6 +208,9 @@ pub enum EasingCurve {
     EaseInOutCubic,
     EaseOutBack,
     EaseOutBounce,
+    Smoothstep,
+    Smootherstep,
+    Steps(u8),
     Moook,
     CubicBezier,
 }
@@ -246,6 +249,16 @@ pub fn evaluate_easing(curve: EasingCurve, t: f32) -> f32 {
             1.0 + C3 * p * p * p + C1 * p * p
         }
         EasingCurve::EaseOutBounce => ease_out_bounce(t),
+        EasingCurve::Smoothstep => t * t * (3.0 - 2.0 * t),
+        EasingCurve::Smootherstep => t * t * t * (t * (t * 6.0 - 15.0) + 10.0),
+        EasingCurve::Steps(count) => {
+            let count = count.max(1) as f32;
+            if t >= 1.0 {
+                1.0
+            } else {
+                ((t * count) as u32 as f32) / count
+            }
+        }
         EasingCurve::Moook => moook_curve(t),
         EasingCurve::CubicBezier => solve_cubic_bezier(0.25, 0.1, 0.25, 1.0, t),
     }
@@ -331,6 +344,9 @@ mod tests {
             EasingCurve::EaseOutCubic,
             EasingCurve::EaseInOutCubic,
             EasingCurve::EaseOutBounce,
+            EasingCurve::Smoothstep,
+            EasingCurve::Smootherstep,
+            EasingCurve::Steps(4),
             EasingCurve::Moook,
             EasingCurve::CubicBezier,
         ];
@@ -344,6 +360,28 @@ mod tests {
                 "{c:?} end failed"
             );
         }
+    }
+
+    #[test]
+    fn test_smoothstep_and_smootherstep_symmetry() {
+        assert_eq!(evaluate_easing(EasingCurve::Smoothstep, 0.0), 0.0);
+        assert_eq!(evaluate_easing(EasingCurve::Smoothstep, 0.5), 0.5);
+        assert_eq!(evaluate_easing(EasingCurve::Smoothstep, 1.0), 1.0);
+
+        assert_eq!(evaluate_easing(EasingCurve::Smootherstep, 0.0), 0.0);
+        assert_eq!(evaluate_easing(EasingCurve::Smootherstep, 0.5), 0.5);
+        assert_eq!(evaluate_easing(EasingCurve::Smootherstep, 1.0), 1.0);
+    }
+
+    #[test]
+    fn test_steps_easing() {
+        let steps = EasingCurve::Steps(4);
+        assert_eq!(evaluate_easing(steps, 0.0), 0.0);
+        assert_eq!(evaluate_easing(steps, 0.1), 0.0);
+        assert_eq!(evaluate_easing(steps, 0.25), 0.25);
+        assert_eq!(evaluate_easing(steps, 0.5), 0.5);
+        assert_eq!(evaluate_easing(steps, 0.75), 0.75);
+        assert_eq!(evaluate_easing(steps, 1.0), 1.0);
     }
 
     #[test]

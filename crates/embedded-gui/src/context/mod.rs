@@ -119,4 +119,49 @@ mod tests {
 
         assert!(ctx.node(btn).is_some());
     }
+
+    #[test]
+    fn test_spatial_focus_navigation_2d() {
+        use crate::input::NavDirection;
+        let viewport = Rect::new(0, 0, 320, 240);
+        let mut ctx: GuiContext<32, 16, 16> = GuiContext::new(viewport);
+
+        // 2x2 grid:
+        // [btn_tl (0,0)]    [btn_tr (100,0)]
+        // [btn_bl (0,50)]   [btn_br (100,50)]
+        let btn_tl = ctx
+            .add_themed_button(Rect::new(0, 0, 50, 30), "TL")
+            .unwrap();
+        let btn_tr = ctx
+            .add_themed_button(Rect::new(100, 0, 50, 30), "TR")
+            .unwrap();
+        let btn_bl = ctx
+            .add_themed_button(Rect::new(0, 50, 50, 30), "BL")
+            .unwrap();
+        let btn_br = ctx
+            .add_themed_button(Rect::new(100, 50, 50, 30), "BR")
+            .unwrap();
+
+        assert_eq!(ctx.focus(), Some(btn_tl));
+
+        // Moving Down should go to btn_bl, NOT btn_tr!
+        ctx.handle_input(InputEvent::Down).unwrap();
+        assert_eq!(ctx.focus(), Some(btn_bl));
+
+        // Moving Right should go to btn_br
+        ctx.handle_input(InputEvent::Right).unwrap();
+        assert_eq!(ctx.focus(), Some(btn_br));
+
+        // Moving Up should go to btn_tr
+        ctx.handle_input(InputEvent::Up).unwrap();
+        assert_eq!(ctx.focus(), Some(btn_tr));
+
+        // Moving Left should go back to btn_tl
+        ctx.handle_input(InputEvent::Left).unwrap();
+        assert_eq!(ctx.focus(), Some(btn_tl));
+
+        // Explicit method call works too:
+        assert!(ctx.move_focus_direction(NavDirection::Down).unwrap());
+        assert_eq!(ctx.focus(), Some(btn_bl));
+    }
 }

@@ -48,6 +48,15 @@ pub enum InputEvent {
     },
 }
 
+/// Direction for 2D spatial focus navigation across focusable widgets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiEvent {
     FocusChanged {

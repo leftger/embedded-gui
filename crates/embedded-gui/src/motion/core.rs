@@ -11,6 +11,8 @@ pub enum Easing {
     EaseOut,
     EaseInOut,
     Smoothstep,
+    Smootherstep,
+    Steps(u8),
     InCubic,
     OutCubic,
     InOutCubic,
@@ -75,6 +77,15 @@ pub fn apply_easing(t: f32, easing: Easing) -> f32 {
             }
         }
         Easing::Smoothstep => t * t * (3.0 - 2.0 * t),
+        Easing::Smootherstep => t * t * t * (t * (t * 6.0 - 15.0) + 10.0),
+        Easing::Steps(count) => {
+            let count = count.max(1) as f32;
+            if t >= 1.0 {
+                1.0
+            } else {
+                ((t * count) as u32 as f32) / count
+            }
+        }
         Easing::InCubic => t.powi(3),
         Easing::OutCubic => 1.0 - (1.0 - t).powi(3),
         Easing::InOutCubic => {

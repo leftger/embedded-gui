@@ -2,6 +2,8 @@
 //!
 //! Provides all 148 standard CSS named colors mapped directly to [`Rgb565`].
 
+pub mod tailwind;
+
 use embedded_graphics_core::pixelcolor::Rgb565;
 
 /// Converts a 16-bit packed RGB565 raw value into [`Rgb565`].
@@ -332,7 +334,7 @@ pub const CSS_COLOR_TABLE: [(&str, Rgb565); 147] = [
     ("yellowgreen", YELLOWGREEN),
 ];
 
-/// Lookup a standard CSS color by name (case-insensitive, zero heap allocation).
+/// Lookup a standard CSS or Tailwind color by name (case-insensitive, zero heap allocation).
 pub fn from_name(name: &str) -> Option<Rgb565> {
     let mut i = 0;
     while i < CSS_COLOR_TABLE.len() {
@@ -341,7 +343,7 @@ pub fn from_name(name: &str) -> Option<Rgb565> {
         }
         i += 1;
     }
-    None
+    tailwind::from_name(name)
 }
 
 #[cfg(test)]
@@ -355,5 +357,17 @@ mod tests {
         assert_eq!(from_name("forestgreen"), Some(FORESTGREEN));
         assert_eq!(from_name("crimson"), Some(CRIMSON));
         assert_eq!(from_name("notacolor"), None);
+    }
+
+    #[test]
+    fn test_tailwind_colors_lookup() {
+        assert_eq!(tailwind::from_name("slate-500"), Some(tailwind::SLATE_500));
+        assert_eq!(tailwind::from_name("SLATE_500"), Some(tailwind::SLATE_500));
+        assert_eq!(
+            tailwind::from_name("emerald-600"),
+            Some(tailwind::EMERALD_600)
+        );
+        assert_eq!(from_name("emerald-600"), Some(tailwind::EMERALD_600));
+        assert_eq!(from_name("amber-400"), Some(tailwind::AMBER_400));
     }
 }

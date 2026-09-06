@@ -6,8 +6,8 @@ use crate::{
     geometry::Rect,
     haptics::HapticPattern,
     input::{
-        InputEvent, PointerState, UiEvent, UiEventFilter, WidgetDispatchPolicy, WidgetEvent,
-        WidgetEventKind,
+        InputEvent, NavDirection, PointerState, UiEvent, UiEventFilter, WidgetDispatchPolicy,
+        WidgetEvent, WidgetEventKind,
     },
     state::{FeedTimelineState, ListState, ScrollState, SliderState, TabsState},
     style::{VisualState, WidgetStyle},
@@ -177,25 +177,33 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 Ok(())
             }
             InputEvent::Up => {
-                if !self.adjust_focused_selection(-1)? {
+                if !self.adjust_focused_selection(-1)?
+                    && !self.move_focus_direction(NavDirection::Up)?
+                {
                     self.focus_prev()?;
                 }
                 Ok(())
             }
             InputEvent::Down => {
-                if !self.adjust_focused_selection(1)? {
+                if !self.adjust_focused_selection(1)?
+                    && !self.move_focus_direction(NavDirection::Down)?
+                {
                     self.focus_next()?;
                 }
                 Ok(())
             }
             InputEvent::Left => {
-                if !self.adjust_focused_scalar(-1.0)? {
+                if !self.adjust_focused_scalar(-1.0)?
+                    && !self.move_focus_direction(NavDirection::Left)?
+                {
                     self.focus_prev()?;
                 }
                 Ok(())
             }
             InputEvent::Right => {
-                if !self.adjust_focused_scalar(1.0)? {
+                if !self.adjust_focused_scalar(1.0)?
+                    && !self.move_focus_direction(NavDirection::Right)?
+                {
                     self.focus_next()?;
                 }
                 Ok(())
@@ -746,6 +754,116 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             .nth(next_pos)
             .map(|node| node.id);
         self.set_focus(next)
+    }
+
+    /// Moves focus in a 2D spatial direction (`Up`, `Down`, `Left`, `Right`)
+    /// based on candidate bounding box alignment and perpendicular overlap.
+    ///
+    /// Returns `Ok(true)` if focus moved to a candidate in that direction,
+    /// or `Ok(false)` if no candidate was found.
+    pub fn move_focus_direction(&mut self, dir: NavDirection) -> Result<bool, GuiError> {
+        let current_id = match self.focus {
+            Some(id) => id,
+            None => {
+                if let Some(first) = self.widgets.iter().find(|n| self.effective_focusable(n.id)) {
+                    self.set_focus(Some(first.id))?;
+                    return Ok(true);
+                }
+                return Ok(false);
+            }
+        };
+
+        let origin_node = match self.node(current_id) {
+            Some(node) => node,
+            None => return Ok(false),
+        };
+        let origin = origin_node.rect;
+        let ox = origin.x + origin.w as i32 / 2;
+        let oy = origin.y + origin.h as i32 / 2;
+
+        let mut best_id = None;
+        let mut best_score = f32::INFINITY;
+
+        for node in &self.widgets {
+            if node.id == current_id || !self.effective_focusable(node.id) {
+                continue;
+            }
+            let cand = node.rect;
+            let cx = cand.x + cand.w as i32 / 2;
+            let cy = cand.y + cand.h as i32 / 2;
+
+            let (dir_x, dir_y) = match dir {
+                NavDirection::Up => (0.0, -1.0),
+                NavDirection::Down => (0.0, 1.0),
+                NavDirection::Left => (-1.0, 0.0),
+                NavDirection::Right => (1.0, 0.0),
+            };
+
+            let to_x = (cx - ox) as f32;
+            let to_y = (cy - oy) as f32;
+            let center_dist = (to_x * to_x + to_y * to_y).sqrt();
+            if center_dist <= 0.0 {
+                continue;
+            }
+
+            let alignment = (to_x * dir_x + to_y * dir_y) / center_dist;
+            if alignment <= 0.05 {
+                continue;
+            }
+
+            let overlap = match dir {
+                NavDirection::Up | NavDirection::Down => {
+                    let a_min = origin.x;
+                    let a_max = origin.right();
+                    let b_min = cand.x;
+                    let b_max = cand.right();
+                    let o = (a_max.min(b_max) - a_min.max(b_min)).max(0);
+                    let span = (a_max - a_min).min(b_max - b_min);
+                    if span > 0 {
+                        (o as f32) / (span as f32)
+                    } else {
+                        0.0
+                    }
+                }
+                NavDirection::Left | NavDirection::Right => {
+                    let a_min = origin.y;
+                    let a_max = origin.bottom();
+                    let b_min = cand.y;
+                    let b_max = cand.bottom();
+                    let o = (a_max.min(b_max) - a_min.max(b_min)).max(0);
+                    let span = (a_max - a_min).min(b_max - b_min);
+                    if span > 0 {
+                        (o as f32) / (span as f32)
+                    } else {
+                        0.0
+                    }
+                }
+            };
+
+            let dx = (cand.x - origin.right())
+                .max(origin.x - cand.right())
+                .max(0) as f32;
+            let dy = (cand.y - origin.bottom())
+                .max(origin.y - cand.bottom())
+                .max(0) as f32;
+            let edge_dist = (dx * dx + dy * dy).sqrt();
+
+            let alignment_penalty = (1.0 - alignment) * edge_dist * 2.0;
+            let overlap_bonus = overlap * 15.0;
+            let score = edge_dist + alignment_penalty - overlap_bonus;
+
+            if score < best_score {
+                best_score = score;
+                best_id = Some(node.id);
+            }
+        }
+
+        if let Some(next_id) = best_id {
+            self.set_focus(Some(next_id))?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Stub for the `rich-widgets`-off build: none of the gated kinds this
