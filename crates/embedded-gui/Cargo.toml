@@ -34,6 +34,8 @@ triple-buffering = []
 embassy-time = ["dep:embassy-time"]
 embassy = ["embassy-time", "dep:embassy-sync"]
 macros = ["dep:embedded-gui-macros"]
+color-rgb888 = []
+color-gray8 = []
 
 [dependencies]
 embedded-graphics-core.workspace = true

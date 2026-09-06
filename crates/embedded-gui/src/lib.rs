@@ -3,6 +3,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod adapter;
 pub mod block;
 pub mod colors;
 pub mod completion;
@@ -62,6 +63,7 @@ pub use visual_widgets::{BusyWheel, GaugeWidget};
 #[cfg(feature = "embedded-dsp")]
 pub use visual_widgets::{SpectrumAnalyzerWidget, TouchInputFilter};
 
+pub use adapter::{ColorConvertedDrawTarget, DrawTargetColorExt};
 pub use animation::{
     Animation, AnimationError, AnimationHandlers, AnimationId, AnimationManager,
     AnimationManagerCallbacks, AnimationState, Easing, InertiaAnimator, PathAnimator, PathPoint,
@@ -78,6 +80,18 @@ pub use animation_timing::{
     PORT_HOLE_DURATION_MS, SHUTTER_DURATION_MS, interpolate_moook, moook_curve, moook_duration_ms,
     timing_half_phase, timing_scaled, timing_shutter_phase,
 };
+
+/// Canonical pixel color type for the active target configuration.
+///
+/// Defaults to [`Rgb565`], but can be selected at compile time via the
+/// `color-rgb888` or `color-gray8` feature flags for zero-cost hardware specialization.
+#[cfg(feature = "color-rgb888")]
+pub type Pixel = embedded_graphics_core::pixelcolor::Rgb888;
+#[cfg(all(feature = "color-gray8", not(feature = "color-rgb888")))]
+pub type Pixel = embedded_graphics_core::pixelcolor::Gray8;
+#[cfg(not(any(feature = "color-rgb888", feature = "color-gray8")))]
+pub type Pixel = embedded_graphics_core::pixelcolor::Rgb565;
+
 pub use block::Block;
 pub use cinematic::{
     CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, CinematicPreset,
@@ -198,12 +212,12 @@ pub mod prelude {
         AnimationId, AnimationManager, AnimationManagerCallbacks, AnimationSequence,
         AnimationState, AntiAliasMode, Axis, BasicTextShaper, BindingSnapshot, BitmapFont, Blend,
         BlendMode, Block, Border, CallbackSlot, CardDeckDirection, CardDeckState, CardStory,
-        CardStoryTransition, CarouselSpec, ChartMode, CinematicPreset, ColorFormat,
-        ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
+        CardStoryTransition, CarouselSpec, ChartMode, CinematicPreset, ColorConvertedDrawTarget,
+        ColorFormat, ComposedAnimation, ComposedAnimationCallbacks, ComposedAnimationPlayer,
         ComposedAnimationStatus, CompositeIconSpec, CompositionControls, CompositionMode,
-        Compositor, Constraint, DirtyTracker, Dither, Easing, EdgeInsets, EllipsisMode,
-        EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FlexBuilder,
-        FluentBuilder, FocusGroupId, Font, FontId, Framebuffer, FramebufferGray8,
+        Compositor, Constraint, DirtyTracker, Dither, DrawTargetColorExt, Easing, EdgeInsets,
+        EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState,
+        FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId, Framebuffer, FramebufferGray8,
         FramebufferRgba8888, FramebufferSlice, GlanceTileSpec, GradientDirection, GridLayout,
         GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer,
         Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit,
@@ -211,7 +225,7 @@ pub mod prelude {
         KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
         LineBufferRenderer, LinearGradient, LinearLayout, ListState, MenuContract, ModelChange,
         MonoBitmap, MotionTokens, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
-        PeekRevealSpec, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming,
+        PeekRevealSpec, Pixel, PixelRead, PointerButton, PointerState, PresentRegion, PressTiming,
         PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps, RenderCtx,
         RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
         ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
