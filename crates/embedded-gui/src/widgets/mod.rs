@@ -32,11 +32,19 @@ pub mod picker;
 pub mod repeater;
 pub mod rich_text_node;
 pub mod scale;
+pub mod segmented;
 pub mod spinbox;
 pub mod status_bar;
 pub mod table;
 pub mod timeline;
 pub mod wearable;
+
+pub use segmented::{
+    SEG_7_A, SEG_7_B, SEG_7_C, SEG_7_D, SEG_7_DP, SEG_7_E, SEG_7_F, SEG_7_G, SEG_14_A1, SEG_14_A2,
+    SEG_14_B, SEG_14_C, SEG_14_D1, SEG_14_D2, SEG_14_E, SEG_14_F, SEG_14_G1, SEG_14_G2, SEG_14_H,
+    SEG_14_J, SEG_14_K, SEG_14_L, SEG_14_M, SEG_14_N, SegmentStyle, SevenSegmentDisplay,
+    encode_7seg, encode_14seg,
+};
 
 pub use action_menu::{ActionMenuError, ActionMenuItem, ActionMenuWidget};
 pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
