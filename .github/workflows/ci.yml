@@ -185,7 +185,7 @@ jobs:
           cargo llvm-cov --all-features --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cargo llvm-cov --all-features --lcov --output-path lcov-all.info
-          cargo llvm-cov -p embedded-gui --no-default-features --features rich-widgets,libm --lcov --output-path lcov-nostd.info
+          cargo llvm-cov -p embedded-gui --lib --no-default-features --features std,rich-widgets,libm --lcov --output-path lcov-nostd.info
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
@@ -194,6 +194,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: leftger/embedded-gui
       - name: Install nextest
+        if: ${{ !cancelled() }}
         uses: taiki-e/install-action@nextest
       - name: Run tests with JUnit report
         if: ${{ !cancelled() }}

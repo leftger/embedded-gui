@@ -1,4 +1,5 @@
 //! Pixel-level behavior of the carousel and composite icon widgets.
+#![cfg(feature = "std")]
 
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_gui::prelude::*;
