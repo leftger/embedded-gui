@@ -6,7 +6,7 @@ use eframe::egui::{self, Color32, FontId, TextFormat};
 pub fn highlight_kdl(ctx: &egui::Context, text: &str) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let default_font = FontId::monospace(12.5);
-    let is_dark = ctx.style().visuals.dark_mode;
+    let is_dark = ctx.theme() == egui::Theme::Dark;
 
     let col_comment = if is_dark {
         Color32::from_rgb(110, 120, 135)
@@ -267,7 +267,7 @@ fn classify_kdl_word(
 pub fn highlight_rust(ctx: &egui::Context, text: &str) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let default_font = FontId::monospace(12.5);
-    let is_dark = ctx.style().visuals.dark_mode;
+    let is_dark = ctx.theme() == egui::Theme::Dark;
 
     let col_keyword = if is_dark {
         Color32::from_rgb(255, 120, 160)

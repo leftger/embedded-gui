@@ -2,8 +2,9 @@
 
 use core::fmt::Debug;
 use embedded_3dgfx::{
-    K3dengine, Ray,
+    camera::Ray,
     command_buffer::CommandBuffer,
+    engine::K3dengine,
     mesh::{K3dMesh, RenderMode},
     renderer::FrameCtx,
 };

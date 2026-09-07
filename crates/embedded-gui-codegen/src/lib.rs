@@ -6,7 +6,7 @@
 pub mod assets;
 
 use core::fmt::Write as _;
-use kdl::{KdlDocument, KdlNode, KdlValue};
+use kdl::{KdlDocument, KdlNode};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -443,38 +443,26 @@ pub fn parse_tracks(spec: &str) -> Result<Vec<GridTrackDef>, CodegenError> {
 }
 
 fn entry_to_str(e: &kdl::KdlEntry) -> Option<&str> {
-    match e.value() {
-        KdlValue::String(s) | KdlValue::RawString(s) => Some(s.as_str()),
-        _ => None,
-    }
+    e.value().as_string()
 }
 
 fn get_string_prop<'a>(node: &'a KdlNode, name: &str) -> Option<&'a str> {
-    node.get(name).and_then(entry_to_str)
+    node.get(name).and_then(|v| v.as_string())
 }
 
 fn get_i64_prop(node: &KdlNode, name: &str) -> Option<i64> {
-    node.get(name).and_then(|e| match e.value() {
-        KdlValue::Base10(i) | KdlValue::Base2(i) | KdlValue::Base8(i) | KdlValue::Base16(i) => {
-            Some(*i)
-        }
-        _ => None,
-    })
+    node.get(name)
+        .and_then(|v| v.as_integer())
+        .map(|i| i as i64)
 }
 
 fn get_f64_prop(node: &KdlNode, name: &str) -> Option<f64> {
-    node.get(name).and_then(|e| match e.value() {
-        KdlValue::Base10Float(f) => Some(*f),
-        KdlValue::Base10(i) => Some(*i as f64),
-        _ => None,
-    })
+    node.get(name)
+        .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
 }
 
 fn get_bool_prop(node: &KdlNode, name: &str) -> Option<bool> {
-    node.get(name).and_then(|e| match e.value() {
-        KdlValue::Bool(b) => Some(*b),
-        _ => None,
-    })
+    node.get(name).and_then(|v| v.as_bool())
 }
 
 /// Parses an SVG path definition string (e.g. `M 10 20 C 15 25 30 40 50 20 Z` or `M0,0 L20,20 Z`) into PathVerbDefs.
@@ -668,10 +656,11 @@ fn parse_path_verbs(node: &KdlNode) -> Vec<PathVerbDef> {
             let args: Vec<i32> = child
                 .entries()
                 .iter()
-                .filter_map(|e| match e.value() {
-                    KdlValue::Base10(i) => Some(*i as i32),
-                    KdlValue::Base10Float(f) => Some(*f as i32),
-                    _ => None,
+                .filter_map(|e| {
+                    e.value()
+                        .as_integer()
+                        .map(|i| i as i32)
+                        .or_else(|| e.value().as_float().map(|f| f as i32))
                 })
                 .collect();
 

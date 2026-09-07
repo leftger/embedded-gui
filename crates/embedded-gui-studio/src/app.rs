@@ -2091,7 +2091,8 @@ impl EmbeddedGuiStudio {
 }
 
 impl eframe::App for EmbeddedGuiStudio {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         // The agent reports its panel size asynchronously, so the frame sent at
         // connect time cannot be fitted yet. Resend once the handshake lands.
         let handshaked = self
@@ -2338,8 +2339,8 @@ impl eframe::App for EmbeddedGuiStudio {
         }
 
         // Top Menu Bar
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+        egui::Panel::top("top_panel").show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.label(egui::RichText::new("⚡ Embedded GUI Studio").strong());
                 ui.separator();
 
@@ -2362,7 +2363,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 }
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("💾 Save Project").clicked() {
                         match self.save_project_to_disk() {
@@ -2376,7 +2377,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 self.action_toast = Some((format!("Save project: {err}"), 3.0));
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("💾 Save Project As…").clicked() {
                         self.project_root = None;
@@ -2391,7 +2392,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 self.action_toast = Some((format!("Save project: {err}"), 3.0));
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🖼 Import Image Asset…").clicked() {
                         match self.import_image_asset() {
@@ -2411,7 +2412,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             }
                             Err(_) => {}
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔤 Import Font (BDF)…").clicked() {
                         match self.import_font_asset() {
@@ -2434,7 +2435,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             }
                             Err(_) => {}
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🧩 Import Icon Art (1-bit)…").clicked() {
                         match self.import_icon_asset() {
@@ -2454,7 +2455,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             }
                             Err(_) => {}
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🧊 Import Mesh (OBJ)…").clicked() {
                         match self.import_mesh_asset() {
@@ -2474,7 +2475,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             }
                             Err(_) => {}
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("📂 Open .kdl File... (Ctrl+O)").clicked() {
@@ -2485,7 +2486,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 2.0,
                             ));
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("💾 Save .kdl File... (Ctrl+S)").clicked() {
                         let def_name = self
@@ -2501,7 +2502,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 2.0,
                             ));
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("🎨 Import Figma (.fig)... (Ctrl+I)").clicked() {
@@ -2519,7 +2520,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 3.0,
                             ));
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui
@@ -2546,7 +2547,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 }
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -2573,7 +2574,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             border_color: None,
                             corner_radius: None,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔲 Toggle Switch").clicked() {
                         self.insert_widget(WidgetDef::Toggle {
@@ -2581,7 +2582,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             label: "POWER".to_string(),
                             checked: true,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("☑ Checkbox").clicked() {
                         self.insert_widget(WidgetDef::Checkbox {
@@ -2589,7 +2590,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             label: "ENABLE".to_string(),
                             checked: false,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🎚 Linear Slider").clicked() {
                         self.insert_widget(WidgetDef::Slider {
@@ -2598,7 +2599,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             max: 100,
                             value: 50,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔢 Spinbox (Precision Digit)").clicked() {
                         self.insert_widget(WidgetDef::Spinbox {
@@ -2609,7 +2610,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             digits: 3,
                             decimals: 1,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔢 Number Picker (Unit Scroll)").clicked() {
                         self.insert_widget(WidgetDef::NumberPicker {
@@ -2619,7 +2620,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             value: 135,
                             unit: "BPM".to_string(),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🕒 Time Picker (HH:MM)").clicked() {
                         self.insert_widget(WidgetDef::TimePicker {
@@ -2629,7 +2630,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             is_12h: true,
                             is_pm: true,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📋 Dropdown Menu").clicked() {
                         self.insert_widget(WidgetDef::Dropdown {
@@ -2637,7 +2638,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             options: vec!["Auto".to_string(), "Cool".to_string(), "Heat".to_string()],
                             selected: 0,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🎡 Rotary Roller Wheel").clicked() {
                         self.insert_widget(WidgetDef::Roller {
@@ -2645,7 +2646,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             options: vec!["Low".to_string(), "Med".to_string(), "High".to_string(), "Turbo".to_string()],
                             selected: 1,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
@@ -2657,7 +2658,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             style: None,
                             font: None,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("✨ Inverted XOR Status Label").clicked() {
                         self.insert_widget(WidgetDef::Label {
@@ -2666,14 +2667,14 @@ impl eframe::App for EmbeddedGuiStudio {
                             style: Some("inverted".to_string()),
                             font: None,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📱 Header Status Bar").clicked() {
                         self.insert_widget(WidgetDef::StatusBar {
                             id: None,
                             time: "10:42".to_string(),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("💬 Confirmation Dialog").clicked() {
                         self.insert_widget(WidgetDef::Dialog {
@@ -2682,7 +2683,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             message: "Apply settings now?".to_string(),
                             dialog_type: "confirm".to_string(),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📊 Data Table Grid").clicked() {
                         self.insert_widget(WidgetDef::Table {
@@ -2693,7 +2694,7 @@ impl eframe::App for EmbeddedGuiStudio {
                                 vec!["Voltage".to_string(), "3.3V".to_string()],
                             ],
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
@@ -2703,7 +2704,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             id: None,
                             value: 0.65,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⏱ Radial Tachometer Scale").clicked() {
                         self.insert_widget(WidgetDef::Scale {
@@ -2715,7 +2716,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             major_ticks: 6,
                             minor_ticks: 2,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📐 Sweeping Arc Dial").clicked() {
                         self.insert_widget(WidgetDef::SweepingArc {
@@ -2723,21 +2724,21 @@ impl eframe::App for EmbeddedGuiStudio {
                             start_angle: 0,
                             end_angle: 180,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🌀 Animated Busy Spinner").clicked() {
                         self.insert_widget(WidgetDef::BusyWheel {
                             id: None,
                             active: true,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📉 Oscilloscope Waveform Plotter").clicked() {
                         self.insert_widget(WidgetDef::Plotter {
                             id: None,
                             mode: "waveform".to_string(),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
@@ -2750,7 +2751,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             fill_color: Some("#000000".to_string()),
                             stroke_color: Some("#FFFFFF".to_string()),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚪ Vector Circle").clicked() {
                         self.insert_widget(WidgetDef::CircleShape {
@@ -2760,7 +2761,7 @@ impl eframe::App for EmbeddedGuiStudio {
                             fill_color: None,
                             stroke_color: Some("#FFFFFF".to_string()),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("➖ Divider Line").clicked() {
                         self.insert_widget(WidgetDef::LineShape {
@@ -2768,11 +2769,11 @@ impl eframe::App for EmbeddedGuiStudio {
                             stroke_width: 1,
                             color: Some("#FFFFFF".to_string()),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("✒️ SVG Bézier Curve Path").clicked() {
                         self.insert_vector_asset("curve", "M 0 10 C 20 0, 40 40, 60 10");
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -2780,64 +2781,64 @@ impl eframe::App for EmbeddedGuiStudio {
                     ui.label(egui::RichText::new("🔋 Power & Battery").strong());
                     if ui.button("🔋 Battery 100% (Full)").clicked() {
                         self.insert_vector_asset("batt_full", "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 12 2 L 12 4 L 2 4 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🪫 Battery 20% (Low)").clicked() {
                         self.insert_vector_asset("batt_low", "M 0 0 L 14 0 L 14 6 L 0 6 Z M 14 2 L 15 2 L 15 4 L 14 4 Z M 2 2 L 4 2 L 4 4 L 2 4 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚡ Lightning Bolt (Charging)").clicked() {
                         self.insert_vector_asset("bolt", "M 6 0 L 1 7 L 5 7 L 3 13 L 10 5 L 5 5 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
                     ui.label(egui::RichText::new("📶 Connectivity").strong());
                     if ui.button("📡 Bluetooth 5.2 Icon").clicked() {
                         self.insert_vector_asset("bluetooth", "M 4 1 L 8 5 L 5 8 L 5 0 L 8 3 L 4 7");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📶 Cellular Signal Bars").clicked() {
                         self.insert_vector_asset("signal", "M 1 6 L 3 6 L 3 8 L 1 8 Z M 5 4 L 7 4 L 7 8 L 5 8 Z M 9 2 L 11 2 L 11 8 L 9 8 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
                     ui.label(egui::RichText::new("🛡️ Badges & Status").strong());
                     if ui.button("⚠️ Warning Triangle").clicked() {
                         self.insert_vector_asset("warning", "M 6 1 L 12 11 L 0 11 Z M 6 4 L 6 7 M 6 9 L 6 10");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🛡️ Security Shield").clicked() {
                         self.insert_vector_asset("shield", "M 0 2 L 6 0 L 12 2 L 12 7 C 12 10, 6 13, 6 13 C 6 13, 0 10, 0 7 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("❤️ Heart Pulse (Health)").clicked() {
                         self.insert_vector_asset("heart", "M 6 2 C 4 0, 0 1, 0 4 C 0 8, 6 11, 6 11 C 6 11, 12 8, 12 4 C 12 1, 8 0, 6 2 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🎯 Target Crosshair").clicked() {
                         self.insert_vector_asset("crosshair", "M 6 0 L 6 3 M 6 9 L 6 12 M 0 6 L 3 6 M 9 6 L 12 6 M 6 2 C 8.2 2, 10 3.8, 10 6 C 10 8.2, 8.2 10, 6 10 C 3.8 10, 2 8.2, 2 6 C 2 3.8, 3.8 2, 6 2 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     ui.separator();
                     ui.label(egui::RichText::new("⚙️ Navigation & Tools").strong());
                     if ui.button("⏱ Timer Clock Dial").clicked() {
                         self.insert_vector_asset("timer", "M 6 0 C 9.3 0, 12 2.7, 12 6 C 12 9.3, 9.3 12, 6 12 C 2.7 12, 0 9.3, 0 6 C 0 2.7, 2.7 0, 6 0 Z M 6 2 L 6 6 L 9 6");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚙️ Settings Gear").clicked() {
                         self.insert_vector_asset("gear", "M 5 0 L 7 0 L 7 2 L 9 3 L 11 1 L 12 2 L 10 4 L 11 6 L 13 6 L 13 8 L 11 8 L 10 10 L 12 12 L 11 13 L 9 11 L 7 12 L 7 14 L 5 14 L 5 12 L 3 11 L 1 13 L 0 12 L 2 10 L 1 8 L 0 8 L 0 6 L 2 6 L 1 4 L 2 2 L 4 3 L 5 2 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("▶ Play Arrow").clicked() {
                         self.insert_vector_asset("play", "M 2 1 L 11 6 L 2 11 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⏸ Pause Double Bar").clicked() {
                         self.insert_vector_asset("pause", "M 2 1 L 5 1 L 5 11 L 2 11 Z M 7 1 L 10 1 L 10 11 L 7 11 Z");
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -2860,7 +2861,7 @@ impl eframe::App for EmbeddedGuiStudio {
                         if ui.selectable_label(self.selected_easing == curve, name).clicked() {
                             self.selected_easing = curve;
                             self.action_toast = Some((format!("Active Easing: {:?}", curve), 2.0));
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                 });
@@ -2870,51 +2871,51 @@ impl eframe::App for EmbeddedGuiStudio {
                         self.display_theme = DisplayTheme::MonochromeOled;
                         self.hardware_profile = HardwareProfile::Ssd1306Oled;
                         self.load_kdl_source(SAMPLE_SSD1306_OLED.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📟 SSD1357 OLED (96×64 RGB)").clicked() {
                         self.display_theme = DisplayTheme::DarkTft;
                         self.hardware_profile = HardwareProfile::Ssd1357;
                         self.load_kdl_source(SAMPLE_SSD1357.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("🚗 Automotive Digital Cluster").clicked() {
                         self.load_kdl_source(SAMPLE_AUTOMOTIVE_CLUSTER.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("❄️ HVAC Smart Climate").clicked() {
                         self.load_kdl_source(SAMPLE_HVAC_CLIMATE.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🩺 Patient Vital Monitor").clicked() {
                         self.load_kdl_source(SAMPLE_PATIENT_MONITOR.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚙️ Industrial CNC Controller").clicked() {
                         self.load_kdl_source(SAMPLE_CNC_CONTROLLER.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⌚ Smartwatch Activity Tracker").clicked() {
                         self.load_kdl_source(SAMPLE_SMARTWATCH_FITNESS.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("📈 Live Oscilloscope").clicked() {
                         self.load_kdl_source(SAMPLE_WAVEFORM.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("✨ Motion Kitchen Sink").clicked() {
                         self.load_kdl_source(SAMPLE_MOTION_KITCHEN_SINK.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🌡 Smart Thermostat").clicked() {
                         self.load_kdl_source(SAMPLE_THERMOSTAT.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📊 Sensor Dashboard").clicked() {
                         self.load_kdl_source(SAMPLE_DASHBOARD.to_string());
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -2952,7 +2953,7 @@ impl eframe::App for EmbeddedGuiStudio {
         });
 
         // Bottom Hardware Profiler Bar & Silicon Bridge
-        egui::TopBottomPanel::bottom("bottom_hardware_profiler").show(ctx, |ui| {
+        egui::Panel::bottom("bottom_hardware_profiler").show(ui, |ui| {
             ui.horizontal(|ui| {
                 if let Ok(screen) = &self.parsed_screen {
                     let bpp = self.hardware_profile.bpp();
@@ -3091,10 +3092,10 @@ impl eframe::App for EmbeddedGuiStudio {
         });
 
         // Left Panel: KDL Code Editor with Syntax Highlighting
-        egui::SidePanel::left("editor_panel")
-            .min_width(340.0)
-            .default_width(380.0)
-            .show(ctx, |ui| {
+        egui::Panel::left("editor_panel")
+            .min_size(340.0)
+            .default_size(380.0)
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("KDL Screen Definition");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3108,10 +3109,10 @@ impl eframe::App for EmbeddedGuiStudio {
                 });
                 ui.separator();
 
-                let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-                    let mut job = crate::syntax::highlight_kdl(ui.ctx(), string);
+                let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap_width: f32| {
+                    let mut job = crate::syntax::highlight_kdl(ui.ctx(), text.as_str());
                     job.wrap.max_width = wrap_width;
-                    ui.fonts(|f| f.layout_job(job))
+                    ui.fonts_mut(|f| f.layout_job(job))
                 };
 
                 egui::ScrollArea::vertical()
@@ -3142,10 +3143,10 @@ impl eframe::App for EmbeddedGuiStudio {
             });
 
         // Right Panel: Visual Property Inspector
-        egui::SidePanel::right("inspector_panel")
-            .min_width(260.0)
-            .default_width(300.0)
-            .show(ctx, |ui| {
+        egui::Panel::right("inspector_panel")
+            .min_size(260.0)
+            .default_size(300.0)
+            .show(ui, |ui| {
                 if let Ok(mut screen) = self.parsed_screen.clone() {
                     let previous_size = (screen.width, screen.height);
                     let mut sel_idx = self.selected_widget_idx;
@@ -3191,7 +3192,7 @@ impl eframe::App for EmbeddedGuiStudio {
             });
 
         // Center Panel: Tabs (Visual Preview / Rust Codegen / AST / Assets / Flow)
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(
                     &mut self.active_tab,
@@ -3330,10 +3331,10 @@ impl eframe::App for EmbeddedGuiStudio {
                     crate::assets::render_asset_browser(ui, &mut self.action_toast);
                 }
                 StudioTab::RustCodegen => {
-                    let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-                        let mut job = crate::syntax::highlight_rust(ui.ctx(), string);
+                    let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let mut job = crate::syntax::highlight_rust(ui.ctx(), text.as_str());
                         job.wrap.max_width = wrap_width;
-                        ui.fonts(|f| f.layout_job(job))
+                        ui.fonts_mut(|f| f.layout_job(job))
                     };
                     egui::ScrollArea::both().show(ui, |ui| {
                         ui.add(
@@ -3409,7 +3410,7 @@ impl eframe::App for EmbeddedGuiStudio {
             }
         });
 
-        crate::command_palette::render_command_palette(self, ctx);
+        crate::command_palette::render_command_palette(self, &ctx);
     }
 }
 

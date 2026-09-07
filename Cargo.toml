@@ -46,7 +46,7 @@ nalgebra = { version = "0.35", default-features = false }
 
 embedded-graphics-simulator = "0.8"
 criterion = { version = "0.8", features = ["html_reports"] }
-kdl = "6.7"
+kdl = { version = "6.7", features = ["v1-fallback"] }
 thiserror = "2.0"
 proc-macro2 = "1.0"
 quote = "1.0"

@@ -231,20 +231,16 @@ fn format_manifest(
 }
 
 fn entry_str(node: &kdl::KdlNode, key: &str) -> Option<String> {
-    node.get(key).and_then(|e| match e.value() {
-        kdl::KdlValue::String(s) | kdl::KdlValue::RawString(s) => Some(s.to_string()),
-        _ => None,
-    })
+    node.get(key)
+        .and_then(|v| v.as_string())
+        .map(|s| s.to_string())
 }
 
 fn entry_u32(node: &kdl::KdlNode, key: &str) -> Option<u32> {
-    node.get(key).and_then(|e| match e.value() {
-        kdl::KdlValue::Base10(i)
-        | kdl::KdlValue::Base2(i)
-        | kdl::KdlValue::Base8(i)
-        | kdl::KdlValue::Base16(i) => u32::try_from(*i).ok(),
-        kdl::KdlValue::String(s) | kdl::KdlValue::RawString(s) => s.parse().ok(),
-        _ => None,
+    node.get(key).and_then(|v| {
+        v.as_integer()
+            .and_then(|i| u32::try_from(i).ok())
+            .or_else(|| v.as_string().and_then(|s| s.parse().ok()))
     })
 }
 
