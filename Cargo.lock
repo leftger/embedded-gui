@@ -1236,9 +1236,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-dsp"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3646c811179ee0966f5e24aba8aa07aaaa4208bee60c20b86bd4bf37360e2c1f"
+checksum = "1c3038494bcff2cb0cd80781dcb34354a47bb4500cc02a31844b1c49dcc536e7"
 dependencies = [
  "libm",
 ]

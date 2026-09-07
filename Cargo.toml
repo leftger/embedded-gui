@@ -40,7 +40,7 @@ micromath = { version = "2.1" }
 embedded-graphics = { version = "0.8" }
 embedded-text = { version = "0.7.3" }
 embedded-layout = { version = "0.4.2" }
-embedded-dsp = { version = "0.4.1", default-features = false }
+embedded-dsp = { version = "0.5.1", default-features = false }
 embedded-3dgfx = { version = "0.6.1" }
 nalgebra = { version = "0.35", default-features = false }
 
