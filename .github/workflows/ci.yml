@@ -197,7 +197,12 @@ jobs:
         uses: taiki-e/install-action@nextest
       - name: Run tests with JUnit report
         if: ${{ !cancelled() }}
-        run: cargo nextest run --workspace --all-features --junit junit.xml
+        run: |
+          set +e
+          cargo nextest run --workspace --all-features --profile ci
+          status=$?
+          cp target/nextest/ci/junit.xml junit.xml
+          exit $status
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
