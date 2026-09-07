@@ -9,8 +9,8 @@
 <a href=#9 id=9 data-nosnippet>9</a>    style::{Style, WidgetStyle},
 <a href=#10 id=10 data-nosnippet>10</a>    widget::{FocusGroupId, StyleClassId, Widget, WidgetId},
 <a href=#11 id=11 data-nosnippet>11</a>    widgets::{
-<a href=#12 id=12 data-nosnippet>12</a>        CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, NotificationLevel, ScaleMode,
-<a href=#13 id=13 data-nosnippet>13</a>        SurfaceState, WidgetKind,
+<a href=#12 id=12 data-nosnippet>12</a>        CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, MenuCell, NotificationLevel,
+<a href=#13 id=13 data-nosnippet>13</a>        ScaleMode, SurfaceState, WidgetKind,
 <a href=#14 id=14 data-nosnippet>14</a>    },
 <a href=#15 id=15 data-nosnippet>15</a>};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
@@ -1355,114 +1355,141 @@
 <a href=#1355 id=1355 data-nosnippet>1355</a>        <span class="prelude-val">Ok</span>(id)
 <a href=#1356 id=1356 data-nosnippet>1356</a>    }
 <a href=#1357 id=1357 data-nosnippet>1357</a>
-<a href=#1358 id=1358 data-nosnippet>1358</a>    <span class="kw">pub fn </span>add_dial&lt;S&gt;(
-<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1360 id=1360 data-nosnippet>1360</a>        rect: Rect,
-<a href=#1361 id=1361 data-nosnippet>1361</a>        value: f32,
-<a href=#1362 id=1362 data-nosnippet>1362</a>        min: f32,
-<a href=#1363 id=1363 data-nosnippet>1363</a>        max: f32,
-<a href=#1364 id=1364 data-nosnippet>1364</a>        style: S,
-<a href=#1365 id=1365 data-nosnippet>1365</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
-<a href=#1366 id=1366 data-nosnippet>1366</a>    <span class="kw">where
-<a href=#1367 id=1367 data-nosnippet>1367</a>        </span>S: Into&lt;WidgetStyle&gt;,
-<a href=#1368 id=1368 data-nosnippet>1368</a>    {
-<a href=#1369 id=1369 data-nosnippet>1369</a>        <span class="kw">let </span>value = value.clamp(min, max);
-<a href=#1370 id=1370 data-nosnippet>1370</a>        <span class="kw">let </span>id = <span class="self">self</span>.add_widget(rect, WidgetKind::Dial { value, min, max }, style)<span class="question-mark">?</span>;
-<a href=#1371 id=1371 data-nosnippet>1371</a>        <span class="self">self</span>.ensure_focus();
-<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="prelude-val">Ok</span>(id)
-<a href=#1373 id=1373 data-nosnippet>1373</a>    }
-<a href=#1374 id=1374 data-nosnippet>1374</a>
-<a href=#1375 id=1375 data-nosnippet>1375</a>    <span class="kw">pub fn </span>add_themed_dial(
-<a href=#1376 id=1376 data-nosnippet>1376</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1377 id=1377 data-nosnippet>1377</a>        rect: Rect,
-<a href=#1378 id=1378 data-nosnippet>1378</a>        value: f32,
-<a href=#1379 id=1379 data-nosnippet>1379</a>        min: f32,
-<a href=#1380 id=1380 data-nosnippet>1380</a>        max: f32,
-<a href=#1381 id=1381 data-nosnippet>1381</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
-<a href=#1382 id=1382 data-nosnippet>1382</a>        <span class="self">self</span>.add_dial(rect, value, min, max, <span class="self">self</span>.theme.button)
+<a href=#1358 id=1358 data-nosnippet>1358</a>    <span class="attr">#[cfg(feature = <span class="string">"rich-widgets"</span>)]
+<a href=#1359 id=1359 data-nosnippet>1359</a>    </span><span class="kw">pub fn </span>add_rich_menu&lt;S&gt;(
+<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1361 id=1361 data-nosnippet>1361</a>        rect: Rect,
+<a href=#1362 id=1362 data-nosnippet>1362</a>        cells: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[MenuCell&lt;<span class="lifetime">'a</span>&gt;],
+<a href=#1363 id=1363 data-nosnippet>1363</a>        selected: usize,
+<a href=#1364 id=1364 data-nosnippet>1364</a>        visible_rows: usize,
+<a href=#1365 id=1365 data-nosnippet>1365</a>        style: S,
+<a href=#1366 id=1366 data-nosnippet>1366</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
+<a href=#1367 id=1367 data-nosnippet>1367</a>    <span class="kw">where
+<a href=#1368 id=1368 data-nosnippet>1368</a>        </span>S: Into&lt;WidgetStyle&gt;,
+<a href=#1369 id=1369 data-nosnippet>1369</a>    {
+<a href=#1370 id=1370 data-nosnippet>1370</a>        <span class="kw">let </span>selected = selected.min(cells.len().saturating_sub(<span class="number">1</span>));
+<a href=#1371 id=1371 data-nosnippet>1371</a>        <span class="kw">let </span>id = <span class="self">self</span>.add_widget(
+<a href=#1372 id=1372 data-nosnippet>1372</a>            rect,
+<a href=#1373 id=1373 data-nosnippet>1373</a>            WidgetKind::RichMenu {
+<a href=#1374 id=1374 data-nosnippet>1374</a>                cells,
+<a href=#1375 id=1375 data-nosnippet>1375</a>                selected,
+<a href=#1376 id=1376 data-nosnippet>1376</a>                offset: selected,
+<a href=#1377 id=1377 data-nosnippet>1377</a>                visible_rows: visible_rows.max(<span class="number">1</span>),
+<a href=#1378 id=1378 data-nosnippet>1378</a>            },
+<a href=#1379 id=1379 data-nosnippet>1379</a>            style,
+<a href=#1380 id=1380 data-nosnippet>1380</a>        )<span class="question-mark">?</span>;
+<a href=#1381 id=1381 data-nosnippet>1381</a>        <span class="self">self</span>.ensure_focus();
+<a href=#1382 id=1382 data-nosnippet>1382</a>        <span class="prelude-val">Ok</span>(id)
 <a href=#1383 id=1383 data-nosnippet>1383</a>    }
 <a href=#1384 id=1384 data-nosnippet>1384</a>
-<a href=#1385 id=1385 data-nosnippet>1385</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
-<a href=#1386 id=1386 data-nosnippet>1386</a>    </span><span class="kw">pub fn </span>add_rle_player&lt;S&gt;(
-<a href=#1387 id=1387 data-nosnippet>1387</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1388 id=1388 data-nosnippet>1388</a>        rect: <span class="kw">impl </span>Into&lt;Rect&gt;,
-<a href=#1389 id=1389 data-nosnippet>1389</a>        rle_data: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8],
-<a href=#1390 id=1390 data-nosnippet>1390</a>        frame_width: u16,
-<a href=#1391 id=1391 data-nosnippet>1391</a>        frame_height: u16,
-<a href=#1392 id=1392 data-nosnippet>1392</a>        total_frames: usize,
-<a href=#1393 id=1393 data-nosnippet>1393</a>        frame_duration_ms: u32,
-<a href=#1394 id=1394 data-nosnippet>1394</a>        style: S,
-<a href=#1395 id=1395 data-nosnippet>1395</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
-<a href=#1396 id=1396 data-nosnippet>1396</a>    <span class="kw">where
-<a href=#1397 id=1397 data-nosnippet>1397</a>        </span>S: Into&lt;WidgetStyle&gt;,
-<a href=#1398 id=1398 data-nosnippet>1398</a>    {
-<a href=#1399 id=1399 data-nosnippet>1399</a>        <span class="self">self</span>.add_widget(
-<a href=#1400 id=1400 data-nosnippet>1400</a>            rect,
-<a href=#1401 id=1401 data-nosnippet>1401</a>            WidgetKind::RlePlayer {
-<a href=#1402 id=1402 data-nosnippet>1402</a>                rle_data,
-<a href=#1403 id=1403 data-nosnippet>1403</a>                frame_width,
-<a href=#1404 id=1404 data-nosnippet>1404</a>                frame_height,
-<a href=#1405 id=1405 data-nosnippet>1405</a>                total_frames,
-<a href=#1406 id=1406 data-nosnippet>1406</a>                current_frame: <span class="number">0</span>,
-<a href=#1407 id=1407 data-nosnippet>1407</a>                elapsed_ms: <span class="number">0</span>,
-<a href=#1408 id=1408 data-nosnippet>1408</a>                frame_duration_ms,
-<a href=#1409 id=1409 data-nosnippet>1409</a>            },
-<a href=#1410 id=1410 data-nosnippet>1410</a>            style,
-<a href=#1411 id=1411 data-nosnippet>1411</a>        )
-<a href=#1412 id=1412 data-nosnippet>1412</a>    }
-<a href=#1413 id=1413 data-nosnippet>1413</a>
-<a href=#1414 id=1414 data-nosnippet>1414</a>    <span class="kw">pub fn </span>add_themed_rle_player(
-<a href=#1415 id=1415 data-nosnippet>1415</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1416 id=1416 data-nosnippet>1416</a>        rect: Rect,
-<a href=#1417 id=1417 data-nosnippet>1417</a>        rle_data: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8],
-<a href=#1418 id=1418 data-nosnippet>1418</a>        frame_width: u16,
-<a href=#1419 id=1419 data-nosnippet>1419</a>        frame_height: u16,
-<a href=#1420 id=1420 data-nosnippet>1420</a>        total_frames: usize,
-<a href=#1421 id=1421 data-nosnippet>1421</a>        frame_duration_ms: u32,
-<a href=#1422 id=1422 data-nosnippet>1422</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
-<a href=#1423 id=1423 data-nosnippet>1423</a>        <span class="self">self</span>.add_rle_player(
-<a href=#1424 id=1424 data-nosnippet>1424</a>            rect,
-<a href=#1425 id=1425 data-nosnippet>1425</a>            rle_data,
-<a href=#1426 id=1426 data-nosnippet>1426</a>            frame_width,
-<a href=#1427 id=1427 data-nosnippet>1427</a>            frame_height,
-<a href=#1428 id=1428 data-nosnippet>1428</a>            total_frames,
-<a href=#1429 id=1429 data-nosnippet>1429</a>            frame_duration_ms,
-<a href=#1430 id=1430 data-nosnippet>1430</a>            <span class="self">self</span>.theme.panel,
-<a href=#1431 id=1431 data-nosnippet>1431</a>        )
-<a href=#1432 id=1432 data-nosnippet>1432</a>    }
-<a href=#1433 id=1433 data-nosnippet>1433</a>
-<a href=#1434 id=1434 data-nosnippet>1434</a>    <span class="kw">pub fn </span>add_autocomplete_widget&lt;S&gt;(
-<a href=#1435 id=1435 data-nosnippet>1435</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1436 id=1436 data-nosnippet>1436</a>        rect: Rect,
-<a href=#1437 id=1437 data-nosnippet>1437</a>        suggestions: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str],
-<a href=#1438 id=1438 data-nosnippet>1438</a>        style: S,
-<a href=#1439 id=1439 data-nosnippet>1439</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
-<a href=#1440 id=1440 data-nosnippet>1440</a>    <span class="kw">where
-<a href=#1441 id=1441 data-nosnippet>1441</a>        </span>S: Into&lt;WidgetStyle&gt;,
-<a href=#1442 id=1442 data-nosnippet>1442</a>    {
-<a href=#1443 id=1443 data-nosnippet>1443</a>        <span class="kw">let </span>id = <span class="self">self</span>.add_widget(
-<a href=#1444 id=1444 data-nosnippet>1444</a>            rect,
-<a href=#1445 id=1445 data-nosnippet>1445</a>            WidgetKind::AutoComplete {
-<a href=#1446 id=1446 data-nosnippet>1446</a>                text_buf: [<span class="number">0</span>; <span class="number">32</span>],
-<a href=#1447 id=1447 data-nosnippet>1447</a>                text_len: <span class="number">0</span>,
-<a href=#1448 id=1448 data-nosnippet>1448</a>                suggestions,
-<a href=#1449 id=1449 data-nosnippet>1449</a>                filtered: [<span class="prelude-val">None</span>; <span class="number">8</span>],
-<a href=#1450 id=1450 data-nosnippet>1450</a>                filter_count: <span class="number">0</span>,
-<a href=#1451 id=1451 data-nosnippet>1451</a>                selected: <span class="prelude-val">None</span>,
-<a href=#1452 id=1452 data-nosnippet>1452</a>                expanded: <span class="bool-val">false</span>,
-<a href=#1453 id=1453 data-nosnippet>1453</a>            },
-<a href=#1454 id=1454 data-nosnippet>1454</a>            style,
-<a href=#1455 id=1455 data-nosnippet>1455</a>        )<span class="question-mark">?</span>;
-<a href=#1456 id=1456 data-nosnippet>1456</a>        <span class="self">self</span>.ensure_focus();
-<a href=#1457 id=1457 data-nosnippet>1457</a>        <span class="prelude-val">Ok</span>(id)
-<a href=#1458 id=1458 data-nosnippet>1458</a>    }
-<a href=#1459 id=1459 data-nosnippet>1459</a>
-<a href=#1460 id=1460 data-nosnippet>1460</a>    <span class="kw">pub fn </span>add_themed_autocomplete(
-<a href=#1461 id=1461 data-nosnippet>1461</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1462 id=1462 data-nosnippet>1462</a>        rect: Rect,
-<a href=#1463 id=1463 data-nosnippet>1463</a>        suggestions: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str],
-<a href=#1464 id=1464 data-nosnippet>1464</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
-<a href=#1465 id=1465 data-nosnippet>1465</a>        <span class="self">self</span>.add_autocomplete_widget(rect, suggestions, <span class="self">self</span>.theme.panel)
-<a href=#1466 id=1466 data-nosnippet>1466</a>    }
-<a href=#1467 id=1467 data-nosnippet>1467</a>}
+<a href=#1385 id=1385 data-nosnippet>1385</a>    <span class="kw">pub fn </span>add_dial&lt;S&gt;(
+<a href=#1386 id=1386 data-nosnippet>1386</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1387 id=1387 data-nosnippet>1387</a>        rect: Rect,
+<a href=#1388 id=1388 data-nosnippet>1388</a>        value: f32,
+<a href=#1389 id=1389 data-nosnippet>1389</a>        min: f32,
+<a href=#1390 id=1390 data-nosnippet>1390</a>        max: f32,
+<a href=#1391 id=1391 data-nosnippet>1391</a>        style: S,
+<a href=#1392 id=1392 data-nosnippet>1392</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
+<a href=#1393 id=1393 data-nosnippet>1393</a>    <span class="kw">where
+<a href=#1394 id=1394 data-nosnippet>1394</a>        </span>S: Into&lt;WidgetStyle&gt;,
+<a href=#1395 id=1395 data-nosnippet>1395</a>    {
+<a href=#1396 id=1396 data-nosnippet>1396</a>        <span class="kw">let </span>value = value.clamp(min, max);
+<a href=#1397 id=1397 data-nosnippet>1397</a>        <span class="kw">let </span>id = <span class="self">self</span>.add_widget(rect, WidgetKind::Dial { value, min, max }, style)<span class="question-mark">?</span>;
+<a href=#1398 id=1398 data-nosnippet>1398</a>        <span class="self">self</span>.ensure_focus();
+<a href=#1399 id=1399 data-nosnippet>1399</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#1400 id=1400 data-nosnippet>1400</a>    }
+<a href=#1401 id=1401 data-nosnippet>1401</a>
+<a href=#1402 id=1402 data-nosnippet>1402</a>    <span class="kw">pub fn </span>add_themed_dial(
+<a href=#1403 id=1403 data-nosnippet>1403</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1404 id=1404 data-nosnippet>1404</a>        rect: Rect,
+<a href=#1405 id=1405 data-nosnippet>1405</a>        value: f32,
+<a href=#1406 id=1406 data-nosnippet>1406</a>        min: f32,
+<a href=#1407 id=1407 data-nosnippet>1407</a>        max: f32,
+<a href=#1408 id=1408 data-nosnippet>1408</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
+<a href=#1409 id=1409 data-nosnippet>1409</a>        <span class="self">self</span>.add_dial(rect, value, min, max, <span class="self">self</span>.theme.button)
+<a href=#1410 id=1410 data-nosnippet>1410</a>    }
+<a href=#1411 id=1411 data-nosnippet>1411</a>
+<a href=#1412 id=1412 data-nosnippet>1412</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
+<a href=#1413 id=1413 data-nosnippet>1413</a>    </span><span class="kw">pub fn </span>add_rle_player&lt;S&gt;(
+<a href=#1414 id=1414 data-nosnippet>1414</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1415 id=1415 data-nosnippet>1415</a>        rect: <span class="kw">impl </span>Into&lt;Rect&gt;,
+<a href=#1416 id=1416 data-nosnippet>1416</a>        rle_data: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8],
+<a href=#1417 id=1417 data-nosnippet>1417</a>        frame_width: u16,
+<a href=#1418 id=1418 data-nosnippet>1418</a>        frame_height: u16,
+<a href=#1419 id=1419 data-nosnippet>1419</a>        total_frames: usize,
+<a href=#1420 id=1420 data-nosnippet>1420</a>        frame_duration_ms: u32,
+<a href=#1421 id=1421 data-nosnippet>1421</a>        style: S,
+<a href=#1422 id=1422 data-nosnippet>1422</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
+<a href=#1423 id=1423 data-nosnippet>1423</a>    <span class="kw">where
+<a href=#1424 id=1424 data-nosnippet>1424</a>        </span>S: Into&lt;WidgetStyle&gt;,
+<a href=#1425 id=1425 data-nosnippet>1425</a>    {
+<a href=#1426 id=1426 data-nosnippet>1426</a>        <span class="self">self</span>.add_widget(
+<a href=#1427 id=1427 data-nosnippet>1427</a>            rect,
+<a href=#1428 id=1428 data-nosnippet>1428</a>            WidgetKind::RlePlayer {
+<a href=#1429 id=1429 data-nosnippet>1429</a>                rle_data,
+<a href=#1430 id=1430 data-nosnippet>1430</a>                frame_width,
+<a href=#1431 id=1431 data-nosnippet>1431</a>                frame_height,
+<a href=#1432 id=1432 data-nosnippet>1432</a>                total_frames,
+<a href=#1433 id=1433 data-nosnippet>1433</a>                current_frame: <span class="number">0</span>,
+<a href=#1434 id=1434 data-nosnippet>1434</a>                elapsed_ms: <span class="number">0</span>,
+<a href=#1435 id=1435 data-nosnippet>1435</a>                frame_duration_ms,
+<a href=#1436 id=1436 data-nosnippet>1436</a>            },
+<a href=#1437 id=1437 data-nosnippet>1437</a>            style,
+<a href=#1438 id=1438 data-nosnippet>1438</a>        )
+<a href=#1439 id=1439 data-nosnippet>1439</a>    }
+<a href=#1440 id=1440 data-nosnippet>1440</a>
+<a href=#1441 id=1441 data-nosnippet>1441</a>    <span class="kw">pub fn </span>add_themed_rle_player(
+<a href=#1442 id=1442 data-nosnippet>1442</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1443 id=1443 data-nosnippet>1443</a>        rect: Rect,
+<a href=#1444 id=1444 data-nosnippet>1444</a>        rle_data: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8],
+<a href=#1445 id=1445 data-nosnippet>1445</a>        frame_width: u16,
+<a href=#1446 id=1446 data-nosnippet>1446</a>        frame_height: u16,
+<a href=#1447 id=1447 data-nosnippet>1447</a>        total_frames: usize,
+<a href=#1448 id=1448 data-nosnippet>1448</a>        frame_duration_ms: u32,
+<a href=#1449 id=1449 data-nosnippet>1449</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
+<a href=#1450 id=1450 data-nosnippet>1450</a>        <span class="self">self</span>.add_rle_player(
+<a href=#1451 id=1451 data-nosnippet>1451</a>            rect,
+<a href=#1452 id=1452 data-nosnippet>1452</a>            rle_data,
+<a href=#1453 id=1453 data-nosnippet>1453</a>            frame_width,
+<a href=#1454 id=1454 data-nosnippet>1454</a>            frame_height,
+<a href=#1455 id=1455 data-nosnippet>1455</a>            total_frames,
+<a href=#1456 id=1456 data-nosnippet>1456</a>            frame_duration_ms,
+<a href=#1457 id=1457 data-nosnippet>1457</a>            <span class="self">self</span>.theme.panel,
+<a href=#1458 id=1458 data-nosnippet>1458</a>        )
+<a href=#1459 id=1459 data-nosnippet>1459</a>    }
+<a href=#1460 id=1460 data-nosnippet>1460</a>
+<a href=#1461 id=1461 data-nosnippet>1461</a>    <span class="kw">pub fn </span>add_autocomplete_widget&lt;S&gt;(
+<a href=#1462 id=1462 data-nosnippet>1462</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1463 id=1463 data-nosnippet>1463</a>        rect: Rect,
+<a href=#1464 id=1464 data-nosnippet>1464</a>        suggestions: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str],
+<a href=#1465 id=1465 data-nosnippet>1465</a>        style: S,
+<a href=#1466 id=1466 data-nosnippet>1466</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt;
+<a href=#1467 id=1467 data-nosnippet>1467</a>    <span class="kw">where
+<a href=#1468 id=1468 data-nosnippet>1468</a>        </span>S: Into&lt;WidgetStyle&gt;,
+<a href=#1469 id=1469 data-nosnippet>1469</a>    {
+<a href=#1470 id=1470 data-nosnippet>1470</a>        <span class="kw">let </span>id = <span class="self">self</span>.add_widget(
+<a href=#1471 id=1471 data-nosnippet>1471</a>            rect,
+<a href=#1472 id=1472 data-nosnippet>1472</a>            WidgetKind::AutoComplete {
+<a href=#1473 id=1473 data-nosnippet>1473</a>                text_buf: [<span class="number">0</span>; <span class="number">32</span>],
+<a href=#1474 id=1474 data-nosnippet>1474</a>                text_len: <span class="number">0</span>,
+<a href=#1475 id=1475 data-nosnippet>1475</a>                suggestions,
+<a href=#1476 id=1476 data-nosnippet>1476</a>                filtered: [<span class="prelude-val">None</span>; <span class="number">8</span>],
+<a href=#1477 id=1477 data-nosnippet>1477</a>                filter_count: <span class="number">0</span>,
+<a href=#1478 id=1478 data-nosnippet>1478</a>                selected: <span class="prelude-val">None</span>,
+<a href=#1479 id=1479 data-nosnippet>1479</a>                expanded: <span class="bool-val">false</span>,
+<a href=#1480 id=1480 data-nosnippet>1480</a>            },
+<a href=#1481 id=1481 data-nosnippet>1481</a>            style,
+<a href=#1482 id=1482 data-nosnippet>1482</a>        )<span class="question-mark">?</span>;
+<a href=#1483 id=1483 data-nosnippet>1483</a>        <span class="self">self</span>.ensure_focus();
+<a href=#1484 id=1484 data-nosnippet>1484</a>        <span class="prelude-val">Ok</span>(id)
+<a href=#1485 id=1485 data-nosnippet>1485</a>    }
+<a href=#1486 id=1486 data-nosnippet>1486</a>
+<a href=#1487 id=1487 data-nosnippet>1487</a>    <span class="kw">pub fn </span>add_themed_autocomplete(
+<a href=#1488 id=1488 data-nosnippet>1488</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1489 id=1489 data-nosnippet>1489</a>        rect: Rect,
+<a href=#1490 id=1490 data-nosnippet>1490</a>        suggestions: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str],
+<a href=#1491 id=1491 data-nosnippet>1491</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;WidgetId, GuiError&gt; {
+<a href=#1492 id=1492 data-nosnippet>1492</a>        <span class="self">self</span>.add_autocomplete_widget(rect, suggestions, <span class="self">self</span>.theme.panel)
+<a href=#1493 id=1493 data-nosnippet>1493</a>    }
+<a href=#1494 id=1494 data-nosnippet>1494</a>}
 </code></pre></div></section></main></body></html>
