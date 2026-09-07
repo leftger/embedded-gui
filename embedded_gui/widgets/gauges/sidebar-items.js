@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ProgressBarWidget"]};
+window.SIDEBAR_ITEMS = {"struct":["ArcGaugeWidget","GaugeThreshold","ProgressBarWidget"]};
