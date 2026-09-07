@@ -539,3 +539,79 @@ pub fn setup_card_story<'a, const NODES: usize, const EVENTS: usize, const DIRTY
     }
     apply_carddeck_visibility(gui, cards, state.current())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn specs_tokens_and_card_deck_state() {
+        let peek = PeekRevealSpec::default();
+        assert_eq!(peek.dot_px, 3);
+        let glance = GlanceTileSpec::default();
+        assert_eq!(glance.focus_duration_ms, 120);
+
+        let tokens = MotionTokens::default();
+        assert_eq!(tokens.to_peek_spec(), peek);
+        assert_eq!(tokens.to_glance_spec(), glance);
+
+        let mut deck = CardDeckState::new(3);
+        assert_eq!(deck.current(), 0);
+        assert_eq!(deck.len(), 3);
+        assert!(!deck.is_empty());
+        assert_eq!(deck.move_next(), Some(CardDeckDirection::Forward));
+        assert_eq!(deck.move_next(), Some(CardDeckDirection::Forward));
+        assert_eq!(deck.move_next(), None);
+        assert_eq!(deck.move_prev(), Some(CardDeckDirection::Backward));
+        assert_eq!(deck.move_prev(), Some(CardDeckDirection::Backward));
+        assert_eq!(deck.move_prev(), None);
+
+        deck.set_len(0);
+        assert!(deck.is_empty());
+        deck.set_len(2);
+        assert_eq!(deck.current(), 0);
+    }
+
+    #[test]
+    fn card_story_transitions_and_presets() {
+        let cards = [WidgetId::new(1), WidgetId::new(2), WidgetId::new(3)];
+        let mut story = CardStory::new(&cards, TimelineMotionPreset::PeekIn).with_slide_px(24);
+        assert_eq!(story.current_widget(), Some(WidgetId::new(1)));
+        assert_eq!(story.state().current(), 0);
+
+        let next = story.next().unwrap();
+        assert_eq!(next.from, WidgetId::new(1));
+        assert_eq!(next.to, WidgetId::new(2));
+        assert_eq!(next.direction, CardDeckDirection::Forward);
+        assert_eq!(next.slide_px, 24);
+
+        let prev = story.prev().unwrap();
+        assert_eq!(prev.from, WidgetId::new(2));
+        assert_eq!(prev.to, WidgetId::new(1));
+
+        let jump = story.jump_to(2).unwrap();
+        assert_eq!(jump.to, WidgetId::new(3));
+        assert!(story.jump_to(2).is_none());
+        assert!(story.jump_to(0).is_some());
+        assert!(story.jump_to(99).is_some());
+
+        let mut empty = CardStory::new(&[], TimelineMotionPreset::PeekOut);
+        assert!(empty.next().is_none());
+        assert!(empty.prev().is_none());
+        assert!(empty.jump_to(0).is_none());
+
+        assert_eq!(TimelineMotionPreset::PeekIn.duration_ms(), 220);
+        assert_eq!(TimelineMotionPreset::PeekOut.duration_ms(), 220);
+        assert_eq!(TimelineMotionPreset::PinExpand.duration_ms(), 260);
+        assert_eq!(TimelineMotionPreset::ScrubSettle.duration_ms(), 140);
+
+        let _ = TimelineMotionPreset::PeekIn.easing();
+        let _ = TimelineMotionPreset::PeekOut.easing();
+        let _ = TimelineMotionPreset::PinExpand.easing();
+        let _ = TimelineMotionPreset::ScrubSettle.easing();
+
+        assert_eq!(CinematicPreset::PeekTimeline.name(), "peek-timeline");
+        assert_eq!(CinematicPreset::LauncherGlance.name(), "launcher-glance");
+        assert_eq!(CinematicPreset::CardStory.name(), "card-story");
+    }
+}

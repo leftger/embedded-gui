@@ -997,4 +997,135 @@ mod tests {
         assert_eq!(tween.value(), 100.0);
         assert!(tween.is_done());
     }
+
+    fn noop_curve(t: f32) -> f32 {
+        t
+    }
+
+    fn noop_interpolator(a: f32, b: f32, t: f32) -> f32 {
+        a + (b - a) * t
+    }
+
+    #[test]
+    fn animation_custom_builders_and_repeat_flow() {
+        let mut anim = Animation::new(0.0, 10.0, 100, Easing::Linear)
+            .with_delay(50)
+            .with_repeat_mode(RepeatMode::Loop)
+            .with_repeat_count(Some(3))
+            .with_custom_curve(noop_curve)
+            .with_custom_interpolator(noop_interpolator);
+        anim.set_reversed(true);
+        anim.reset();
+        anim.clear_custom_curve();
+        anim.clear_custom_interpolator();
+        anim.set_elapsed(25);
+        assert_eq!(anim.value(), 10.0);
+        anim.set_elapsed(400);
+        assert!(anim.is_done());
+        anim.reset();
+        assert!(!anim.is_done());
+        anim.notify_stopped(true);
+        assert_eq!(Animation::duration_from_speed(10.0, 100.0), 100);
+        assert_eq!(Animation::duration_from_speed(-1.0, 100.0), 0);
+        let single = Animation::new(0.0, 1.0, 100, Easing::Linear);
+        assert_eq!(single.total_duration_ms(true, true), Some(100));
+        let looping = Animation::new(0.0, 1.0, 100, Easing::Linear)
+            .with_repeat_mode(RepeatMode::Loop)
+            .with_repeat_count(Some(4));
+        assert_eq!(looping.total_duration_ms(false, true), Some(400));
+        assert_eq!(looping.total_duration_ms(false, false), Some(100));
+    }
+
+    #[test]
+    fn animation_manager_lifecycle_and_callbacks() {
+        static STARTED: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+        static REPEATS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+        static DONE: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+        fn on_start(_: AnimationId) {
+            STARTED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_repeat(_: AnimationId, _: u16) {
+            REPEATS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_complete(_: AnimationId, _: bool) {
+            DONE.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+
+        let mut manager = AnimationManager::<2>::new();
+        manager.set_callbacks(AnimationManagerCallbacks {
+            on_start: Some(on_start),
+            on_repeat: Some(on_repeat),
+            on_complete: Some(on_complete),
+        });
+        let id = manager
+            .start(Animation::new(0.0, 1.0, 100, Easing::Linear))
+            .unwrap();
+        let _ = manager
+            .start(Animation::new(0.0, 1.0, 100, Easing::Linear))
+            .unwrap();
+        assert_eq!(manager.active_count(), 2);
+        assert!(manager.value(id).is_some());
+        assert!(manager.animation(id).is_some());
+        assert!(manager.animation_mut(id).is_some());
+
+        assert!(matches!(
+            manager.start(Animation::new(0.0, 1.0, 100, Easing::Linear)),
+            Err(AnimationError::Full)
+        ));
+
+        manager.set_paused(true);
+        manager.tick(10);
+        assert!(manager.is_paused());
+        manager.set_paused(false);
+
+        assert!(manager.seek(id, 50));
+        assert!(!manager.seek(AnimationId::new(999), 50));
+        assert!(manager.seek_stepped(id, 120, 30));
+        assert!(!manager.seek_stepped(AnimationId::new(999), 1, 30));
+        assert!(manager.replay_stepped(id, 140, 40, |_| {}));
+        assert!(!manager.replay_stepped(AnimationId::new(999), 1, 1, |_| {}));
+
+        manager.tick(1000);
+        assert_eq!(manager.active_count(), 0);
+        assert_eq!(STARTED.load(core::sync::atomic::Ordering::Relaxed), 2);
+        assert_eq!(DONE.load(core::sync::atomic::Ordering::Relaxed), 2);
+
+        let id2 = manager
+            .start(Animation::new(0.0, 1.0, 100, Easing::Linear))
+            .unwrap();
+        assert!(manager.stop(id2));
+        assert!(!manager.stop(id2));
+        assert_eq!(DONE.load(core::sync::atomic::Ordering::Relaxed), 3);
+
+        manager.set_next_id_for_test(7);
+        let id3 = manager
+            .start(Animation::new(0.0, 1.0, 100, Easing::Linear))
+            .unwrap();
+        assert_eq!(id3.raw(), 7);
+    }
+
+    #[test]
+    fn spring_inertia_and_path_animators() {
+        let mut spring = SpringAnimator::new(0.0, 10.0);
+        let _ = spring.tick(16);
+        assert!(spring.value > 0.0);
+
+        let mut inertia = InertiaAnimator::new(0.0, 100.0);
+        let _ = inertia.tick(16);
+        assert!(inertia.value > 0.0);
+
+        let mut path = PathAnimator::<3>::new(100, Easing::Linear);
+        assert!(path.value().is_none());
+        path.push_point(PathPoint::new(0.0, 0.0)).unwrap();
+        path.push_point(PathPoint::new(10.0, 10.0)).unwrap();
+        path.push_point(PathPoint::new(20.0, 0.0)).unwrap();
+        assert!(path.push_point(PathPoint::new(30.0, 0.0)).is_err());
+        assert!(path.value().is_some());
+        assert!(!path.tick(50));
+        assert!(path.tick(50));
+        assert!(path.value().is_some());
+        path.reset();
+        assert_eq!(path.timer.elapsed_ms, 0);
+    }
 }
