@@ -290,6 +290,38 @@ pub fn dispatch_draw_tasks<D: DrawTarget<Color = Rgb565>, const CAP: usize>(
     Ok(())
 }
 
+/// A hardware-accelerated draw unit dispatching solid fills directly via software or silicon DMA.
+pub struct HardwareAcceleratorDrawUnit<A: crate::render::Hardware2DAccelerator> {
+    pub accelerator: A,
+}
+
+impl<A: crate::render::Hardware2DAccelerator> HardwareAcceleratorDrawUnit<A> {
+    pub const fn new(accelerator: A) -> Self {
+        Self { accelerator }
+    }
+}
+
+impl<A: crate::render::Hardware2DAccelerator, D: DrawTarget<Color = Rgb565>> DrawUnit<D>
+    for HardwareAcceleratorDrawUnit<A>
+{
+    fn can_handle(&self, task: &DrawTask) -> bool {
+        match task {
+            DrawTask::Fill {
+                radius, opacity, ..
+            } => *radius == 0 && *opacity == 255,
+            _ => false,
+        }
+    }
+
+    fn execute(&mut self, task: &DrawTask, target: &mut D) -> Result<(), D::Error> {
+        if let DrawTask::Fill { rect, color, .. } = task {
+            let mut ctx = RenderCtx::new(target, *rect);
+            ctx.fill_rect(*rect, *color)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

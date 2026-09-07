@@ -631,6 +631,86 @@ impl From<StateStyle> for WidgetStyle {
 impl crate::geometry::FluentBuilder for Style {}
 impl crate::geometry::FluentBuilder for WidgetStyle {}
 
+/// Centralized Design Token System (inspired by Bevy Feathers).
+///
+/// Encapsulates semantic design tokens (spacing scales, radii scales, typography,
+/// and semantic color roles) so entire UI themes can be generated consistently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThemeTokens {
+    pub surface: Rgb565,
+    pub surface_variant: Rgb565,
+    pub on_surface: Rgb565,
+    pub primary: Rgb565,
+    pub on_primary: Rgb565,
+    pub accent: Rgb565,
+    pub outline: Rgb565,
+    pub focus_ring: Rgb565,
+
+    pub radius_sm: u8,
+    pub radius_md: u8,
+    pub radius_lg: u8,
+
+    pub space_xs: u8,
+    pub space_sm: u8,
+    pub space_md: u8,
+    pub space_lg: u8,
+
+    pub font_body: FontId,
+    pub font_title: FontId,
+}
+
+impl ThemeTokens {
+    pub const fn dark() -> Self {
+        Self {
+            surface: Rgb565::new(3, 6, 8),
+            surface_variant: Rgb565::new(6, 12, 16),
+            on_surface: Rgb565::WHITE,
+            primary: Rgb565::new(0, 48, 63),
+            on_primary: Rgb565::WHITE,
+            accent: Rgb565::new(31, 48, 0),
+            outline: Rgb565::new(10, 20, 26),
+            focus_ring: Rgb565::new(31, 63, 0),
+
+            radius_sm: 2,
+            radius_md: 4,
+            radius_lg: 8,
+
+            space_xs: 2,
+            space_sm: 4,
+            space_md: 8,
+            space_lg: 16,
+
+            font_body: FontId::Scaled6x10,
+            font_title: FontId::Vector(2),
+        }
+    }
+
+    pub const fn light() -> Self {
+        Self {
+            surface: Rgb565::new(28, 58, 28),
+            surface_variant: Rgb565::new(24, 50, 24),
+            on_surface: Rgb565::BLACK,
+            primary: Rgb565::new(0, 32, 28),
+            on_primary: Rgb565::WHITE,
+            accent: Rgb565::new(28, 20, 0),
+            outline: Rgb565::new(18, 36, 18),
+            focus_ring: Rgb565::new(0, 48, 31),
+
+            radius_sm: 2,
+            radius_md: 4,
+            radius_lg: 8,
+
+            space_xs: 2,
+            space_sm: 4,
+            space_md: 8,
+            space_lg: 16,
+
+            font_body: FontId::Scaled6x10,
+            font_title: FontId::Vector(2),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {
     pub panel: Style,
@@ -651,6 +731,88 @@ pub struct Theme {
 }
 
 impl Theme {
+    /// Construct a complete widget theme from centralized design tokens.
+    pub fn from_tokens(tokens: &ThemeTokens) -> Self {
+        let panel_style = Style {
+            background: Some(tokens.surface),
+            foreground: tokens.on_surface,
+            text: tokens.on_surface,
+            accent: tokens.accent,
+            font: tokens.font_body,
+            corner_radius: tokens.radius_md,
+            border: Border::one(tokens.outline),
+            padding: EdgeInsets::all(tokens.space_sm as i16),
+            opacity: 255,
+            gradient: None,
+            shadow: None,
+        };
+
+        let button_style = Style {
+            background: Some(tokens.primary),
+            foreground: tokens.on_primary,
+            text: tokens.on_primary,
+            accent: tokens.accent,
+            font: tokens.font_body,
+            corner_radius: tokens.radius_sm,
+            border: Border::none(),
+            padding: EdgeInsets::symmetric(tokens.space_xs as i16, tokens.space_sm as i16),
+            opacity: 255,
+            gradient: None,
+            shadow: Some(Shadow::soft()),
+        };
+
+        let label_style = Style {
+            background: None,
+            foreground: tokens.on_surface,
+            text: tokens.on_surface,
+            accent: tokens.accent,
+            font: tokens.font_body,
+            corner_radius: 0,
+            border: Border::none(),
+            padding: EdgeInsets::zero(),
+            opacity: 255,
+            gradient: None,
+            shadow: None,
+        };
+
+        Self {
+            panel: panel_style,
+            label: label_style,
+            button: button_style,
+            progress: Style {
+                background: Some(tokens.surface_variant),
+                foreground: tokens.accent,
+                accent: tokens.accent,
+                corner_radius: tokens.radius_sm,
+                border: Border::one(tokens.outline),
+                ..panel_style
+            },
+            toggle: button_style,
+            checkbox: button_style,
+            slider: button_style,
+            value_label: panel_style,
+            icon_button: button_style,
+            list: button_style,
+            dialog: Style {
+                background: Some(tokens.surface_variant),
+                corner_radius: tokens.radius_lg,
+                border: Border::one(tokens.outline),
+                padding: EdgeInsets::all(tokens.space_md as i16),
+                ..panel_style
+            },
+            toast: Style {
+                background: Some(tokens.surface_variant),
+                corner_radius: tokens.radius_sm,
+                border: Border::one(tokens.accent),
+                padding: EdgeInsets::all(tokens.space_sm as i16),
+                ..panel_style
+            },
+            tabs: button_style,
+            meter: panel_style,
+            focus_ring: tokens.focus_ring,
+        }
+    }
+
     pub const fn dark() -> Self {
         Self {
             panel: Style::panel(),
@@ -1482,5 +1644,20 @@ mod tests {
             multipart.resolve(WidgetPart::Indicator, VisualState::Pressed),
             indicator_pressed_style
         );
+    }
+
+    #[test]
+    fn test_theme_tokens() {
+        let tokens = ThemeTokens::dark();
+        let theme = Theme::from_tokens(&tokens);
+
+        assert_eq!(theme.panel.background, Some(tokens.surface));
+        assert_eq!(theme.panel.corner_radius, tokens.radius_md);
+        assert_eq!(theme.button.background, Some(tokens.primary));
+        assert_eq!(theme.focus_ring, tokens.focus_ring);
+
+        let light_tokens = ThemeTokens::light();
+        let light_theme = Theme::from_tokens(&light_tokens);
+        assert_eq!(light_theme.panel.background, Some(light_tokens.surface));
     }
 }

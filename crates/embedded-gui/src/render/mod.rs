@@ -2,6 +2,7 @@ pub mod accelerator;
 pub mod band;
 pub mod compositor;
 pub mod line_buffer;
+pub mod span;
 pub mod stroke;
 pub mod task;
 pub mod text_style;
@@ -14,11 +15,15 @@ pub use compositor::{
     WindowedDrawTarget, lerp_rgb565,
 };
 pub use line_buffer::{LineBufferRenderer, ScanlineTarget};
+pub use span::{FixedSpanRasterizer, ScanlineSpan};
 pub use stroke::{
     AntiAliasMode, PathVerb, RenderQuality, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle,
     Transform2D, VectorPath,
 };
-pub use task::{DrawTask, DrawTaskQueue, DrawUnit, SoftwareDrawUnit, dispatch_draw_tasks};
+pub use task::{
+    DrawTask, DrawTaskQueue, DrawUnit, HardwareAcceleratorDrawUnit, SoftwareDrawUnit,
+    dispatch_draw_tasks,
+};
 pub use text_style::{
     CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,
     TextOverflowPolicy, TextStyle, TextWrap, VerticalAlign,

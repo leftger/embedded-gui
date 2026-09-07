@@ -308,3 +308,183 @@ impl WidgetDispatchPolicy {
         self.kinds.contains(kind.filter()) && self.phases.contains(phase)
     }
 }
+
+/// PebbleOS-inspired tactile button click recognizer.
+///
+/// Distinguishes single clicks, multi-clicks (double/triple), long-press threshold
+/// triggers, and hold-repeat stream events with deterministic timing windows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClickEvent {
+    SingleClick,
+    MultiClick(u8),
+    LongClickStart,
+    LongClickEnd,
+    HoldRepeat(u16),
+}
+
+#[derive(Clone, Debug)]
+pub struct ClickRecognizer {
+    pub multi_click_timeout_ms: u32,
+    pub long_press_threshold_ms: u32,
+    pub repeat_interval_ms: u32,
+
+    is_down: bool,
+    down_duration_ms: u32,
+    idle_time_ms: u32,
+    click_count: u8,
+    long_press_fired: bool,
+    repeat_counter: u16,
+    last_repeat_ms: u32,
+}
+
+impl Default for ClickRecognizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClickRecognizer {
+    pub const fn new() -> Self {
+        Self {
+            multi_click_timeout_ms: 300,
+            long_press_threshold_ms: 500,
+            repeat_interval_ms: 100,
+
+            is_down: false,
+            down_duration_ms: 0,
+            idle_time_ms: 0,
+            click_count: 0,
+            long_press_fired: false,
+            repeat_counter: 0,
+            last_repeat_ms: 0,
+        }
+    }
+
+    /// Notify that the button transitioned to the pressed state.
+    pub fn on_press(&mut self) {
+        self.is_down = true;
+        self.down_duration_ms = 0;
+        self.long_press_fired = false;
+        self.repeat_counter = 0;
+        self.last_repeat_ms = 0;
+    }
+
+    /// Notify that the button transitioned to the released state.
+    ///
+    /// Returns a `ClickEvent` immediately if a long press ended.
+    pub fn on_release(&mut self) -> Option<ClickEvent> {
+        if !self.is_down {
+            return None;
+        }
+        self.is_down = false;
+
+        if self.long_press_fired {
+            self.long_press_fired = false;
+            return Some(ClickEvent::LongClickEnd);
+        }
+
+        // Short press recorded
+        self.click_count = self.click_count.saturating_add(1);
+        self.idle_time_ms = 0;
+        None
+    }
+
+    /// Advance time by `dt_ms` milliseconds and evaluate gestures.
+    pub fn update(&mut self, dt_ms: u32) -> Option<ClickEvent> {
+        if self.is_down {
+            self.down_duration_ms += dt_ms;
+
+            if !self.long_press_fired && self.down_duration_ms >= self.long_press_threshold_ms {
+                self.long_press_fired = true;
+                self.click_count = 0;
+                self.last_repeat_ms = self.down_duration_ms;
+                return Some(ClickEvent::LongClickStart);
+            }
+
+            if self.long_press_fired && self.repeat_interval_ms > 0 {
+                let since_last = self.down_duration_ms.saturating_sub(self.last_repeat_ms);
+                if since_last >= self.repeat_interval_ms {
+                    self.last_repeat_ms = self.down_duration_ms;
+                    self.repeat_counter = self.repeat_counter.saturating_add(1);
+                    return Some(ClickEvent::HoldRepeat(self.repeat_counter));
+                }
+            }
+        } else if self.click_count > 0 {
+            self.idle_time_ms += dt_ms;
+            if self.idle_time_ms >= self.multi_click_timeout_ms {
+                let count = self.click_count;
+                self.click_count = 0;
+                self.idle_time_ms = 0;
+                return if count == 1 {
+                    Some(ClickEvent::SingleClick)
+                } else {
+                    Some(ClickEvent::MultiClick(count))
+                };
+            }
+        }
+
+        None
+    }
+
+    /// Reset recognizer state.
+    pub fn reset(&mut self) {
+        self.is_down = false;
+        self.down_duration_ms = 0;
+        self.idle_time_ms = 0;
+        self.click_count = 0;
+        self.long_press_fired = false;
+        self.repeat_counter = 0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_click_recognizer_single_click() {
+        let mut recognizer = ClickRecognizer::new();
+        recognizer.on_press();
+        recognizer.update(50);
+        assert_eq!(recognizer.on_release(), None);
+
+        // Advance past multi-click timeout (300ms)
+        let evt = recognizer.update(305);
+        assert_eq!(evt, Some(ClickEvent::SingleClick));
+    }
+
+    #[test]
+    fn test_click_recognizer_double_click() {
+        let mut recognizer = ClickRecognizer::new();
+        recognizer.on_press();
+        recognizer.update(50);
+        recognizer.on_release();
+
+        recognizer.update(50); // Pause between clicks
+        recognizer.on_press();
+        recognizer.update(50);
+        recognizer.on_release();
+
+        // Expire multi-click window
+        let evt = recognizer.update(305);
+        assert_eq!(evt, Some(ClickEvent::MultiClick(2)));
+    }
+
+    #[test]
+    fn test_click_recognizer_long_press_and_repeat() {
+        let mut recognizer = ClickRecognizer::new();
+        recognizer.on_press();
+
+        // Wait past 500ms
+        let evt1 = recognizer.update(505);
+        assert_eq!(evt1, Some(ClickEvent::LongClickStart));
+
+        // Hold for 100ms more -> first repeat
+        let evt2 = recognizer.update(105);
+        assert_eq!(evt2, Some(ClickEvent::HoldRepeat(1)));
+
+        // Release
+        let evt3 = recognizer.on_release();
+        assert_eq!(evt3, Some(ClickEvent::LongClickEnd));
+    }
+}

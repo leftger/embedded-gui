@@ -3,9 +3,10 @@
 use core::fmt::Debug;
 use embedded_3dgfx::{
     camera::Ray,
-    command_buffer::CommandBuffer,
+    command_buffer::{CommandBuffer, RenderCommand},
     engine::K3dengine,
     mesh::{K3dMesh, RenderMode},
+    primitive::DrawPrimitive,
     renderer::FrameCtx,
 };
 use embedded_graphics_core::{
@@ -17,7 +18,9 @@ use embedded_graphics_core::{
 };
 use embedded_graphics_framebuf::FrameBuf;
 use embedded_graphics_framebuf::backends::FrameBufferBackend;
-use nalgebra::Point3;
+#[allow(unused_imports)]
+use nalgebra::ComplexField;
+use nalgebra::{Point2, Point3, Vector3};
 
 use crate::{
     context::GuiContext,
@@ -37,8 +40,8 @@ pub struct Gui3dPipeline<
     pub engine: K3dengine,
     /// 2D GUI context instance.
     pub gui: GuiContext<'a, MAX_NODES, MAX_HANDLERS, MAX_ACTIVE>,
-    zbuffer: &'a mut [u32],
-    commands: CommandBuffer<64>,
+    pub zbuffer: &'a mut [u32],
+    pub commands: CommandBuffer<256>,
 }
 
 impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: usize>
@@ -54,6 +57,49 @@ impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: us
         }
     }
 
+    /// Clear all pending render and gizmo commands.
+    pub fn clear_commands(&mut self) {
+        self.commands.clear();
+    }
+
+    /// Record 3D meshes into the pipeline command buffer.
+    pub fn record_scene<'m>(&mut self, meshes: impl IntoIterator<Item = &'m K3dMesh<'m>>) {
+        let mut meshes_iter = meshes.into_iter().peekable();
+        if meshes_iter.peek().is_some() {
+            let existing: heapless::Vec<RenderCommand, 64> =
+                self.commands.iter().cloned().collect();
+            self.engine
+                .record(meshes_iter, &mut self.commands, None)
+                .ok();
+            for cmd in existing {
+                let _ = self.commands.push(cmd);
+            }
+        }
+    }
+
+    /// Render 3D meshes and queued gizmos to `target` using Z-buffering.
+    pub fn render_scene<'m, D>(
+        &mut self,
+        target: &mut D,
+        meshes: impl IntoIterator<Item = &'m K3dMesh<'m>>,
+    ) where
+        D: DrawTarget<Color = Rgb565> + OriginDimensions,
+        D::Error: Debug,
+    {
+        self.record_scene(meshes);
+
+        let vp = self.gui.viewport();
+        let mut frame = FrameCtx {
+            zbuffer: self.zbuffer,
+            width: vp.w as usize,
+            height: vp.h as usize,
+        };
+        self.engine
+            .execute(target, &mut frame, &self.commands, None)
+            .ok();
+        self.commands.clear();
+    }
+
     /// Render a frame containing 3D meshes followed by dirty 2D GUI widgets onto `target`.
     pub fn render_frame<'m, D>(
         &mut self,
@@ -64,8 +110,7 @@ impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: us
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        self.commands.clear();
-        self.engine.record(meshes, &mut self.commands, None).ok();
+        self.record_scene(meshes);
 
         let vp = self.gui.viewport();
         let mut frame = FrameCtx {
@@ -79,8 +124,169 @@ impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: us
 
         self.gui.render(target)?;
         self.gui.clear_dirty();
+        self.commands.clear();
 
         Ok(())
+    }
+
+    /// Check whether a 3D world position is occluded by geometry in the depth buffer.
+    ///
+    /// Returns `true` if an existing rendered mesh is closer to the camera than `world_pos`.
+    /// Returns `false` if `world_pos` is visible / in front of the geometry.
+    pub fn is_world_point_occluded(&self, world_pos: Point3<f32>) -> bool {
+        let arr = [world_pos.x, world_pos.y, world_pos.z];
+        if let Some(screen_pt) = self
+            .engine
+            .transform_point(&arr, self.engine.camera.vp_matrix)
+        {
+            let width = self.gui.viewport().w as usize;
+            let height = self.gui.viewport().h as usize;
+            let x = screen_pt.x;
+            let y = screen_pt.y;
+            if x >= 0 && (x as usize) < width && y >= 0 && (y as usize) < height {
+                let idx = y as usize * width + x as usize;
+                if idx < self.zbuffer.len() {
+                    let depth = embedded_3dgfx::to_zdepth((screen_pt.z as u32) << 16);
+                    return depth > self.zbuffer[idx].saturating_add(embedded_3dgfx::DEPTH_EPSILON);
+                }
+            }
+        }
+        true
+    }
+
+    /// Render a solid color billboard quad at `billboard.position` with depth testing against the Z-buffer.
+    pub fn render_billboard_quad<D>(
+        &mut self,
+        target: &mut D,
+        billboard: &Billboard3d,
+        color: Rgb565,
+    ) -> Result<bool, D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        let arr = [
+            billboard.position.x,
+            billboard.position.y,
+            billboard.position.z,
+        ];
+        let Some(pt) = self
+            .engine
+            .transform_point(&arr, self.engine.camera.vp_matrix)
+        else {
+            return Ok(false);
+        };
+
+        let vp = self.gui.viewport();
+        let width = vp.w as usize;
+        let height = vp.h as usize;
+        let z_depth = embedded_3dgfx::to_zdepth((pt.z as u32) << 16);
+
+        let half_w = (billboard.size.width / 2) as i32;
+        let half_h = (billboard.size.height / 2) as i32;
+        let origin_x = pt.x + billboard.offset.x - half_w;
+        let origin_y = pt.y + billboard.offset.y - half_h;
+
+        let x0 = origin_x.max(0);
+        let y0 = origin_y.max(0);
+        let x1 = (origin_x + billboard.size.width as i32).min(width as i32);
+        let y1 = (origin_y + billboard.size.height as i32).min(height as i32);
+
+        if x0 >= x1 || y0 >= y1 {
+            return Ok(false);
+        }
+
+        let mut drawn_any = false;
+        for y in y0..y1 {
+            let row_idx = y as usize * width;
+            for x in x0..x1 {
+                let idx = row_idx + x as usize;
+                if idx < self.zbuffer.len()
+                    && z_depth <= self.zbuffer[idx].saturating_add(embedded_3dgfx::DEPTH_EPSILON)
+                {
+                    if billboard.depth_write {
+                        self.zbuffer[idx] = z_depth;
+                    }
+                    target.draw_iter(core::iter::once(Pixel(Point::new(x, y), color)))?;
+                    drawn_any = true;
+                }
+            }
+        }
+
+        Ok(drawn_any)
+    }
+
+    /// Render a 2D pixel buffer (e.g. from an off-screen GUI widget or icon) as a 3D world-space billboard
+    /// with per-pixel depth testing against the Z-buffer.
+    pub fn render_billboard_buffer<D>(
+        &mut self,
+        target: &mut D,
+        billboard: &Billboard3d,
+        buffer: &[Rgb565],
+        transparent_color: Option<Rgb565>,
+    ) -> Result<bool, D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        let arr = [
+            billboard.position.x,
+            billboard.position.y,
+            billboard.position.z,
+        ];
+        let Some(pt) = self
+            .engine
+            .transform_point(&arr, self.engine.camera.vp_matrix)
+        else {
+            return Ok(false);
+        };
+
+        let vp = self.gui.viewport();
+        let width = vp.w as usize;
+        let height = vp.h as usize;
+        let z_depth = embedded_3dgfx::to_zdepth((pt.z as u32) << 16);
+
+        let buf_w = billboard.size.width as usize;
+        let buf_h = billboard.size.height as usize;
+        if buffer.len() < buf_w * buf_h {
+            return Ok(false);
+        }
+
+        let half_w = (billboard.size.width / 2) as i32;
+        let half_h = (billboard.size.height / 2) as i32;
+        let origin_x = pt.x + billboard.offset.x - half_w;
+        let origin_y = pt.y + billboard.offset.y - half_h;
+
+        let mut drawn_any = false;
+        for by in 0..buf_h {
+            let y = origin_y + by as i32;
+            if y < 0 || y as usize >= height {
+                continue;
+            }
+            let row_idx = y as usize * width;
+            for bx in 0..buf_w {
+                let x = origin_x + bx as i32;
+                if x < 0 || x as usize >= width {
+                    continue;
+                }
+                let color = buffer[by * buf_w + bx];
+                if let Some(trans) = transparent_color {
+                    if color == trans {
+                        continue;
+                    }
+                }
+                let idx = row_idx + x as usize;
+                if idx < self.zbuffer.len()
+                    && z_depth <= self.zbuffer[idx].saturating_add(embedded_3dgfx::DEPTH_EPSILON)
+                {
+                    if billboard.depth_write {
+                        self.zbuffer[idx] = z_depth;
+                    }
+                    target.draw_iter(core::iter::once(Pixel(Point::new(x, y), color)))?;
+                    drawn_any = true;
+                }
+            }
+        }
+
+        Ok(drawn_any)
     }
 }
 
@@ -397,5 +603,322 @@ impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: us
         let mut fb = FrameBuf::new(SliceBackend(buffer), width, height);
         self.render(&mut fb).map_err(|_| ())?;
         Ok(())
+    }
+}
+
+/// Configuration for a 3D world-space billboard with depth testing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Billboard3d {
+    /// World position of the billboard center.
+    pub position: Point3<f32>,
+    /// Display size on screen in pixels (width, height).
+    pub size: Size,
+    /// Pixel offset from the projected center (e.g. to anchor at bottom instead of center).
+    pub offset: Point,
+    /// Whether to write the billboard's depth to the Z-buffer.
+    pub depth_write: bool,
+}
+
+impl Billboard3d {
+    /// Create a new billboard at `position` with the given screen `size`.
+    pub fn new(position: Point3<f32>, size: Size) -> Self {
+        Self {
+            position,
+            size,
+            offset: Point::zero(),
+            depth_write: true,
+        }
+    }
+
+    /// Set a 2D pixel offset relative to the projected screen position.
+    pub fn with_offset(mut self, offset: Point) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    /// Enable or disable Z-buffer depth writing for the billboard.
+    pub fn with_depth_write(mut self, depth_write: bool) -> Self {
+        self.depth_write = depth_write;
+        self
+    }
+}
+
+/// Trait for immediate-mode 3D debug gizmo drawing into a 3D pipeline.
+pub trait Gui3dGizmos {
+    /// Draw a line segment between two 3D world coordinates.
+    fn draw_line(&mut self, start: Point3<f32>, end: Point3<f32>, color: Rgb565) -> bool;
+
+    /// Draw a 3D ray starting at `origin` along `direction` for `length` units.
+    fn draw_ray(
+        &mut self,
+        origin: Point3<f32>,
+        direction: Vector3<f32>,
+        length: f32,
+        color: Rgb565,
+    ) -> bool;
+
+    /// Draw an axis-aligned wireframe bounding box between `min` and `max`.
+    fn draw_wireframe_box(&mut self, min: Point3<f32>, max: Point3<f32>, color: Rgb565) -> bool;
+
+    /// Draw an axis-aligned wireframe cube centered at `center` with side length `size`.
+    fn draw_wireframe_cube(&mut self, center: Point3<f32>, size: f32, color: Rgb565) -> bool;
+
+    /// Draw RGB 3D coordinate axes (+X red, +Y green, +Z blue) starting from `origin`.
+    fn draw_axes(&mut self, origin: Point3<f32>, length: f32) -> bool;
+
+    /// Draw a ground grid on the XZ plane centered at `center`.
+    fn draw_grid(
+        &mut self,
+        center: Point3<f32>,
+        cell_size: f32,
+        half_count: i32,
+        grid_color: Rgb565,
+        axis_color: Option<Rgb565>,
+    ) -> usize;
+}
+
+impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: usize> Gui3dGizmos
+    for Gui3dPipeline<'a, MAX_NODES, MAX_HANDLERS, MAX_ACTIVE>
+{
+    fn draw_line(&mut self, start: Point3<f32>, end: Point3<f32>, color: Rgb565) -> bool {
+        let p0 = self
+            .engine
+            .transform_point(&[start.x, start.y, start.z], self.engine.camera.vp_matrix);
+        let p1 = self
+            .engine
+            .transform_point(&[end.x, end.y, end.z], self.engine.camera.vp_matrix);
+        if let (Some(s0), Some(s1)) = (p0, p1) {
+            let prim =
+                DrawPrimitive::Line([Point2::new(s0.x, s0.y), Point2::new(s1.x, s1.y)], color);
+            self.commands.push(RenderCommand::Draw(prim)).is_ok()
+        } else {
+            false
+        }
+    }
+
+    fn draw_ray(
+        &mut self,
+        origin: Point3<f32>,
+        direction: Vector3<f32>,
+        length: f32,
+        color: Rgb565,
+    ) -> bool {
+        let dot = direction.dot(&direction);
+        let dir = if dot > 1e-6 {
+            let len = ComplexField::sqrt(dot);
+            direction / len
+        } else {
+            direction
+        };
+        let end = origin + dir * length;
+        self.draw_line(origin, end, color)
+    }
+
+    fn draw_wireframe_box(&mut self, min: Point3<f32>, max: Point3<f32>, color: Rgb565) -> bool {
+        let corners = [
+            Point3::new(min.x, min.y, min.z),
+            Point3::new(max.x, min.y, min.z),
+            Point3::new(max.x, max.y, min.z),
+            Point3::new(min.x, max.y, min.z),
+            Point3::new(min.x, min.y, max.z),
+            Point3::new(max.x, min.y, max.z),
+            Point3::new(max.x, max.y, max.z),
+            Point3::new(min.x, max.y, max.z),
+        ];
+        let edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),
+        ];
+        let mut any_drawn = false;
+        for &(a, b) in &edges {
+            if self.draw_line(corners[a], corners[b], color) {
+                any_drawn = true;
+            }
+        }
+        any_drawn
+    }
+
+    fn draw_wireframe_cube(&mut self, center: Point3<f32>, size: f32, color: Rgb565) -> bool {
+        let half = size * 0.5;
+        let min = Point3::new(center.x - half, center.y - half, center.z - half);
+        let max = Point3::new(center.x + half, center.y + half, center.z + half);
+        self.draw_wireframe_box(min, max, color)
+    }
+
+    fn draw_axes(&mut self, origin: Point3<f32>, length: f32) -> bool {
+        let red = Rgb565::new(31, 0, 0);
+        let green = Rgb565::new(0, 63, 0);
+        let blue = Rgb565::new(0, 0, 31);
+
+        let px = Point3::new(origin.x + length, origin.y, origin.z);
+        let py = Point3::new(origin.x, origin.y + length, origin.z);
+        let pz = Point3::new(origin.x, origin.y, origin.z + length);
+
+        let d1 = self.draw_line(origin, px, red);
+        let d2 = self.draw_line(origin, py, green);
+        let d3 = self.draw_line(origin, pz, blue);
+        d1 || d2 || d3
+    }
+
+    fn draw_grid(
+        &mut self,
+        center: Point3<f32>,
+        cell_size: f32,
+        half_count: i32,
+        grid_color: Rgb565,
+        axis_color: Option<Rgb565>,
+    ) -> usize {
+        let extent = half_count as f32 * cell_size;
+        let min_x = center.x - extent;
+        let max_x = center.x + extent;
+        let min_z = center.z - extent;
+        let max_z = center.z + extent;
+        let y = center.y;
+        let mut count = 0;
+
+        for i in -half_count..=half_count {
+            let x = center.x + i as f32 * cell_size;
+            let color = if i == 0 {
+                axis_color.unwrap_or(grid_color)
+            } else {
+                grid_color
+            };
+            if self.draw_line(Point3::new(x, y, min_z), Point3::new(x, y, max_z), color) {
+                count += 1;
+            }
+        }
+
+        for j in -half_count..=half_count {
+            let z = center.z + j as f32 * cell_size;
+            let color = if j == 0 {
+                axis_color.unwrap_or(grid_color)
+            } else {
+                grid_color
+            };
+            if self.draw_line(Point3::new(min_x, y, z), Point3::new(max_x, y, z), color) {
+                count += 1;
+            }
+        }
+
+        count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_graphics_core::pixelcolor::RgbColor;
+
+    struct MockTarget {
+        pixels: [(Point, Rgb565); 1024],
+        count: usize,
+    }
+
+    impl MockTarget {
+        fn new() -> Self {
+            Self {
+                pixels: [(Point::zero(), Rgb565::BLACK); 1024],
+                count: 0,
+            }
+        }
+    }
+
+    impl OriginDimensions for MockTarget {
+        fn size(&self) -> Size {
+            Size::new(64, 64)
+        }
+    }
+
+    impl DrawTarget for MockTarget {
+        type Color = Rgb565;
+        type Error = core::convert::Infallible;
+
+        fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+        where
+            I: IntoIterator<Item = Pixel<Self::Color>>,
+        {
+            for Pixel(pt, c) in pixels {
+                if self.count < self.pixels.len() {
+                    self.pixels[self.count] = (pt, c);
+                    self.count += 1;
+                }
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_gui3d_gizmos_recording() {
+        let mut zbuffer = [0u32; 64 * 64];
+        let mut pipeline: Gui3dPipeline<'_, 16, 8, 4> = Gui3dPipeline::new(64, 64, &mut zbuffer);
+
+        pipeline
+            .engine
+            .camera
+            .set_position(Point3::new(0.0, 0.0, 5.0));
+        pipeline.engine.camera.set_target(Point3::origin());
+
+        // Draw axes, cube, and ray gizmos
+        assert!(pipeline.draw_axes(Point3::origin(), 1.0));
+        assert!(pipeline.draw_wireframe_cube(Point3::origin(), 1.0, Rgb565::WHITE));
+        assert!(pipeline.draw_ray(
+            Point3::origin(),
+            Vector3::new(0.0, 1.0, 0.0),
+            2.0,
+            Rgb565::YELLOW
+        ));
+        assert_eq!(pipeline.commands.len(), 16); // 3 axes + 12 cube edges + 1 ray
+
+        let mut target = MockTarget::new();
+        pipeline.render_scene(&mut target, []);
+        assert!(target.count > 0);
+        assert_eq!(pipeline.commands.len(), 0);
+    }
+
+    #[test]
+    fn test_gui3d_billboard_depth_testing() {
+        let mut zbuffer = [u32::MAX; 64 * 64];
+        let mut pipeline: Gui3dPipeline<'_, 16, 8, 4> = Gui3dPipeline::new(64, 64, &mut zbuffer);
+
+        pipeline
+            .engine
+            .camera
+            .set_position(Point3::new(0.0, 0.0, 5.0));
+        pipeline.engine.camera.set_target(Point3::origin());
+
+        let billboard = Billboard3d::new(Point3::new(0.0, 0.0, 0.0), Size::new(4, 4));
+
+        let mut target = MockTarget::new();
+        let drawn = pipeline
+            .render_billboard_quad(&mut target, &billboard, Rgb565::GREEN)
+            .unwrap();
+        assert!(drawn);
+        assert_eq!(target.count, 16); // 4x4 pixels drawn
+
+        // Center pixel now has written depth
+        let center_idx = 32 * 64 + 32;
+        let written_depth = pipeline.zbuffer[center_idx];
+        assert!(written_depth < u32::MAX);
+
+        // Billboard behind existing depth should be occluded
+        let behind_billboard = Billboard3d::new(Point3::new(0.0, 0.0, -2.0), Size::new(4, 4));
+        assert!(pipeline.is_world_point_occluded(behind_billboard.position));
+
+        let mut target2 = MockTarget::new();
+        let drawn_behind = pipeline
+            .render_billboard_quad(&mut target2, &behind_billboard, Rgb565::RED)
+            .unwrap();
+        assert!(!drawn_behind);
+        assert_eq!(target2.count, 0); // Completely occluded!
     }
 }

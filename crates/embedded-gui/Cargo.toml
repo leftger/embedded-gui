@@ -51,7 +51,7 @@ embedded-graphics = { workspace = true, optional = true }
 embedded-text = { workspace = true, optional = true }
 embedded-layout = { workspace = true, optional = true }
 embedded-dsp = { workspace = true, optional = true }
-embedded-3dgfx = { workspace = true, optional = true, features = ["lighting"] }
+embedded-3dgfx = { workspace = true, optional = true, features = ["lighting", "gizmos", "scene", "aabb-cull"] }
 nalgebra = { workspace = true, features = ["libm"], optional = true }
 embedded-gui-macros = { workspace = true, optional = true }
 

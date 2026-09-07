@@ -288,6 +288,122 @@ impl<const MAX_COMMANDS: usize, const MAX_POINTS_PER_CMD: usize>
     }
 }
 
+/// Pebble-inspired PDCS (Precise Draw Command Sequence) vector animation reel.
+///
+/// Cycles through keyframed vector frames with per-frame durations, supporting
+/// looping, pausing, rewinding, and zero-allocation frame rendering.
+#[derive(Clone, Debug)]
+pub struct PdcsReel<
+    const MAX_FRAMES: usize = 8,
+    const MAX_CMDS: usize = 8,
+    const MAX_POINTS: usize = 16,
+> {
+    pub frames: Vec<PdcImage<MAX_CMDS, MAX_POINTS>, MAX_FRAMES>,
+    pub durations_ms: [u32; MAX_FRAMES],
+    pub loop_count: u32,
+    pub completed_loops: u32,
+    pub current_frame: usize,
+    pub frame_elapsed_ms: u32,
+    pub is_playing: bool,
+}
+
+impl<const MAX_FRAMES: usize, const MAX_CMDS: usize, const MAX_POINTS: usize> Default
+    for PdcsReel<MAX_FRAMES, MAX_CMDS, MAX_POINTS>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const MAX_FRAMES: usize, const MAX_CMDS: usize, const MAX_POINTS: usize>
+    PdcsReel<MAX_FRAMES, MAX_CMDS, MAX_POINTS>
+{
+    pub const fn new() -> Self {
+        Self {
+            frames: Vec::new(),
+            durations_ms: [100; MAX_FRAMES],
+            loop_count: 0,
+            completed_loops: 0,
+            current_frame: 0,
+            frame_elapsed_ms: 0,
+            is_playing: true,
+        }
+    }
+
+    pub fn add_frame(
+        &mut self,
+        frame: PdcImage<MAX_CMDS, MAX_POINTS>,
+        duration_ms: u32,
+    ) -> Result<(), PdcError> {
+        let idx = self.frames.len();
+        if idx < MAX_FRAMES {
+            self.durations_ms[idx] = duration_ms.max(1);
+            self.frames.push(frame).map_err(|_| PdcError)
+        } else {
+            Err(PdcError)
+        }
+    }
+
+    pub fn play(&mut self) {
+        self.is_playing = true;
+    }
+
+    pub fn pause(&mut self) {
+        self.is_playing = false;
+    }
+
+    pub fn rewind(&mut self) {
+        self.current_frame = 0;
+        self.frame_elapsed_ms = 0;
+        self.completed_loops = 0;
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.loop_count > 0 && self.completed_loops >= self.loop_count
+    }
+
+    /// Advance sequence playback by `dt_ms` milliseconds.
+    pub fn update(&mut self, dt_ms: u32) {
+        if !self.is_playing || self.frames.is_empty() || self.is_finished() {
+            return;
+        }
+
+        self.frame_elapsed_ms += dt_ms;
+        let mut dur = self.durations_ms[self.current_frame];
+        while self.frame_elapsed_ms >= dur {
+            self.frame_elapsed_ms -= dur;
+            self.current_frame += 1;
+            if self.current_frame >= self.frames.len() {
+                self.current_frame = 0;
+                self.completed_loops += 1;
+                if self.is_finished() {
+                    self.is_playing = false;
+                    self.current_frame = self.frames.len() - 1;
+                    break;
+                }
+            }
+            dur = self.durations_ms[self.current_frame];
+        }
+    }
+
+    /// Current active vector frame image.
+    pub fn current_image(&self) -> Option<&PdcImage<MAX_CMDS, MAX_POINTS>> {
+        self.frames.get(self.current_frame)
+    }
+
+    /// Renders current animated vector frame to target.
+    pub fn draw<D, C>(&self, ctx: &mut RenderCtx<'_, D, C>, origin: Point) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+        C: crate::render::Compositor<D>,
+    {
+        if let Some(img) = self.current_image() {
+            img.draw(ctx, origin)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,5 +433,27 @@ mod tests {
         let mut fb = Framebuffer::<400>::new(20, 20);
         let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 20, 20));
         img.draw(&mut ctx, Point::new(0, 0)).unwrap();
+    }
+
+    #[test]
+    fn test_pdcs_reel_playback() {
+        let mut reel = PdcsReel::<4, 2, 4>::new();
+        let frame1 = PdcImage::new(Rect::new(0, 0, 10, 10));
+        let frame2 = PdcImage::new(Rect::new(0, 0, 10, 10));
+
+        assert!(reel.add_frame(frame1, 50).is_ok());
+        assert!(reel.add_frame(frame2, 50).is_ok());
+        assert_eq!(reel.current_frame, 0);
+
+        reel.update(30);
+        assert_eq!(reel.current_frame, 0);
+
+        reel.update(25);
+        assert_eq!(reel.current_frame, 1);
+
+        reel.update(50);
+        // Loops back to frame 0
+        assert_eq!(reel.current_frame, 0);
+        assert_eq!(reel.completed_loops, 1);
     }
 }
