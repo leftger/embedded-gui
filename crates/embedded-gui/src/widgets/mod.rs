@@ -11,8 +11,9 @@ use crate::{
     block::Block,
     geometry::{EdgeInsets, Rect},
     image::{ImageFit, ImageRef, ReelPlayer},
-    mono::{IconAlign, IconPart},
+    mono::{IconAlign, IconPart, MonoBitmap},
     render::{Compositor, RenderCtx, StrokeStyle, TextAlign, TextStyle, TextWrap, VerticalAlign},
+    state::ListState,
     style::{Border, Style, VisualState, WidgetStyle},
     widget::{
         FocusGroupId, PropertyError, PropertyKey, PropertyValue, StyleClassId, WidgetFlags,
@@ -197,6 +198,53 @@ pub enum NotificationLevel {
     Success,
     Warning,
     Error,
+}
+
+/// A single selectable row in a [`WidgetKind::RichMenu`].
+///
+/// Mirrors PebbleOS-style menu cells: an optional icon, a primary title, and an
+/// optional smaller subtitle. All data lives in static/Flash storage so the
+/// widget remains zero-allocation on embedded targets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuCell<'a> {
+    /// Primary row label.
+    pub title: &'a str,
+    /// Optional secondary label rendered beneath the title.
+    pub subtitle: Option<&'a str>,
+    /// Optional 1-bit icon rendered in the leading column.
+    pub icon: Option<MonoBitmap<'a>>,
+    /// When `false`, the row is drawn dimmed and skipped by selection.
+    pub enabled: bool,
+}
+
+impl<'a> MenuCell<'a> {
+    /// Creates a simple enabled menu cell with only a title.
+    pub const fn new(title: &'a str) -> Self {
+        Self {
+            title,
+            subtitle: None,
+            icon: None,
+            enabled: true,
+        }
+    }
+
+    /// Adds an optional subtitle line.
+    pub const fn with_subtitle(mut self, subtitle: &'a str) -> Self {
+        self.subtitle = Some(subtitle);
+        self
+    }
+
+    /// Adds an optional monochrome icon.
+    pub const fn with_icon(mut self, icon: MonoBitmap<'a>) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    /// Marks the cell as disabled or enabled.
+    pub const fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -435,6 +483,13 @@ pub enum WidgetKind<'a> {
         selected: usize,
     },
     #[cfg(feature = "rich-widgets")]
+    RichMenu {
+        cells: &'a [MenuCell<'a>],
+        selected: usize,
+        offset: usize,
+        visible_rows: usize,
+    },
+    #[cfg(feature = "rich-widgets")]
     PeekReveal {
         icon: ImageRef<'a>,
         title: &'a str,
@@ -545,6 +600,7 @@ impl WidgetKind<'_> {
                 | Self::TextArea { .. }
                 | Self::Keyboard { .. }
                 | Self::Menu { .. }
+                | Self::RichMenu { .. }
                 | Self::FeedTimeline { .. }
                 | Self::Dial { .. }
                 | Self::AutoComplete { .. }
@@ -638,6 +694,10 @@ impl<'a> WidgetNode<'a> {
             (PropertyKey::Selected, WidgetKind::Tabs { selected, .. }) => {
                 Some(PropertyValue::Usize(*selected))
             }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Selected, WidgetKind::RichMenu { selected, .. }) => {
+                Some(PropertyValue::Usize(*selected))
+            }
             _ => None,
         }
     }
@@ -691,6 +751,26 @@ impl<'a> WidgetNode<'a> {
             #[cfg(feature = "rich-widgets")]
             (PropertyKey::Selected, WidgetKind::Tabs { selected, .. }, PropertyValue::Usize(s)) => {
                 *selected = s;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (
+                PropertyKey::Selected,
+                WidgetKind::RichMenu {
+                    cells,
+                    selected: current,
+                    offset: current_offset,
+                    visible_rows,
+                },
+                PropertyValue::Usize(s),
+            ) => {
+                let len = cells.len();
+                let mut state = ListState::new(*current, *current_offset, *visible_rows);
+                let changed = state.set_selected(s.min(len.saturating_sub(1)), len);
+                if changed {
+                    *current = state.selected;
+                    *current_offset = state.offset;
+                }
                 Ok(())
             }
             _ => Err(PropertyError::NotFound),
@@ -1048,6 +1128,22 @@ impl<'a> WidgetNode<'a> {
             WidgetKind::Menu { items, selected } => {
                 render_menu(ctx, rect, items, selected, self.style, state)
             }
+            #[cfg(feature = "rich-widgets")]
+            WidgetKind::RichMenu {
+                cells,
+                selected,
+                offset,
+                visible_rows,
+            } => render_rich_menu(
+                ctx,
+                rect,
+                cells,
+                selected,
+                offset,
+                visible_rows,
+                self.style,
+                state,
+            ),
             #[cfg(feature = "rich-widgets")]
             WidgetKind::PeekReveal {
                 icon,
@@ -2939,6 +3035,157 @@ where
                 line_spacing: 0,
             },
         )?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "rich-widgets")]
+fn render_menu_icon<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    icon: MonoBitmap<'_>,
+    left: i32,
+    top: i32,
+    ink: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    for y in 0..icon.height {
+        for x in 0..icon.width {
+            if icon.is_ink(x, y) {
+                ctx.fill_rect(Rect::new(left + x as i32, top + y as i32, 1, 1), ink)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "rich-widgets")]
+#[allow(clippy::too_many_arguments)]
+fn render_rich_menu<D, C>(
+    ctx: &mut RenderCtx<'_, D, C>,
+    rect: Rect,
+    cells: &[MenuCell<'_>],
+    selected: usize,
+    offset: usize,
+    visible_rows: usize,
+    style: WidgetStyle,
+    state: VisualState,
+) -> Result<(), D::Error>
+where
+    D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    let style = style.resolve(state);
+    let block = Block::styled(style);
+    block.render(rect, ctx)?;
+
+    if cells.is_empty() {
+        return Ok(());
+    }
+
+    let inner = block.inner(rect);
+    let rows = visible_rows.max(1).min(cells.len());
+    let row_h = (inner.h / rows as u32).max(1);
+    let line_h = style.font.line_height();
+
+    for row_idx in 0..rows {
+        let item_idx = offset.saturating_add(row_idx);
+        let Some(cell) = cells.get(item_idx) else {
+            break;
+        };
+
+        let row = Rect::new(
+            inner.x,
+            inner.y + (row_idx as u32 * row_h) as i32,
+            inner.w,
+            row_h,
+        );
+        let is_selected = item_idx == selected;
+
+        if is_selected {
+            ctx.fill_rect(row, style.accent)?;
+        }
+
+        let has_subtitle = cell.subtitle.is_some();
+        let icon_w = cell.icon.map(|icon| icon.width).unwrap_or(0);
+        let text_x = inner.x + icon_w as i32 + 3;
+        let text_w = inner.w.saturating_sub(icon_w + 4).max(1);
+
+        if let Some(icon) = cell.icon {
+            let icon_h = icon.height;
+            let icon_y = row.y + (row.h.saturating_sub(icon_h) as i32 / 2);
+            render_menu_icon(ctx, icon, inner.x + 1, icon_y, style.text)?;
+        }
+
+        let text_color = if cell.enabled {
+            style.text
+        } else {
+            // Keep the row visible but clearly de-emphasized.
+            Rgb565::new(style.text.r() / 2, style.text.g() / 2, style.text.b() / 2)
+        };
+        let text_opacity = if cell.enabled {
+            style.opacity
+        } else {
+            style.opacity.saturating_div(2).max(1)
+        };
+
+        let title_area = if has_subtitle && row.h >= line_h.saturating_mul(2) {
+            Rect::new(text_x, row.y + 1, text_w, line_h)
+        } else {
+            Rect::new(text_x, row.y + 1, text_w, row.h.saturating_sub(2).max(1))
+        };
+
+        ctx.draw_text_in(
+            title_area,
+            cell.title,
+            TextStyle {
+                color: text_color,
+                font: style.font,
+                opacity: text_opacity,
+                align: TextAlign::Left,
+                vertical_align: if has_subtitle && row.h >= line_h.saturating_mul(2) {
+                    VerticalAlign::Top
+                } else {
+                    VerticalAlign::Middle
+                },
+                wrap: TextWrap::None,
+                overflow: crate::render::TextOverflow::Clip,
+                overflow_policy: crate::render::TextOverflowPolicy::Global(
+                    crate::render::TextOverflow::Clip,
+                ),
+                kerning: false,
+                max_lines: None,
+                ellipsis: crate::render::EllipsisMode::ThreeDots,
+                line_spacing: 0,
+            },
+        )?;
+
+        if let Some(subtitle) = cell.subtitle {
+            if row.h >= line_h.saturating_mul(2) {
+                ctx.draw_text_in(
+                    Rect::new(text_x, row.y + 1 + line_h as i32, text_w, line_h),
+                    subtitle,
+                    TextStyle {
+                        color: text_color,
+                        font: style.font,
+                        opacity: text_opacity.saturating_div(2).max(1),
+                        align: TextAlign::Left,
+                        vertical_align: VerticalAlign::Top,
+                        wrap: TextWrap::None,
+                        overflow: crate::render::TextOverflow::Clip,
+                        overflow_policy: crate::render::TextOverflowPolicy::Global(
+                            crate::render::TextOverflow::Clip,
+                        ),
+                        kerning: false,
+                        max_lines: None,
+                        ellipsis: crate::render::EllipsisMode::ThreeDots,
+                        line_spacing: 0,
+                    },
+                )?;
+            }
+        }
     }
     Ok(())
 }

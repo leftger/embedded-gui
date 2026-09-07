@@ -121,3 +121,63 @@ fn test_style_and_widget_style_fluent_builders() {
     assert_eq!(colors::from_name("forestgreen"), Some(colors::FORESTGREEN));
     assert_eq!(colors::from_name("crimson"), Some(colors::CRIMSON));
 }
+
+#[test]
+fn test_rich_menu_selection_skips_disabled_and_renders() {
+    static ICON_BITS: [u8; 1] = [0b1000_0000];
+    static CELLS: [MenuCell; 4] = [
+        MenuCell::new("Bright")
+            .with_subtitle("subtitle")
+            .with_icon(MonoBitmap::new(1, 1, &ICON_BITS)),
+        MenuCell::new("Disabled").with_enabled(false),
+        MenuCell::new("Dim"),
+        MenuCell::new("End"),
+    ];
+
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 128, 64));
+    let id = gui
+        .add_rich_menu(Rect::new(0, 0, 128, 64), &CELLS, 0, 3, Style::panel())
+        .unwrap();
+
+    assert_eq!(gui.rich_menu_selected(id), Some(0));
+    assert_eq!(gui.focus(), Some(id));
+
+    // Down from cell 0 should skip the disabled cell 1 and land on cell 2.
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.rich_menu_selected(id), Some(2));
+
+    gui.set_rich_menu_selected(id, 3).unwrap();
+    assert_eq!(
+        gui.get_widget_property(id, PropertyKey::Selected),
+        Some(PropertyValue::Usize(3))
+    );
+
+    let mut target = MockTarget::new(128, 64);
+    gui.render(&mut target).unwrap();
+    assert!(!target.pixels.is_empty());
+}
+
+#[test]
+fn test_rich_menu_property_setter_keeps_selection_visible() {
+    static CELLS: [MenuCell; 6] = [
+        MenuCell::new("A"),
+        MenuCell::new("B"),
+        MenuCell::new("C"),
+        MenuCell::new("D"),
+        MenuCell::new("E"),
+        MenuCell::new("F"),
+    ];
+
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 80, 40));
+    let id = gui
+        .add_rich_menu(Rect::new(0, 0, 80, 40), &CELLS, 0, 3, Style::panel())
+        .unwrap();
+
+    gui.set_widget_property(id, PropertyKey::Selected, PropertyValue::Usize(5))
+        .unwrap();
+    assert_eq!(gui.rich_menu_selected(id), Some(5));
+    assert_eq!(
+        gui.get_widget_property(id, PropertyKey::Selected),
+        Some(PropertyValue::Usize(5))
+    );
+}

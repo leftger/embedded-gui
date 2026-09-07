@@ -9,8 +9,8 @@ use crate::{
     style::{Style, WidgetStyle},
     widget::{FocusGroupId, StyleClassId, Widget, WidgetId},
     widgets::{
-        CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, NotificationLevel, ScaleMode,
-        SurfaceState, WidgetKind,
+        CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, MenuCell, NotificationLevel,
+        ScaleMode, SurfaceState, WidgetKind,
     },
 };
 use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
@@ -1351,6 +1351,33 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     {
         let selected = selected.min(items.len().saturating_sub(1));
         let id = self.add_widget(rect, WidgetKind::Menu { items, selected }, style)?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn add_rich_menu<S>(
+        &mut self,
+        rect: Rect,
+        cells: &'a [MenuCell<'a>],
+        selected: usize,
+        visible_rows: usize,
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let selected = selected.min(cells.len().saturating_sub(1));
+        let id = self.add_widget(
+            rect,
+            WidgetKind::RichMenu {
+                cells,
+                selected,
+                offset: selected,
+                visible_rows: visible_rows.max(1),
+            },
+            style,
+        )?;
         self.ensure_focus();
         Ok(id)
     }

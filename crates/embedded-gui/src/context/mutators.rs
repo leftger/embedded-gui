@@ -433,6 +433,40 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     }
 
     #[cfg(feature = "rich-widgets")]
+    pub fn set_rich_menu_selected(
+        &mut self,
+        id: WidgetId,
+        selected: usize,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::RichMenu {
+                cells,
+                selected: ref mut current,
+                ref mut offset,
+                visible_rows,
+            } => {
+                let mut state = ListState::new(*current, *offset, visible_rows);
+                state.set_selected(selected, cells.len());
+                *current = state.selected;
+                *offset = state.offset;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    pub fn rich_menu_selected(&self, id: WidgetId) -> Option<usize> {
+        match self.node(id)?.kind {
+            WidgetKind::RichMenu { selected, .. } => Some(selected),
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "rich-widgets")]
     pub fn list_selected(&self, id: WidgetId) -> Option<usize> {
         match self.node(id)?.kind {
             WidgetKind::List { selected, .. } | WidgetKind::CircularList { selected, .. } => {

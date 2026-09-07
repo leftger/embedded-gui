@@ -599,6 +599,31 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 )
             }
             #[cfg(feature = "rich-widgets")]
+            WidgetKind::RichMenu {
+                cells,
+                visible_rows,
+                ..
+            } => {
+                let has_subtitles = cells.iter().any(|cell| cell.subtitle.is_some());
+                let row_h = if has_subtitles {
+                    text_height.saturating_mul(2).saturating_add(2)
+                } else {
+                    text_height.saturating_add(2)
+                };
+                let max = cells
+                    .iter()
+                    .map(|cell| text_width(cell.title))
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(10);
+                (
+                    max,
+                    row_h
+                        .saturating_mul(visible_rows.max(1) as u32)
+                        .max(text_height),
+                )
+            }
+            #[cfg(feature = "rich-widgets")]
             WidgetKind::FeedTimeline {
                 items,
                 visible_rows,
@@ -896,6 +921,37 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     }
                     changed = bump_index_with_wrap(current, items.len(), delta, wrap_navigation);
                     changed_rect = changed.then_some(node.rect);
+                }
+                WidgetKind::RichMenu {
+                    cells,
+                    selected: ref mut current,
+                    ref mut offset,
+                    visible_rows,
+                } => {
+                    if cells.is_empty() {
+                        return Ok(true);
+                    }
+                    let mut next = *current;
+                    let mut bumped = false;
+                    for _ in 0..cells.len() {
+                        let stepped =
+                            bump_index_with_wrap(&mut next, cells.len(), delta, wrap_navigation);
+                        if !stepped {
+                            break;
+                        }
+                        bumped = true;
+                        if cells[next].enabled {
+                            break;
+                        }
+                    }
+                    changed = bumped && next != *current;
+                    if changed {
+                        let mut state = ListState::new(next, *offset, visible_rows);
+                        state.set_selected(next, cells.len());
+                        *current = state.selected;
+                        *offset = state.offset;
+                        changed_rect = changed.then_some(node.rect);
+                    }
                 }
                 WidgetKind::Dropdown {
                     items,

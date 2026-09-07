@@ -225,8 +225,8 @@ pub use widgets::{
     TextSpan, TimeFormat, TimePickerField, TimePickerWidget, TimelineNodeState, TimelineNodeWidget,
 };
 pub use widgets::{
-    CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, NotificationLevel, SurfaceState,
-    WidgetKind, WidgetNode,
+    CarouselSpec, ChartMode, CompositeIconSpec, KeyboardLayout, MenuCell, NotificationLevel,
+    SurfaceState, WidgetKind, WidgetNode,
 };
 
 pub mod prelude {
@@ -255,10 +255,10 @@ pub mod prelude {
         IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator,
         InputEvent, InverterWidget, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
         KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
-        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MatrixWidget, MenuContract,
-        MeterOrientation, ModelChange, MonoBitmap, MotionTokens, MultiStopGradient, NavDirection,
-        NineSlice, NineSliceLayout, NotificationLevel, PackedFont, PathAnimator, PathPoint,
-        PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState,
+        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MatrixWidget, MenuCell,
+        MenuContract, MeterOrientation, ModelChange, MonoBitmap, MotionTokens, MultiStopGradient,
+        NavDirection, NineSlice, NineSliceLayout, NotificationLevel, PackedFont, PathAnimator,
+        PathPoint, PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState,
         PowerConfig, PowerEvent, PowerManager, PowerState, PresentRegion, PressTiming,
         ProgressBarWidget, PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps,
         RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
