@@ -1660,4 +1660,114 @@ mod tests {
         let light_theme = Theme::from_tokens(&light_tokens);
         assert_eq!(light_theme.panel.background, Some(light_tokens.surface));
     }
+
+    #[test]
+    fn widget_style_builders_and_conversions() {
+        let base = Style::new().with_bg(Rgb565::CSS_BLUE);
+        let ws = WidgetStyle::new(base)
+            .with_bg(Rgb565::CSS_RED)
+            .with_fg(Rgb565::CSS_WHITE)
+            .with_text(Rgb565::CSS_YELLOW)
+            .with_pressed_bg(Rgb565::CSS_GREEN)
+            .with_pressed_fg(Rgb565::CSS_WHITE)
+            .with_pressed_text(Rgb565::CSS_BLACK)
+            .with_focused_bg(Rgb565::CSS_CYAN)
+            .with_focused_fg(Rgb565::CSS_BLACK)
+            .with_focused_text(Rgb565::CSS_BLACK)
+            .with_disabled_bg(Rgb565::CSS_GRAY)
+            .with_disabled_fg(Rgb565::CSS_BLACK)
+            .with_disabled_text(Rgb565::CSS_BLACK)
+            .with_border_color(Rgb565::CSS_WHITE)
+            .with_corner_radius(4)
+            .with_font(FontId::Medium4x7)
+            .with_focused(Style::new().with_bg(Rgb565::CSS_MAGENTA))
+            .with_pressed(Style::new().with_bg(Rgb565::CSS_LIME))
+            .with_disabled(Style::new().with_bg(Rgb565::CSS_NAVY))
+            .with_normal(Style::new().with_bg(Rgb565::CSS_MAROON));
+
+        assert_eq!(
+            ws.resolve(VisualState::Normal).background,
+            Some(Rgb565::CSS_MAROON)
+        );
+        assert_eq!(
+            ws.resolve(VisualState::Focused).background,
+            Some(Rgb565::CSS_MAGENTA)
+        );
+        assert_eq!(
+            ws.resolve(VisualState::Pressed).background,
+            Some(Rgb565::CSS_LIME)
+        );
+        assert_eq!(
+            ws.resolve(VisualState::Disabled).background,
+            Some(Rgb565::CSS_NAVY)
+        );
+
+        let _ = WidgetStyle::button();
+        let _ = WidgetStyle::label();
+        let _ = WidgetStyle::panel();
+        let _ = WidgetStyle::progress();
+        let _ = WidgetStyle::default();
+        let _ = WidgetStyle::from(base);
+        let _ = WidgetStyle::from(StateStyle::new(base));
+
+        let mid = ws.resolve_interpolated(VisualState::Normal, VisualState::Focused, 0.5);
+        let _ = mid;
+    }
+
+    #[test]
+    fn gradients_visual_state_and_multipart_masks() {
+        let v = AlphaLinearGradient::vertical(Rgb565::CSS_BLACK, 0, Rgb565::CSS_WHITE, 255);
+        let sample = v.sample(128);
+        assert!(sample.0 != Rgb565::BLACK || sample.1 > 0);
+        let h = AlphaLinearGradient::horizontal(Rgb565::CSS_RED, 10, Rgb565::CSS_BLUE, 200);
+        let _ = h.sample(0);
+        let radial =
+            AlphaRadialGradient::new(10.0, 10.0, 0.0, Rgb565::CSS_RED, 0, Rgb565::CSS_BLUE, 255);
+        assert_eq!(radial.radius, 1.0);
+        let _ = radial.sample_at_dist(0.0);
+        let _ = radial.sample_at_dist(100.0);
+
+        assert!(VisualStateMask::FOCUSED.contains(VisualStateMask::FOCUSED));
+        assert!(!VisualStateMask::FOCUSED.contains(VisualStateMask::PRESSED));
+        let combined = VisualStateMask::PRESSED.with(VisualStateMask::CHECKED);
+        assert!(combined.contains(VisualStateMask::PRESSED));
+        assert!(combined.contains(VisualStateMask::CHECKED));
+        assert_eq!(
+            VisualStateMask::from_visual_state(VisualState::Normal),
+            VisualStateMask::NORMAL
+        );
+        assert_eq!(
+            VisualStateMask::from_visual_state(VisualState::Disabled),
+            VisualStateMask::DISABLED
+        );
+
+        let base = Style::new();
+        let custom_style = Style {
+            corner_radius: 3,
+            ..base
+        };
+        let m = MultiPartStyle::<2>::new(base)
+            .with_part_rule(
+                WidgetPart::Custom(7),
+                VisualStateMask::PRESSED,
+                custom_style,
+            )
+            .with_part_rule(
+                WidgetPart::Scrollbar,
+                VisualStateMask::FOCUSED,
+                custom_style,
+            );
+        assert_eq!(
+            m.resolve(WidgetPart::Custom(7), VisualState::Pressed),
+            custom_style
+        );
+        assert_eq!(m.resolve(WidgetPart::Custom(8), VisualState::Pressed), base);
+        let mask = VisualStateMask::FOCUSED;
+        assert_eq!(m.resolve_mask(WidgetPart::Scrollbar, mask), custom_style);
+        assert_eq!(
+            m.resolve_mask(WidgetPart::Indicator, VisualStateMask::NORMAL),
+            base
+        );
+        let _ = MultiPartStyle::<2>::default();
+    }
 }
