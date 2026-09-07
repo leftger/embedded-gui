@@ -1,10 +1,17 @@
 ignore:
+  - "embedded-gui-studio/**"
   - "crates/embedded-gui-studio/**"
+  - "**/embedded-gui-studio/**"
   - "size_harness/**"
+  - "**/size_harness/**"
   - "examples/**"
+  - "**/examples/**"
   - "assets/**"
+  - "**/assets/**"
   - "docs/**"
+  - "**/docs/**"
   - "figma-plugin/**"
+  - "**/figma-plugin/**"
 
 coverage:
   status:
