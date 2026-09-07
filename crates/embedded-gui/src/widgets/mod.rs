@@ -4109,4 +4109,130 @@ mod tests {
                 .is_ok()
         );
     }
+
+    #[test]
+    fn widget_node_textarea_and_keyboard_render() {
+        let mut fb = Framebuffer::<40_000>::new(200, 200);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 200, 200));
+
+        let mut buf = [0u8; TEXTAREA_CAPACITY];
+        let text = b"hello\nworld";
+        buf[..text.len()].copy_from_slice(text);
+        let ta = WidgetKind::TextArea {
+            text_buf: buf,
+            text_len: text.len() as u8,
+            cursor: 7,
+            placeholder: "type...",
+            selection: Some((0, 5)),
+            cursor_visible: true,
+            read_only: false,
+            single_line: false,
+            accept_newline: true,
+        };
+        let node = WidgetNode::new(WidgetId::new(2), Rect::new(0, 0, 100, 60), ta, Style::new());
+        assert!(
+            node.render_at(&mut ctx, Rect::new(0, 0, 100, 60), VisualState::Focused)
+                .is_ok()
+        );
+
+        let empty_buf = [0u8; TEXTAREA_CAPACITY];
+        let placeholder_ta = WidgetKind::TextArea {
+            text_buf: empty_buf,
+            text_len: 0,
+            cursor: 0,
+            placeholder: "empty",
+            selection: None,
+            cursor_visible: false,
+            read_only: false,
+            single_line: false,
+            accept_newline: false,
+        };
+        let placeholder_node = WidgetNode::new(
+            WidgetId::new(3),
+            Rect::new(0, 60, 100, 40),
+            placeholder_ta,
+            Style::new(),
+        );
+        assert!(
+            placeholder_node
+                .render_at(&mut ctx, Rect::new(0, 60, 100, 40), VisualState::Normal)
+                .is_ok()
+        );
+
+        let keys = ['a', 'b', 'c', 'd', 'e', 'f'];
+        let alt_keys = ['A', 'B', 'C', 'D', 'E', 'F'];
+        for layout in [
+            KeyboardLayout::Normal,
+            KeyboardLayout::Shift,
+            KeyboardLayout::Symbols,
+        ] {
+            let kb = WidgetKind::Keyboard {
+                keys: &keys,
+                selected: 3,
+                cols: 3,
+                alt_keys: Some(&alt_keys),
+                layout,
+                target: None,
+            };
+            let kb_node = WidgetNode::new(
+                WidgetId::new(4),
+                Rect::new(0, 110, 100, 60),
+                kb,
+                Style::new(),
+            );
+            assert!(
+                kb_node
+                    .render_at(&mut ctx, Rect::new(0, 110, 100, 60), VisualState::Focused)
+                    .is_ok()
+            );
+        }
+
+        let empty_kb = WidgetKind::Keyboard {
+            keys: &[],
+            selected: 0,
+            cols: 1,
+            alt_keys: None,
+            layout: KeyboardLayout::Normal,
+            target: None,
+        };
+        let empty_node = WidgetNode::new(
+            WidgetId::new(5),
+            Rect::new(0, 180, 50, 20),
+            empty_kb,
+            Style::new(),
+        );
+        assert!(
+            empty_node
+                .render_at(&mut ctx, Rect::new(0, 180, 50, 20), VisualState::Normal)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn rich_menu_subtitle_and_tall_row_render() {
+        let mut fb = Framebuffer::<40_000>::new(200, 200);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 200, 200));
+        let cells = [
+            MenuCell::new("Alpha").with_subtitle("subtitle alpha"),
+            MenuCell::new("Beta")
+                .with_subtitle("subtitle beta")
+                .with_enabled(false),
+        ];
+        let menu = WidgetKind::RichMenu {
+            cells: &cells,
+            selected: 0,
+            offset: 0,
+            visible_rows: 1,
+        };
+        let node = WidgetNode::new(
+            WidgetId::new(6),
+            Rect::new(0, 0, 100, 60),
+            menu,
+            Style::new(),
+        );
+        assert!(
+            node.render_at(&mut ctx, Rect::new(0, 0, 100, 60), VisualState::Focused)
+                .is_ok()
+        );
+    }
 }
