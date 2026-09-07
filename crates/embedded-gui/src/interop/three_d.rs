@@ -921,4 +921,137 @@ mod tests {
         assert!(!drawn_behind);
         assert_eq!(target2.count, 0); // Completely occluded!
     }
+
+    #[test]
+    fn test_billboard_buffer_and_mesh_panel_errors() {
+        let mut zbuffer = [u32::MAX; 64 * 64];
+        let mut pipeline: Gui3dPipeline<'_, 16, 8, 4> = Gui3dPipeline::new(64, 64, &mut zbuffer);
+        pipeline
+            .engine
+            .camera
+            .set_position(Point3::new(0.0, 0.0, 5.0));
+        pipeline.engine.camera.set_target(Point3::origin());
+
+        let billboard = Billboard3d::new(Point3::new(0.0, 0.0, 0.0), Size::new(2, 2))
+            .with_offset(Point::new(1, 1))
+            .with_depth_write(false);
+        assert_eq!(billboard.offset, Point::new(1, 1));
+        assert!(!billboard.depth_write);
+
+        let mut pixels = [Rgb565::GREEN; 4];
+        pixels[0] = Rgb565::BLACK;
+        let mut target = MockTarget::new();
+        let drawn = pipeline
+            .render_billboard_buffer(&mut target, &billboard, &pixels, Some(Rgb565::BLACK))
+            .unwrap();
+        assert!(drawn);
+
+        let too_small = pipeline
+            .render_billboard_buffer(&mut target, &billboard, &[Rgb565::GREEN; 1], None)
+            .unwrap();
+        assert!(!too_small);
+
+        let mut target2 = MockTarget::new();
+        static VERTICES: [[f32; 3]; 1] = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &VERTICES,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+            vertex_normals: &[],
+            uvs: &[],
+            texture_id: None,
+        };
+        let panel = MeshPanel::new(geometry, Rgb565::WHITE);
+        assert!(render_mesh_panel(&mut target2, Rect::new(0, 0, 0, 0), &panel, &mut []).is_ok());
+
+        let mut small_zb = [0u32; 2];
+        assert_eq!(
+            render_mesh_panel(&mut target2, Rect::new(0, 0, 4, 4), &panel, &mut small_zb)
+                .unwrap_err(),
+            MeshPanelError::ZBufferTooSmall { needed: 16, got: 2 }
+        );
+
+        for shading in [
+            MeshShading::Points,
+            MeshShading::Lines,
+            MeshShading::Solid,
+            MeshShading::Lit,
+        ] {
+            let mut panel = MeshPanel::new(geometry, Rgb565::WHITE);
+            panel.shading = shading;
+            let mut zb = [0u32; 16];
+            let _ = render_mesh_panel(&mut target2, Rect::new(0, 0, 4, 4), &panel, &mut zb);
+        }
+    }
+
+    #[test]
+    fn test_dispatch_pointer_and_texture_rendering() {
+        let mut zbuffer = [0u32; 16 * 16];
+        let mut pipeline: Gui3dPipeline<'_, 8, 4, 2> = Gui3dPipeline::new(16, 16, &mut zbuffer);
+        pipeline
+            .engine
+            .camera
+            .set_position(Point3::new(0.0, 0.0, 5.0));
+        pipeline.engine.camera.set_target(Point3::origin());
+
+        let scene = dispatch_pointer_input(
+            &mut pipeline.gui,
+            &pipeline.engine,
+            8,
+            8,
+            PointerState::Pressed,
+            PointerButton::Primary,
+        );
+        assert!(matches!(scene, InputResult::ScenePick(_)));
+
+        let ignored = dispatch_pointer_input(
+            &mut pipeline.gui,
+            &pipeline.engine,
+            8,
+            8,
+            PointerState::Released,
+            PointerButton::Primary,
+        );
+        assert!(matches!(ignored, InputResult::Ignored));
+
+        let mut texture = [Rgb565::BLACK; 4];
+        assert!(pipeline.gui.render_to_texture(&mut texture, 2, 2).is_ok());
+        assert!(pipeline.gui.render_to_texture(&mut texture, 3, 2).is_err());
+    }
+
+    #[test]
+    fn test_more_gizmos_grid_and_wireframe_box() {
+        let mut zbuffer = [0u32; 64 * 64];
+        let mut pipeline: Gui3dPipeline<'_, 16, 8, 4> = Gui3dPipeline::new(64, 64, &mut zbuffer);
+        pipeline
+            .engine
+            .camera
+            .set_position(Point3::new(0.0, 0.0, 5.0));
+        pipeline.engine.camera.set_target(Point3::origin());
+
+        assert!(pipeline.draw_wireframe_box(
+            Point3::new(-1.0, -1.0, -1.0),
+            Point3::new(1.0, 1.0, 1.0),
+            Rgb565::WHITE
+        ));
+
+        let count = pipeline.draw_grid(
+            Point3::origin(),
+            1.0,
+            2,
+            Rgb565::new(20, 20, 20),
+            Some(Rgb565::WHITE),
+        );
+        assert_eq!(count, 10);
+
+        pipeline.clear_commands();
+        let hidden = pipeline.draw_line(
+            Point3::new(0.0, 0.0, 100.0),
+            Point3::new(0.0, 0.0, 101.0),
+            Rgb565::WHITE,
+        );
+        assert!(!hidden);
+    }
 }
