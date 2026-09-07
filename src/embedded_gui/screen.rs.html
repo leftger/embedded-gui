@@ -238,4 +238,55 @@
 <a href=#238 id=238 data-nosnippet>238</a>        <span class="self">Self</span>::new()
 <a href=#239 id=239 data-nosnippet>239</a>    }
 <a href=#240 id=240 data-nosnippet>240</a>}
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a><span class="attr">#[cfg(test)]
+<a href=#243 id=243 data-nosnippet>243</a></span><span class="kw">mod </span>tests {
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">use </span><span class="kw">crate</span>::geometry::Rect;
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">use </span><span class="kw">crate</span>::style::Style;
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="kw">struct </span>DummyScreen;
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="kw">const </span>NODES: usize, <span class="kw">const </span>EVENTS: usize, <span class="kw">const </span>DIRTY: usize&gt;
+<a href=#251 id=251 data-nosnippet>251</a>        Screen&lt;<span class="lifetime">'a</span>, NODES, EVENTS, DIRTY&gt; <span class="kw">for </span>DummyScreen
+<a href=#252 id=252 data-nosnippet>252</a>    {
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ScreenId {
+<a href=#254 id=254 data-nosnippet>254</a>            ScreenId::new(<span class="number">1</span>)
+<a href=#255 id=255 data-nosnippet>255</a>        }
+<a href=#256 id=256 data-nosnippet>256</a>    }
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="attr">#[test]
+<a href=#259 id=259 data-nosnippet>259</a>    </span><span class="kw">fn </span>screen_id_raw_and_default_lifecycle_hooks() {
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="macro">assert_eq!</span>(ScreenId::new(<span class="number">7</span>).raw(), <span class="number">7</span>);
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span><span class="kw-2">mut </span>gui = GuiContext::&lt;<span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>&gt;::new(Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">32</span>, <span class="number">32</span>));
+<a href=#263 id=263 data-nosnippet>263</a>        gui.add_label(Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">4</span>, <span class="number">4</span>), <span class="string">"x"</span>, Style::label())
+<a href=#264 id=264 data-nosnippet>264</a>            .unwrap();
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span><span class="kw-2">mut </span>screen = DummyScreen;
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="macro">assert!</span>(screen.on_mount(<span class="kw-2">&amp;mut </span>gui).is_ok());
+<a href=#267 id=267 data-nosnippet>267</a>        <span class="macro">assert!</span>(screen.on_unmount(<span class="kw-2">&amp;mut </span>gui).is_ok());
+<a href=#268 id=268 data-nosnippet>268</a>        <span class="macro">assert!</span>(screen.on_pause(<span class="kw-2">&amp;mut </span>gui).is_ok());
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="macro">assert!</span>(screen.on_resume(<span class="kw-2">&amp;mut </span>gui).is_ok());
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="macro">assert_eq!</span>(
+<a href=#271 id=271 data-nosnippet>271</a>            screen.handle_input(InputEvent::Select, <span class="kw-2">&amp;mut </span>gui).unwrap(),
+<a href=#272 id=272 data-nosnippet>272</a>            ScreenCommand::None
+<a href=#273 id=273 data-nosnippet>273</a>        );
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="macro">assert_eq!</span>(screen.tick(<span class="number">1</span>, <span class="kw-2">&amp;mut </span>gui).unwrap(), ScreenCommand::None);
+<a href=#275 id=275 data-nosnippet>275</a>    }
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="attr">#[test]
+<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">fn </span>screen_stack_default_clear_to_and_apply_none() {
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span><span class="kw-2">mut </span>stack = ScreenStack::&lt;<span class="number">2</span>&gt;::default();
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="macro">assert!</span>(stack.is_empty());
+<a href=#281 id=281 data-nosnippet>281</a>        stack.push(ScreenId::new(<span class="number">1</span>)).unwrap();
+<a href=#282 id=282 data-nosnippet>282</a>        stack.push(ScreenId::new(<span class="number">2</span>)).unwrap();
+<a href=#283 id=283 data-nosnippet>283</a>        stack.clear_to(ScreenId::new(<span class="number">3</span>)).unwrap();
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="macro">assert_eq!</span>(stack.as_slice(), <span class="kw-2">&amp;</span>[ScreenId::new(<span class="number">3</span>)]);
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="macro">assert_eq!</span>(stack.current(), <span class="prelude-val">Some</span>(ScreenId::new(<span class="number">3</span>)));
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="macro">assert_eq!</span>(stack.apply(ScreenCommand::None).unwrap(), ());
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="macro">assert!</span>(stack.replace(ScreenId::new(<span class="number">4</span>)).is_ok());
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="macro">assert!</span>(stack.pop().is_ok());
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="macro">assert!</span>(stack.replace(ScreenId::new(<span class="number">5</span>)).is_err());
+<a href=#290 id=290 data-nosnippet>290</a>    }
+<a href=#291 id=291 data-nosnippet>291</a>}
 </code></pre></div></section></main></body></html>

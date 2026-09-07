@@ -614,5 +614,74 @@
 <a href=#614 id=614 data-nosnippet>614</a>        <span class="macro">assert_eq!</span>(CinematicPreset::LauncherGlance.name(), <span class="string">"launcher-glance"</span>);
 <a href=#615 id=615 data-nosnippet>615</a>        <span class="macro">assert_eq!</span>(CinematicPreset::CardStory.name(), <span class="string">"card-story"</span>);
 <a href=#616 id=616 data-nosnippet>616</a>    }
-<a href=#617 id=617 data-nosnippet>617</a>}
+<a href=#617 id=617 data-nosnippet>617</a>
+<a href=#618 id=618 data-nosnippet>618</a>    <span class="attr">#[test]
+<a href=#619 id=619 data-nosnippet>619</a>    </span><span class="kw">fn </span>cinematic_setup_helpers_and_story_apply() {
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">let </span><span class="kw-2">mut </span>gui: GuiContext&lt;<span class="number">12</span>, <span class="number">8</span>, <span class="number">8</span>&gt; =
+<a href=#621 id=621 data-nosnippet>621</a>            GuiContext::new(<span class="kw">crate</span>::geometry::Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">200</span>, <span class="number">100</span>));
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="kw">let </span>id1 = gui
+<a href=#623 id=623 data-nosnippet>623</a>            .add_label(
+<a href=#624 id=624 data-nosnippet>624</a>                <span class="kw">crate</span>::geometry::Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">20</span>, <span class="number">10</span>),
+<a href=#625 id=625 data-nosnippet>625</a>                <span class="string">"1"</span>,
+<a href=#626 id=626 data-nosnippet>626</a>                <span class="kw">crate</span>::style::Style::label(),
+<a href=#627 id=627 data-nosnippet>627</a>            )
+<a href=#628 id=628 data-nosnippet>628</a>            .unwrap();
+<a href=#629 id=629 data-nosnippet>629</a>        <span class="kw">let </span>id2 = gui
+<a href=#630 id=630 data-nosnippet>630</a>            .add_label(
+<a href=#631 id=631 data-nosnippet>631</a>                <span class="kw">crate</span>::geometry::Rect::new(<span class="number">0</span>, <span class="number">20</span>, <span class="number">20</span>, <span class="number">10</span>),
+<a href=#632 id=632 data-nosnippet>632</a>                <span class="string">"2"</span>,
+<a href=#633 id=633 data-nosnippet>633</a>                <span class="kw">crate</span>::style::Style::label(),
+<a href=#634 id=634 data-nosnippet>634</a>            )
+<a href=#635 id=635 data-nosnippet>635</a>            .unwrap();
+<a href=#636 id=636 data-nosnippet>636</a>        <span class="kw">let </span>id3 = gui
+<a href=#637 id=637 data-nosnippet>637</a>            .add_label(
+<a href=#638 id=638 data-nosnippet>638</a>                <span class="kw">crate</span>::geometry::Rect::new(<span class="number">0</span>, <span class="number">40</span>, <span class="number">20</span>, <span class="number">10</span>),
+<a href=#639 id=639 data-nosnippet>639</a>                <span class="string">"3"</span>,
+<a href=#640 id=640 data-nosnippet>640</a>                <span class="kw">crate</span>::style::Style::label(),
+<a href=#641 id=641 data-nosnippet>641</a>            )
+<a href=#642 id=642 data-nosnippet>642</a>            .unwrap();
+<a href=#643 id=643 data-nosnippet>643</a>        <span class="kw">let </span>cards = [id1, id2, id3];
+<a href=#644 id=644 data-nosnippet>644</a>        <span class="kw">let </span><span class="kw-2">mut </span>deck = CardDeckState::new(<span class="number">3</span>);
+<a href=#645 id=645 data-nosnippet>645</a>        setup_card_story(<span class="kw-2">&amp;mut </span>gui, <span class="kw-2">&amp;</span>cards, <span class="kw-2">&amp;</span>deck).unwrap();
+<a href=#646 id=646 data-nosnippet>646</a>        deck.move_next();
+<a href=#647 id=647 data-nosnippet>647</a>        setup_card_story(<span class="kw-2">&amp;mut </span>gui, <span class="kw-2">&amp;</span>cards, <span class="kw-2">&amp;</span>deck).unwrap();
+<a href=#648 id=648 data-nosnippet>648</a>
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="kw">let </span><span class="kw-2">mut </span>story = CardStory::new(<span class="kw-2">&amp;</span>cards, TimelineMotionPreset::PeekIn);
+<a href=#650 id=650 data-nosnippet>650</a>        story.next();
+<a href=#651 id=651 data-nosnippet>651</a>        story.apply(<span class="kw-2">&amp;mut </span>gui).unwrap();
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a>        <span class="kw">let </span><span class="kw-2">mut </span>animator = WidgetAnimator::&lt;<span class="number">32</span>, <span class="number">32</span>&gt;::new();
+<a href=#654 id=654 data-nosnippet>654</a>        animate_glance_focus(
+<a href=#655 id=655 data-nosnippet>655</a>            <span class="kw-2">&amp;mut </span>animator,
+<a href=#656 id=656 data-nosnippet>656</a>            id1,
+<a href=#657 id=657 data-nosnippet>657</a>            <span class="kw-2">&amp;</span>[id2, id3],
+<a href=#658 id=658 data-nosnippet>658</a>            <span class="number">10</span>,
+<a href=#659 id=659 data-nosnippet>659</a>            <span class="number">20</span>,
+<a href=#660 id=660 data-nosnippet>660</a>            GlanceTileSpec::default(),
+<a href=#661 id=661 data-nosnippet>661</a>        )
+<a href=#662 id=662 data-nosnippet>662</a>        .unwrap();
+<a href=#663 id=663 data-nosnippet>663</a>        setup_peek_timeline(<span class="kw-2">&amp;mut </span>animator, id1, <span class="prelude-val">Some</span>(id2), <span class="prelude-val">Some</span>(id3), <span class="number">10</span>, <span class="number">20</span>).unwrap();
+<a href=#664 id=664 data-nosnippet>664</a>        setup_peek_timeline_with_tokens(
+<a href=#665 id=665 data-nosnippet>665</a>            <span class="kw-2">&amp;mut </span>animator,
+<a href=#666 id=666 data-nosnippet>666</a>            id1,
+<a href=#667 id=667 data-nosnippet>667</a>            <span class="prelude-val">Some</span>(id2),
+<a href=#668 id=668 data-nosnippet>668</a>            <span class="prelude-val">None</span>,
+<a href=#669 id=669 data-nosnippet>669</a>            <span class="number">10</span>,
+<a href=#670 id=670 data-nosnippet>670</a>            <span class="number">20</span>,
+<a href=#671 id=671 data-nosnippet>671</a>            MotionTokens::default(),
+<a href=#672 id=672 data-nosnippet>672</a>        )
+<a href=#673 id=673 data-nosnippet>673</a>        .unwrap();
+<a href=#674 id=674 data-nosnippet>674</a>        setup_launcher_glance(<span class="kw-2">&amp;mut </span>animator, id1, <span class="kw-2">&amp;</span>[id2, id3], <span class="number">10</span>, <span class="number">20</span>).unwrap();
+<a href=#675 id=675 data-nosnippet>675</a>        setup_launcher_glance_with_tokens(
+<a href=#676 id=676 data-nosnippet>676</a>            <span class="kw-2">&amp;mut </span>animator,
+<a href=#677 id=677 data-nosnippet>677</a>            id1,
+<a href=#678 id=678 data-nosnippet>678</a>            <span class="kw-2">&amp;</span>[id2],
+<a href=#679 id=679 data-nosnippet>679</a>            <span class="number">10</span>,
+<a href=#680 id=680 data-nosnippet>680</a>            <span class="number">20</span>,
+<a href=#681 id=681 data-nosnippet>681</a>            MotionTokens::default(),
+<a href=#682 id=682 data-nosnippet>682</a>        )
+<a href=#683 id=683 data-nosnippet>683</a>        .unwrap();
+<a href=#684 id=684 data-nosnippet>684</a>        <span class="macro">assert!</span>(animator.active_count() &gt; <span class="number">0</span>);
+<a href=#685 id=685 data-nosnippet>685</a>    }
+<a href=#686 id=686 data-nosnippet>686</a>}
 </code></pre></div></section></main></body></html>

@@ -3904,5 +3904,33 @@
 <a href=#3904 id=3904 data-nosnippet>3904</a>        <span class="macro">assert!</span>(rust_code.contains(<span class="string">".with_disabled_bg(Rgb565::new(4, 34, 4))"</span>)); <span class="comment">// forestgreen
 <a href=#3905 id=3905 data-nosnippet>3905</a>        </span><span class="macro">assert!</span>(rust_code.contains(<span class="string">".with_disabled_text(Rgb565::new(27, 5, 7))"</span>)); <span class="comment">// crimson
 <a href=#3906 id=3906 data-nosnippet>3906</a>    </span>}
-<a href=#3907 id=3907 data-nosnippet>3907</a>}
+<a href=#3907 id=3907 data-nosnippet>3907</a>
+<a href=#3908 id=3908 data-nosnippet>3908</a>    <span class="attr">#[test]
+<a href=#3909 id=3909 data-nosnippet>3909</a>    </span><span class="kw">fn </span>default_defs_parse_tracks_errors_and_relative_svg_paths() {
+<a href=#3910 id=3910 data-nosnippet>3910</a>        <span class="macro">assert_eq!</span>(GridPlacementDef::default().col_span, <span class="number">1</span>);
+<a href=#3911 id=3911 data-nosnippet>3911</a>        <span class="kw">let </span>anim = WidgetAnimationDef::default();
+<a href=#3912 id=3912 data-nosnippet>3912</a>        <span class="macro">assert_eq!</span>(anim.repeat, <span class="number">1</span>);
+<a href=#3913 id=3913 data-nosnippet>3913</a>        <span class="kw">let </span>transition = ScreenTransitionDef::default();
+<a href=#3914 id=3914 data-nosnippet>3914</a>        <span class="macro">assert_eq!</span>(transition.duration_ms, <span class="number">300</span>);
+<a href=#3915 id=3915 data-nosnippet>3915</a>
+<a href=#3916 id=3916 data-nosnippet>3916</a>        <span class="macro">assert!</span>(parse_tracks(<span class="string">"badfr"</span>).is_err());
+<a href=#3917 id=3917 data-nosnippet>3917</a>        <span class="macro">assert!</span>(parse_tracks(<span class="string">"bogus"</span>).is_err());
+<a href=#3918 id=3918 data-nosnippet>3918</a>        <span class="macro">assert_eq!</span>(parse_tracks(<span class="string">""</span>).unwrap(), <span class="macro">vec!</span>[GridTrackDef::Fr(<span class="number">1</span>)]);
+<a href=#3919 id=3919 data-nosnippet>3919</a>        <span class="macro">assert_eq!</span>(
+<a href=#3920 id=3920 data-nosnippet>3920</a>            parse_tracks(<span class="string">"64 1fr auto"</span>).unwrap(),
+<a href=#3921 id=3921 data-nosnippet>3921</a>            <span class="macro">vec!</span>[
+<a href=#3922 id=3922 data-nosnippet>3922</a>                GridTrackDef::Px(<span class="number">64</span>),
+<a href=#3923 id=3923 data-nosnippet>3923</a>                GridTrackDef::Fr(<span class="number">1</span>),
+<a href=#3924 id=3924 data-nosnippet>3924</a>                GridTrackDef::Auto
+<a href=#3925 id=3925 data-nosnippet>3925</a>            ]
+<a href=#3926 id=3926 data-nosnippet>3926</a>        );
+<a href=#3927 id=3927 data-nosnippet>3927</a>
+<a href=#3928 id=3928 data-nosnippet>3928</a>        <span class="kw">let </span>rel = parse_svg_path_d(<span class="string">"m 10 10 l 5 0 h -2 v 3 c 1 1 2 2 3 0 z"</span>);
+<a href=#3929 id=3929 data-nosnippet>3929</a>        <span class="macro">assert!</span>(rel.iter().any(|v| <span class="macro">matches!</span>(v, PathVerbDef::LineTo(<span class="number">15</span>, <span class="number">10</span>))));
+<a href=#3930 id=3930 data-nosnippet>3930</a>        <span class="macro">assert!</span>(rel.iter().any(|v| <span class="macro">matches!</span>(v, PathVerbDef::Close)));
+<a href=#3931 id=3931 data-nosnippet>3931</a>
+<a href=#3932 id=3932 data-nosnippet>3932</a>        <span class="kw">let </span>with_separators = parse_svg_path_d(<span class="string">"M0,0 5,5 Z"</span>);
+<a href=#3933 id=3933 data-nosnippet>3933</a>        <span class="macro">assert_eq!</span>(with_separators.len(), <span class="number">3</span>);
+<a href=#3934 id=3934 data-nosnippet>3934</a>    }
+<a href=#3935 id=3935 data-nosnippet>3935</a>}
 </code></pre></div></section></main></body></html>
