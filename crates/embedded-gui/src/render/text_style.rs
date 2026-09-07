@@ -169,3 +169,53 @@ pub struct TextMetrics {
     pub width: u32,
     pub height: u32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_graphics_core::pixelcolor::RgbColor;
+
+    #[test]
+    fn text_style_builder_mutations() {
+        let mut style = TextStyle::new(Rgb565::RED);
+        style = style.centered();
+        assert_eq!(style.align, TextAlign::Center);
+        assert_eq!(style.vertical_align, VerticalAlign::Middle);
+
+        style = style
+            .with_align(TextAlign::Right)
+            .with_vertical_align(VerticalAlign::Bottom)
+            .with_wrap(TextWrap::Word)
+            .with_line_spacing(2)
+            .with_overflow(TextOverflow::Ellipsis)
+            .with_kerning(true)
+            .with_max_lines(Some(2))
+            .with_ellipsis_mode(EllipsisMode::SingleGlyph)
+            .with_overflow_policy(TextOverflowPolicy::WrapThenEllipsis { max_lines: 3 })
+            .with_opacity(100)
+            .with_font_id(FontId::Tiny3x5)
+            .with_font(FontId::Tiny3x5);
+        assert_eq!(style.align, TextAlign::Right);
+        assert_eq!(style.vertical_align, VerticalAlign::Bottom);
+        assert_eq!(style.wrap, TextWrap::Word);
+        assert_eq!(style.line_spacing, 2);
+        assert_eq!(style.overflow, TextOverflow::Ellipsis);
+        assert!(style.kerning);
+        assert_eq!(style.max_lines, Some(2));
+        assert_eq!(style.ellipsis, EllipsisMode::SingleGlyph);
+        assert_eq!(style.opacity, 100);
+        assert_eq!(style.font, FontId::Tiny3x5);
+    }
+
+    #[cfg(feature = "embedded-graphics")]
+    #[test]
+    fn text_style_from_mono_style() {
+        use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_4X6};
+        let mono = MonoTextStyle::new(&FONT_4X6, Rgb565::GREEN);
+        let style = TextStyle::from(&mono);
+        assert_eq!(style.color, Rgb565::GREEN);
+        assert!(matches!(style.font, FontId::MonoFont(_)));
+        let style2 = TextStyle::from(mono);
+        assert_eq!(style2.color, Rgb565::GREEN);
+    }
+}

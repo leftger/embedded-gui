@@ -264,4 +264,49 @@ mod tests {
         );
         assert_eq!(pm.state(), PowerState::Active);
     }
+
+    #[test]
+    fn test_power_manager_off_config_and_wake_disabled() {
+        let config = PowerConfig {
+            dim_timeout_ms: 100,
+            standby_timeout_ms: 200,
+            active_brightness: 255,
+            dim_brightness: 10,
+            active_fps: 60,
+            dim_fps: 15,
+        };
+        let mut pm = PowerManager::new(config);
+        pm.set_wake_on_input(false);
+        pm.tick(250);
+        assert_eq!(pm.state(), PowerState::Standby);
+        assert_eq!(pm.frame_interval_ms(), None);
+        assert_eq!(pm.notify_activity(), PowerEvent::None);
+        assert_eq!(pm.state(), PowerState::Standby);
+        assert_eq!(pm.tick(1000), PowerEvent::None);
+
+        assert_eq!(
+            pm.force_state(PowerState::Off),
+            PowerEvent::StateChanged {
+                from: PowerState::Standby,
+                to: PowerState::Off,
+            }
+        );
+        assert_eq!(pm.tick(100), PowerEvent::None);
+        assert_eq!(pm.force_state(PowerState::Off), PowerEvent::None);
+        assert_eq!(pm.frame_interval_ms(), None);
+
+        pm.force_state(PowerState::Dimmed);
+        assert_eq!(pm.backlight_brightness(), 10);
+        assert_eq!(pm.target_fps(), 15);
+        assert_eq!(pm.frame_interval_ms(), Some(1000 / 15));
+        assert!(pm.should_render());
+
+        pm.config_mut().active_fps = 30;
+        pm.force_state(PowerState::Active);
+        assert_eq!(pm.config().active_fps, 30);
+        assert_eq!(pm.frame_interval_ms(), Some(33));
+
+        let default_cfg = PowerConfig::default();
+        assert_eq!(default_cfg.dim_timeout_ms, 30_000);
+    }
 }

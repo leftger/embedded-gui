@@ -158,3 +158,79 @@ impl<'a, const N: usize> DrawTarget for ScanlineTarget<'a, N> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockTarget {
+        pixels: [Rgb565; 400],
+    }
+
+    impl Default for MockTarget {
+        fn default() -> Self {
+            Self {
+                pixels: [Rgb565::BLACK; 400],
+            }
+        }
+    }
+
+    impl OriginDimensions for MockTarget {
+        fn size(&self) -> Size {
+            Size::new(20, 20)
+        }
+    }
+
+    impl DrawTarget for MockTarget {
+        type Color = Rgb565;
+        type Error = Infallible;
+
+        fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+        where
+            I: IntoIterator<Item = Pixel<Self::Color>>,
+        {
+            for Pixel(pt, color) in pixels {
+                if pt.x >= 0 && pt.y >= 0 && pt.x < 20 && pt.y < 20 {
+                    self.pixels[(pt.y * 20 + pt.x) as usize] = color;
+                }
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn line_buffer_direct_helpers() {
+        let mut renderer = LineBufferRenderer::<12>::new(4, 3);
+        assert_eq!(renderer.width(), 4);
+        assert_eq!(renderer.lines(), 3);
+        assert_eq!(renderer.current_y(), 0);
+        assert_eq!(renderer.buffer().len(), 12);
+
+        renderer.clear(Rgb565::RED);
+        assert_eq!(renderer.buffer()[0], Rgb565::RED);
+        renderer.buffer_mut()[1] = Rgb565::GREEN;
+        assert_eq!(renderer.buffer()[1], Rgb565::GREEN);
+    }
+
+    #[test]
+    fn line_buffer_stream_multiple_slices_and_clip() {
+        let mut renderer = LineBufferRenderer::<20>::new(10, 2);
+        let mut target = MockTarget::default();
+        let viewport = Rect::new(2, 1, 10, 5);
+        renderer
+            .render_stream(&mut target, viewport, Some(Rgb565::BLACK), |scan, rect| {
+                scan.draw_iter([
+                    Pixel(Point::new(rect.x, rect.y), Rgb565::YELLOW),
+                    Pixel(Point::new(rect.x + 1, rect.y), Rgb565::CYAN),
+                    Pixel(Point::new(999, 999), Rgb565::WHITE),
+                ])?;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(target.pixels[20 + 2], Rgb565::YELLOW);
+        assert_eq!(target.pixels[3 * 20 + 2], Rgb565::YELLOW);
+        assert_eq!(target.pixels[20 + 3], Rgb565::CYAN);
+        assert_eq!(target.pixels[3 * 20 + 3], Rgb565::CYAN);
+        assert_eq!(renderer.current_y(), viewport.y + 4);
+    }
+}

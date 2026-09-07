@@ -416,4 +416,167 @@ mod tests {
         assert_eq!(hw_unit.fill_count, 1);
         assert_eq!(fb.pixels()[0], Rgb565::RED);
     }
+
+    #[test]
+    fn test_draw_task_all_bounds_and_queue_overflow() {
+        let shadow = Shadow::soft();
+        let tasks = [
+            DrawTask::Gradient {
+                rect: Rect::new(1, 2, 3, 4),
+                gradient: LinearGradient::horizontal(Rgb565::RED, Rgb565::BLUE),
+                radius: 0,
+                opacity: 255,
+            },
+            DrawTask::Label {
+                rect: Rect::new(1, 2, 3, 4),
+                text: "x",
+                style: TextStyle::new(Rgb565::RED),
+            },
+            DrawTask::Image {
+                rect: Rect::new(1, 2, 3, 4),
+                image: ImageRef::new(2, 2, &[0xFFFF; 4]),
+                tint: None,
+            },
+            DrawTask::Arc {
+                center: Point::new(10, 10),
+                radius: 4,
+                start_angle: 0,
+                end_angle: 90,
+                stroke_width: 2,
+                color: Rgb565::RED,
+            },
+            DrawTask::Line {
+                start: Point::new(0, 0),
+                end: Point::new(10, 10),
+                color: Rgb565::RED,
+                width: 3,
+            },
+            DrawTask::BoxShadow {
+                rect: Rect::new(1, 2, 3, 4),
+                shadow,
+                radius: 2,
+            },
+        ];
+        for task in &tasks {
+            assert!(!task.bounds().is_empty());
+        }
+
+        let mut queue = DrawTaskQueue::<1>::default();
+        queue
+            .push(DrawTask::Fill {
+                rect: Rect::new(0, 0, 1, 1),
+                color: Rgb565::RED,
+                radius: 0,
+                opacity: 255,
+            })
+            .unwrap();
+        assert!(
+            queue
+                .push(DrawTask::Fill {
+                    rect: Rect::new(1, 1, 1, 1),
+                    color: Rgb565::BLUE,
+                    radius: 0,
+                    opacity: 255,
+                })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_software_unit_executes_all_task_families() {
+        let mut fb = Framebuffer::<400>::new(20, 20);
+        let mut unit = SoftwareDrawUnit;
+        let mut queue = DrawTaskQueue::<16>::new();
+        let shadow = Shadow::soft();
+
+        queue
+            .push(DrawTask::Fill {
+                rect: Rect::new(0, 0, 4, 4),
+                color: Rgb565::RED,
+                radius: 0,
+                opacity: 0,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Fill {
+                rect: Rect::new(0, 0, 4, 4),
+                color: Rgb565::RED,
+                radius: 0,
+                opacity: 255,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Fill {
+                rect: Rect::new(5, 5, 4, 4),
+                color: Rgb565::GREEN,
+                radius: 2,
+                opacity: 128,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Gradient {
+                rect: Rect::new(0, 6, 4, 4),
+                gradient: LinearGradient::vertical(Rgb565::RED, Rgb565::BLUE),
+                radius: 0,
+                opacity: 128,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Border {
+                rect: Rect::new(0, 10, 6, 6),
+                border: Border::one(Rgb565::WHITE),
+                radius: 0,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Border {
+                rect: Rect::new(10, 10, 6, 6),
+                border: Border::one(Rgb565::WHITE),
+                radius: 2,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Label {
+                rect: Rect::new(0, 12, 10, 8),
+                text: "Hi",
+                style: TextStyle::new(Rgb565::WHITE),
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Image {
+                rect: Rect::new(10, 0, 4, 4),
+                image: ImageRef::new(2, 2, &[0xFFFF; 4]),
+                tint: None,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Arc {
+                center: Point::new(12, 12),
+                radius: 4,
+                start_angle: 0,
+                end_angle: 180,
+                stroke_width: 1,
+                color: Rgb565::YELLOW,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::Line {
+                start: Point::new(14, 14),
+                end: Point::new(18, 18),
+                color: Rgb565::CYAN,
+                width: 1,
+            })
+            .unwrap();
+        queue
+            .push(DrawTask::BoxShadow {
+                rect: Rect::new(12, 14, 4, 4),
+                shadow,
+                radius: 1,
+            })
+            .unwrap();
+
+        let mut units: [&mut dyn DrawUnit<Framebuffer<400>>; 0] = [];
+        dispatch_draw_tasks(&queue, &mut fb, &mut units, &mut unit).unwrap();
+        assert!(fb.pixels().contains(&Rgb565::RED));
+    }
 }

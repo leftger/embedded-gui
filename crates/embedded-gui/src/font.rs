@@ -619,4 +619,61 @@ mod tests {
         assert_eq!(font_id.advance(), 10);
         assert_eq!(font_id.line_height(), 14);
     }
+
+    #[test]
+    fn test_font_id_all_variants_and_glyph_rows() {
+        assert_eq!(FontId::Tiny3x5.advance(), 4);
+        assert_eq!(FontId::Tiny3x5.line_height(), 6);
+        assert_eq!(FontId::Medium4x7.advance(), 5);
+        assert_eq!(FontId::Medium4x7.line_height(), 8);
+        assert_eq!(FontId::Scaled6x10.advance(), 7);
+        assert_eq!(FontId::Scaled6x10.line_height(), 11);
+        assert_eq!(FontId::Vector(2).advance(), 16);
+        assert_eq!(FontId::Vector(2).line_height(), 24);
+        assert_eq!(FontId::Bitmap(&MY_BITMAP_FONT).advance(), 8);
+        assert_eq!(FontId::Dynamic(&DYN_FONT_INSTANCE).line_height(), 14);
+
+        let rows = glyph_rows(FontId::Tiny3x5, 'A');
+        assert_eq!(rows.len(), 5);
+        let missing = glyph_rows(FontId::Tiny3x5, '\u{10FFFF}');
+        assert_eq!(missing.len(), 5);
+    }
+
+    #[test]
+    fn test_packed_font_draw_and_missing_glyph() {
+        let mut pixels = Vec::new();
+        ASCII_3X5_FONT.draw_glyph('A', &mut |x, y| pixels.push((x, y)));
+        assert!(!pixels.is_empty());
+
+        let mut zero = Vec::new();
+        ASCII_3X5_FONT.draw_glyph('\u{10FFFF}', &mut |_, _| zero.push(()));
+        assert!(zero.is_empty());
+    }
+
+    #[test]
+    fn test_bitmap_font_glyph_bytes_and_spans() {
+        static SINGLE_GLYPHS: [u8; 16] = [0b10000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        static SINGLE_BITMAP: BitmapFont = BitmapFont::new_8x16(65, 8, 16, &SINGLE_GLYPHS);
+
+        assert!(MY_BITMAP_FONT.glyph_bytes('A').is_some());
+        assert!(MY_BITMAP_FONT.glyph_bytes('\u{10FFFF}').is_none());
+        assert!(MY_BITMAP_FONT.glyph_bytes(' ').is_none());
+
+        let mut ops = Vec::new();
+        MY_BITMAP_FONT.draw_glyph_to('A', |op| ops.push(op));
+        assert!(ops.iter().any(|op| matches!(op, GlyphOp::Span(..))));
+
+        let mut single_ops = Vec::new();
+        SINGLE_BITMAP.draw_glyph_to('A', |op| single_ops.push(op));
+        assert!(single_ops.iter().any(|op| matches!(op, GlyphOp::Pixel(..))));
+    }
+
+    #[test]
+    fn test_get_vector_glyph_covers_ascii_and_fallback() {
+        for ch in (32u8..=126).map(|c| c as char) {
+            let _ = get_vector_glyph(ch);
+        }
+        let fallback = get_vector_glyph('é');
+        assert!(!fallback.is_empty());
+    }
 }

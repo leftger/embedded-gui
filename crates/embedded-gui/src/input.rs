@@ -487,4 +487,90 @@ mod tests {
         let evt3 = recognizer.on_release();
         assert_eq!(evt3, Some(ClickEvent::LongClickEnd));
     }
+
+    #[test]
+    fn test_event_filters_masks_and_ui_event_targets() {
+        let mut filter = UiEventFilter::empty();
+        assert!(UiEventFilter::ALL.contains(UiEventFilter::FOCUS));
+        filter.insert(UiEventFilter::POINTER);
+        filter.insert(UiEventFilter::VALUE | UiEventFilter::BACK);
+        assert!(filter.contains(UiEventFilter::POINTER));
+        assert!(filter.contains(UiEventFilter::VALUE));
+        filter.remove(UiEventFilter::POINTER);
+        assert!(!filter.contains(UiEventFilter::POINTER));
+
+        let id = WidgetId::new(3);
+        let events = [
+            UiEvent::FocusChanged {
+                old: None,
+                new: Some(id),
+            },
+            UiEvent::Activate(id),
+            UiEvent::Back,
+            UiEvent::Pressed(id),
+            UiEvent::Released(id),
+            UiEvent::Clicked(id),
+            UiEvent::DoubleClicked(id),
+            UiEvent::LongPressed(id),
+            UiEvent::Opened(id),
+            UiEvent::Closed(id),
+            UiEvent::PointerPressed(id),
+            UiEvent::PointerReleased(id),
+            UiEvent::Gesture(id),
+            UiEvent::ValueChanged(id),
+            UiEvent::TextInput { id, ch: 'x' },
+            UiEvent::Focused(id),
+            UiEvent::Defocused(id),
+            UiEvent::Scroll { id, delta: 1 },
+            UiEvent::LayoutChanged(id),
+            UiEvent::StyleChanged(id),
+        ];
+        for e in events {
+            let _ = e.target();
+            let _ = e.filter();
+        }
+        assert_eq!(UiEvent::Back.target(), None);
+
+        let mut wf = WidgetEventFilter::ALL;
+        assert!(wf.contains(WidgetEventFilter::POINTER));
+        wf = WidgetEventFilter::POINTER | WidgetEventFilter::VALUE;
+        assert!(wf.contains(WidgetEventFilter::POINTER));
+        assert!(!wf.contains(WidgetEventFilter::FOCUS));
+
+        let kinds = [
+            WidgetEventKind::Pressed,
+            WidgetEventKind::Released,
+            WidgetEventKind::Clicked,
+            WidgetEventKind::DoubleClicked,
+            WidgetEventKind::LongPressed,
+            WidgetEventKind::Opened,
+            WidgetEventKind::Closed,
+            WidgetEventKind::ValueChanged,
+            WidgetEventKind::Focused,
+            WidgetEventKind::Defocused,
+            WidgetEventKind::Scroll { delta: 1 },
+            WidgetEventKind::Gesture,
+            WidgetEventKind::LayoutChanged,
+            WidgetEventKind::StyleChanged,
+        ];
+        for k in kinds {
+            let _ = k.filter();
+        }
+
+        assert!(EventPhaseMask::ALL.contains(EventPhase::Capture));
+        assert!(EventPhaseMask::ALL.contains(EventPhase::Bubble));
+        let policy = WidgetDispatchPolicy::stop(WidgetEventFilter::POINTER, EventPhaseMask::ALL);
+        assert!(policy.stop);
+        assert!(policy.allows(WidgetEventKind::Pressed, EventPhase::Target));
+        assert!(!policy.allows(WidgetEventKind::Clicked, EventPhase::Target));
+    }
+
+    #[test]
+    fn test_click_recognizer_reset_and_release_without_press() {
+        let mut recognizer = ClickRecognizer::default();
+        assert_eq!(recognizer.on_release(), None);
+        recognizer.on_press();
+        recognizer.reset();
+        assert_eq!(recognizer.on_release(), None);
+    }
 }

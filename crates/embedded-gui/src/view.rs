@@ -273,4 +273,51 @@ mod tests {
         assert_eq!(ctx.widgets().len(), 4); // panel container + 3 children
         assert!(ctx.node(root).is_some());
     }
+
+    #[test]
+    fn test_view_row_panel_and_flex_when_child_false() {
+        let mut ctx: GuiContext<32, 16, 16> = GuiContext::new(Rect::new(0, 0, 320, 240));
+        let root = ctx
+            .build_view(|cx| {
+                cx.row(|row| {
+                    row.child(|c| c.styled_label("A", crate::style::Style::label()))?
+                        .child(|c| {
+                            c.panel(|panel| panel.styled_label("P", crate::style::Style::label()))
+                        })?
+                        .when_child(false, |c| c.label("never"))?
+                        .build()
+                })
+            })
+            .unwrap();
+        assert!(ctx.node(root).is_some());
+
+        let root2 = ctx
+            .build_view(|cx| {
+                cx.column(|col| {
+                    col.cross_align(Align::Center)
+                        .justify(JustifyContent::SpaceBetween)
+                        .child(|c| c.button("B"))?
+                        .build()
+                })
+            })
+            .unwrap();
+        assert!(ctx.node(root2).is_some());
+    }
+
+    #[cfg(feature = "rich-widgets")]
+    #[test]
+    fn test_view_rich_widget_builders() {
+        let mut ctx: GuiContext<16, 16, 16> = GuiContext::new(Rect::new(0, 0, 160, 120));
+        let root = ctx
+            .build_view(|cx| {
+                cx.column(|col| {
+                    col.child(|c| c.toggle("T", true))?
+                        .child(|c| c.slider(0.5, 0.0, 1.0))?
+                        .child(|c| c.progress_bar(0.7))?
+                        .build()
+                })
+            })
+            .unwrap();
+        assert!(ctx.node(root).is_some());
+    }
 }

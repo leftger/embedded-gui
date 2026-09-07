@@ -383,4 +383,67 @@ mod tests {
         assert_eq!(target.pixels[20 * 9 + 5], Rgb565::GREEN);
         assert_eq!(target.pixels[20 * 11 + 5], Rgb565::BLACK);
     }
+
+    #[test]
+    fn test_partial_band_buffer_direct_drawing() {
+        let mut band = PartialBandBuffer::<20>::new(5, 4);
+        assert_eq!(band.size(), Size::new(5, 4));
+        assert_eq!(band.buffer().len(), 20);
+        band.clear_color(Rgb565::RED);
+        assert_eq!(band.buffer()[0], Rgb565::RED);
+        band.buffer_mut()[1] = Rgb565::GREEN;
+        assert_eq!(band.buffer()[1], Rgb565::GREEN);
+
+        band.draw_iter([Pixel(Point::new(1, 1), Rgb565::BLUE)])
+            .unwrap();
+        assert_eq!(band.buffer()[6], Rgb565::BLUE);
+        band.draw_iter([Pixel(Point::new(99, 99), Rgb565::WHITE)])
+            .unwrap();
+        band.draw_iter([Pixel(Point::new(-1, 0), Rgb565::WHITE)])
+            .unwrap();
+
+        let area = Rectangle::new(Point::new(-1, -1), Size::new(10, 10));
+        band.fill_solid(&area, Rgb565::YELLOW).unwrap();
+        assert_eq!(band.buffer()[0], Rgb565::YELLOW);
+
+        let mut band2 = PartialBandBuffer::<20>::new(5, 4);
+        let area2 = Rectangle::new(Point::new(1, 1), Size::new(2, 2));
+        band2
+            .fill_contiguous(
+                &area2,
+                [Rgb565::RED, Rgb565::GREEN, Rgb565::BLUE, Rgb565::WHITE],
+            )
+            .unwrap();
+        assert_eq!(band2.get_pixel(Point::new(1, 1)), Rgb565::RED);
+        assert_eq!(band2.get_pixel(Point::new(2, 2)), Rgb565::WHITE);
+        assert_eq!(band2.get_pixel(Point::new(50, 50)), Rgb565::BLACK);
+        band2.clear(Rgb565::CYAN).unwrap();
+        assert_eq!(band2.buffer()[0], Rgb565::CYAN);
+    }
+
+    #[test]
+    fn test_band_target_wrapper_geometry() {
+        let mut band = PartialBandBuffer::<20>::new(5, 4);
+        let mut wrapper = BandTargetWrapper {
+            parent: &mut band,
+            band_origin: Point::new(10, 20),
+        };
+        wrapper
+            .draw_iter([Pixel(Point::new(11, 21), Rgb565::RED)])
+            .unwrap();
+        assert_eq!(wrapper.parent.get_pixel(Point::new(1, 1)), Rgb565::RED);
+
+        wrapper
+            .draw_iter([Pixel(Point::new(99, 99), Rgb565::RED)])
+            .unwrap();
+
+        let area = Rectangle::new(Point::new(10, 20), Size::new(2, 2));
+        wrapper.fill_solid(&area, Rgb565::GREEN).unwrap();
+        assert_eq!(wrapper.parent.get_pixel(Point::new(1, 1)), Rgb565::GREEN);
+
+        let area2 = Rectangle::new(Point::new(11, 21), Size::new(1, 1));
+        wrapper.fill_contiguous(&area2, [Rgb565::BLUE]).unwrap();
+        assert_eq!(wrapper.parent.get_pixel(Point::new(1, 1)), Rgb565::BLUE);
+        assert_eq!(wrapper.get_pixel(Point::new(11, 21)), Rgb565::BLUE);
+    }
 }

@@ -174,4 +174,30 @@ mod tests {
         assert_eq!(outlines[2], Rect::new(10, 20, 1, 50));
         assert_eq!(outlines[3], Rect::new(109, 20, 1, 50));
     }
+
+    #[test]
+    fn test_profiler_wrap_reset_visualizer_and_empty() {
+        let mut tracker = FrameBudgetTracker::new(0);
+        assert_eq!(tracker.target_frame_time_ms(), 16);
+        for i in 0..20 {
+            tracker.record_frame(if i % 2 == 0 { 20 } else { 10 });
+        }
+        assert_eq!(tracker.total_frames(), 20);
+        assert!(tracker.dropped_frames() > 0);
+        assert!(tracker.average_render_time_ms() >= 10);
+        let fps = tracker.estimated_fps();
+        assert!(fps > 0 && fps <= 1000);
+        tracker.reset();
+        assert_eq!(tracker.average_render_time_ms(), 0);
+        assert_eq!(tracker.dropped_frames(), 0);
+        assert_eq!(tracker.total_frames(), 0);
+        assert_eq!(tracker.estimated_fps(), 62); // 1000 / 16 == 62
+
+        let v = DirtyRectVisualizer::default();
+        assert!(!v.enabled);
+        let v2 = DirtyRectVisualizer::new(Rgb565::new(31, 63, 31));
+        assert!(v2.enabled);
+        let empty = DirtyRectVisualizer::outline_rects(Rect::empty());
+        assert_eq!(empty, [Rect::empty(); 4]);
+    }
 }

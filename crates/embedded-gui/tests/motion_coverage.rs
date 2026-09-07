@@ -397,3 +397,162 @@ fn cinematic_deck_story_tokens_and_peek_animation() {
     assert_eq!(TimelineMotionPreset::PeekIn.duration_ms(), 220);
     assert_eq!(TimelineMotionPreset::ScrubSettle.duration_ms(), 140);
 }
+
+#[test]
+fn widget_animator_extended_policies_presets_and_stops() {
+    let mut animator = WidgetAnimator::<64, 64>::new();
+    let id = WidgetId::new(11);
+    let id2 = WidgetId::new(12);
+
+    animator
+        .animate_slider_value_with_policy(
+            id,
+            0.0,
+            1.0,
+            20,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_scroll_offset_y_with_policy(
+            id,
+            0,
+            10,
+            20,
+            Easing::Linear,
+            AnimationConflictPolicy::Queue,
+        )
+        .unwrap();
+    animator
+        .animate_tab_selected(id, 0, 1, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_dropdown_selected(id, 0, 1, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_roller_selected(id, 0, 1, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_gauge_value(id, 0.0, 1.0, 20, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_spinner_phase(id, 0.0, 1.0, 20, Easing::Linear)
+        .unwrap();
+
+    animator
+        .animate_widget_x_with_policy(
+            id,
+            0,
+            5,
+            10,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_x_with_custom_interpolator(
+            id,
+            0,
+            5,
+            10,
+            Easing::Linear,
+            |t, _, _| t,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_y_with_policy(
+            id,
+            0,
+            5,
+            10,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_y_with_custom_curve(
+            id,
+            0,
+            5,
+            10,
+            Easing::Linear,
+            |t| t,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_width_with_policy(
+            id,
+            1,
+            2,
+            10,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_widget_height_with_policy(
+            id,
+            1,
+            2,
+            10,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .animate_opacity_with_policy(
+            id,
+            0,
+            255,
+            10,
+            Easing::Linear,
+            AnimationConflictPolicy::Replace,
+        )
+        .unwrap();
+    animator
+        .bind_property(
+            id,
+            AnimatedProperty::CornerRadius,
+            Animation::new(0.0, 4.0, 10, Easing::Linear),
+        )
+        .unwrap();
+    animator
+        .bind_property_with_policy(
+            id,
+            AnimatedProperty::CornerRadius,
+            Animation::new(4.0, 8.0, 10, Easing::Linear),
+            AnimationConflictPolicy::Queue,
+        )
+        .unwrap();
+
+    animator
+        .stagger_widget_x(&[id, id2], 0, 10, 20, 5, Easing::Linear)
+        .unwrap();
+    animator.preset_fade_in_up(id, 20, 0, 10).unwrap();
+    animator.preset_attention_shake(id, 10, 3, 30).unwrap();
+    animator
+        .preset_selection_bump_settle(id, 20, 4, 30)
+        .unwrap();
+
+    assert!(animator.is_animating_widget(id));
+    let stopped = animator.stop_widget_property(id, AnimatedProperty::WidgetX);
+    assert!(stopped > 0);
+    assert!(animator.active_count() > 0);
+    let _ = animator.stop_widget(id2);
+
+    // Test animator tick with real widgets for scroll/corner/opacity properties.
+    let mut gui = GuiContext::<8, 8, 8>::new(Rect::new(0, 0, 128, 64));
+    let label_id = gui
+        .add_label(Rect::new(0, 0, 20, 10), "x", Style::label())
+        .unwrap();
+    let mut real = WidgetAnimator::<8, 8>::new();
+    real.animate_widget_x(label_id, 0, 10, 5, Easing::Linear)
+        .unwrap();
+    real.animate_opacity(label_id, 0, 255, 5, Easing::Linear)
+        .unwrap();
+    real.tick(10, &mut gui).unwrap();
+    assert_eq!(real.active_count(), 0);
+}

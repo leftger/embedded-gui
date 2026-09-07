@@ -546,4 +546,117 @@ mod tests {
         let badge = child.align_to(parent, HorizontalAlign::LeftToRight, VerticalAlign::Top);
         assert_eq!(badge, Rect::new(100, 0, 20, 20));
     }
+
+    #[test]
+    fn test_all_anchor_and_align_variants() {
+        let parent = Rect::new(10, 10, 100, 100);
+        let child = Rect::new(0, 0, 20, 20);
+
+        let left = child.align_to(parent, HorizontalAlign::Left, VerticalAlign::Center);
+        assert_eq!(left.x, 10);
+        assert_eq!(left.y, 50);
+
+        let right = child.align_to(parent, HorizontalAlign::Right, VerticalAlign::Bottom);
+        assert_eq!(right, Rect::new(90, 90, 20, 20));
+
+        let rtl = child.align_to(
+            parent,
+            HorizontalAlign::RightToLeft,
+            VerticalAlign::TopToBottom,
+        );
+        assert_eq!(rtl, Rect::new(-10, 110, 20, 20));
+
+        let btt = child.align_to(parent, HorizontalAlign::Center, VerticalAlign::BottomToTop);
+        assert_eq!(btt, Rect::new(50, -10, 20, 20));
+
+        for (anchor, expected) in [
+            (Anchor::TopLeft, Rect::new(10, 10, 20, 20)),
+            (Anchor::TopCenter, Rect::new(50, 10, 20, 20)),
+            (Anchor::TopRight, Rect::new(90, 10, 20, 20)),
+            (Anchor::CenterLeft, Rect::new(10, 50, 20, 20)),
+            (Anchor::Center, Rect::new(50, 50, 20, 20)),
+            (Anchor::CenterRight, Rect::new(90, 50, 20, 20)),
+            (Anchor::BottomLeft, Rect::new(10, 90, 20, 20)),
+            (Anchor::BottomCenter, Rect::new(50, 90, 20, 20)),
+            (Anchor::BottomRight, Rect::new(90, 90, 20, 20)),
+            (Anchor::OutsideTop, Rect::new(50, -10, 20, 20)),
+            (Anchor::OutsideBottom, Rect::new(50, 110, 20, 20)),
+            (Anchor::OutsideLeft, Rect::new(-10, 50, 20, 20)),
+            (Anchor::OutsideRight, Rect::new(110, 50, 20, 20)),
+        ] {
+            assert_eq!(child.anchor_to(parent, anchor), expected, "{anchor:?}");
+        }
+    }
+
+    #[test]
+    fn test_edge_insets_conversions_and_fluent_builder() {
+        let e = EdgeInsets::new(1, 2, 3, 4);
+        assert_eq!(e.left, 4);
+        assert_eq!(EdgeInsets::zero(), EdgeInsets::all(0));
+        assert_eq!(EdgeInsets::symmetric(3, 2), EdgeInsets::new(2, 3, 2, 3));
+
+        assert_eq!(EdgeInsets::from(5i16), EdgeInsets::all(5));
+        assert_eq!(EdgeInsets::from(5u16), EdgeInsets::all(5));
+        assert_eq!(EdgeInsets::from(5i32), EdgeInsets::all(5));
+        assert_eq!(EdgeInsets::from(5u32), EdgeInsets::all(5));
+        assert_eq!(EdgeInsets::from((1i16, 2i16)), EdgeInsets::new(1, 2, 1, 2));
+        assert_eq!(EdgeInsets::from((1u16, 2u16)), EdgeInsets::new(1, 2, 1, 2));
+        assert_eq!(EdgeInsets::from((1i32, 2i32)), EdgeInsets::new(1, 2, 1, 2));
+        assert_eq!(EdgeInsets::from((1u32, 2u32)), EdgeInsets::new(1, 2, 1, 2));
+        assert_eq!(
+            EdgeInsets::from((1i16, 2i16, 3i16)),
+            EdgeInsets::new(1, 2, 3, 2)
+        );
+        assert_eq!(
+            EdgeInsets::from((1u16, 2u16, 3u16)),
+            EdgeInsets::new(1, 2, 3, 2)
+        );
+        assert_eq!(
+            EdgeInsets::from((1i16, 2i16, 3i16, 4i16)),
+            EdgeInsets::new(1, 2, 3, 4)
+        );
+        assert_eq!(
+            EdgeInsets::from((1u16, 2u16, 3u16, 4u16)),
+            EdgeInsets::new(1, 2, 3, 4)
+        );
+
+        let r = Rect::new(1, 2, 3, 4);
+        assert_eq!(
+            r.map(|v| Rect::new(v.x + 1, v.y, v.w, v.h)),
+            Rect::new(2, 2, 3, 4)
+        );
+        assert_eq!(
+            r.when(true, |v| Rect::new(v.x, v.y, v.w + 1, v.h)),
+            Rect::new(1, 2, 4, 4)
+        );
+        assert_eq!(
+            r.when_else(
+                false,
+                |_| Rect::empty(),
+                |v| Rect::new(v.x, v.y, v.w + 1, v.h)
+            ),
+            Rect::new(1, 2, 4, 4)
+        );
+        assert_eq!(
+            r.when_some(Some(5), |v, n| Rect::new(v.x + n, v.y, v.w, v.h)),
+            Rect::new(6, 2, 3, 4)
+        );
+        assert_eq!(
+            r.when_none(&None::<i32>, |v| Rect::new(v.x + 1, v.y, v.w, v.h)),
+            Rect::new(2, 2, 3, 4)
+        );
+    }
+
+    #[test]
+    fn test_dirty_tracker_overflow_mark_all_and_empty_add() {
+        let mut dt: DirtyTracker<2> = DirtyTracker::default();
+        dt.add(Rect::empty()).unwrap();
+        assert!(dt.is_empty());
+        dt.add(Rect::new(0, 0, 4, 4)).unwrap();
+        dt.add(Rect::new(10, 0, 4, 4)).unwrap();
+        assert_eq!(dt.add(Rect::new(20, 0, 4, 4)), Err(DirtyError::Full));
+        dt.mark_all(Rect::new(0, 0, 50, 50)).unwrap();
+        assert_eq!(dt.as_slice(), &[Rect::new(0, 0, 50, 50)]);
+        assert_eq!(dt.bounding_rect(), Some(Rect::new(0, 0, 50, 50)));
+    }
 }

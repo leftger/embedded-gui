@@ -456,4 +456,100 @@ mod tests {
         assert_eq!(reel.current_frame, 0);
         assert_eq!(reel.completed_loops, 1);
     }
+
+    #[test]
+    fn test_pdc_command_paths_and_beziers() {
+        let mut path = PdcCommand::<8>::new(PdcCommandType::Path);
+        assert!(path.add_point(Point::new(0, 0)).is_ok());
+        assert!(path.add_point(Point::new(10, 0)).is_ok());
+        assert!(path.add_point(Point::new(10, 10)).is_ok());
+        path.is_closed = true;
+        path.stroke_color = Some(Rgb565::RED);
+        path.stroke_width = 2;
+
+        let mut fb = Framebuffer::<400>::new(20, 20);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 20, 20));
+        path.render(&mut ctx, Point::new(0, 0)).unwrap();
+
+        let mut overflow = PdcCommand::<2>::new(PdcCommandType::Path);
+        overflow.add_point(Point::new(0, 0)).unwrap();
+        overflow.add_point(Point::new(1, 1)).unwrap();
+        assert!(overflow.add_point(Point::new(2, 2)).is_err());
+
+        let mut quad = PdcCommand::<16>::new(PdcCommandType::PrecisePath);
+        quad.add_bezier_quad(Point::new(0, 0), Point::new(5, 10), Point::new(10, 0), 4)
+            .unwrap();
+        quad.add_bezier_cubic(
+            Point::new(10, 0),
+            Point::new(15, 10),
+            Point::new(5, 10),
+            Point::new(0, 0),
+            4,
+        )
+        .unwrap();
+        quad.stroke_color = Some(Rgb565::WHITE);
+        quad.is_closed = true;
+        let mut fb2 = Framebuffer::<400>::new(20, 20);
+        let mut ctx2 = RenderCtx::new(&mut fb2, Rect::new(0, 0, 20, 20));
+        quad.render(&mut ctx2, Point::new(0, 0)).unwrap();
+
+        let mut fb3 = Framebuffer::<400>::new(20, 20);
+        let mut ctx3 = RenderCtx::new(&mut fb3, Rect::new(0, 0, 20, 20));
+        PdcCommand::<4>::new(PdcCommandType::Path)
+            .render(&mut ctx3, Point::new(0, 0))
+            .unwrap();
+    }
+
+    #[test]
+    fn test_pdc_image_default_overflow_and_reel_controls() {
+        let mut img = PdcImage::<1, 2>::default();
+        assert_eq!(img.viewbox, Rect::new(0, 0, 0, 0));
+        let cmd = PdcCommand::<2>::new(PdcCommandType::Path);
+        img.push_command(cmd).unwrap();
+        assert!(
+            img.push_command(PdcCommand::<2>::new(PdcCommandType::Path))
+                .is_err()
+        );
+
+        let mut reel = PdcsReel::<1, 1, 2>::default();
+        reel.pause();
+        assert!(!reel.is_playing);
+        reel.update(100);
+        reel.play();
+        assert!(reel.is_playing);
+        reel.add_frame(PdcImage::new(Rect::new(0, 0, 1, 1)), 10)
+            .unwrap();
+        reel.update(10);
+        assert!(reel.completed_loops >= 1);
+
+        reel.rewind();
+        assert_eq!(reel.current_frame, 0);
+        assert_eq!(reel.completed_loops, 0);
+
+        let mut finite = PdcsReel::<2, 1, 2>::new();
+        finite.loop_count = 1;
+        finite
+            .add_frame(PdcImage::new(Rect::new(0, 0, 1, 1)), 10)
+            .unwrap();
+        finite.update(10);
+        assert!(finite.is_finished());
+        finite.play();
+        finite.update(100);
+        assert_eq!(finite.current_frame, 0);
+        // A finished reel ignores updates even if play() is called again.
+        assert!(finite.is_playing);
+
+        let mut full = PdcsReel::<1, 1, 2>::new();
+        full.add_frame(PdcImage::new(Rect::new(0, 0, 1, 1)), 10)
+            .unwrap();
+        assert!(
+            full.add_frame(PdcImage::new(Rect::new(0, 0, 1, 1)), 10)
+                .is_err()
+        );
+
+        assert!(reel.current_image().is_some());
+        let mut fb = Framebuffer::<400>::new(20, 20);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 20, 20));
+        reel.draw(&mut ctx, Point::new(0, 0)).unwrap();
+    }
 }
