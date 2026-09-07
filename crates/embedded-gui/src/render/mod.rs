@@ -138,7 +138,13 @@ where
             _compositor: PhantomData,
         }
     }
+}
 
+impl<'a, D, C> RenderCtx<'a, D, C>
+where
+    D: DrawTarget<Color = Rgb565> + PixelRead,
+    C: Compositor<D>,
+{
     /// Apply Fast IIR Blur to a sub-region `rect` on the destination target.
     pub fn blur_rect(&mut self, rect: Rect, blur_degree: u8) -> Result<(), D::Error> {
         let draw = self.visible_rect(rect);

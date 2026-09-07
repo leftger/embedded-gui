@@ -27,12 +27,14 @@ pub mod controls;
 pub mod data;
 pub mod dialog;
 pub mod gauges;
+pub mod inverter;
 pub mod notification;
 pub mod picker;
 pub mod repeater;
 pub mod rich_text_node;
 pub mod scale;
 pub mod segmented;
+pub mod sparkline;
 pub mod spinbox;
 pub mod status_bar;
 pub mod table;
@@ -54,7 +56,8 @@ pub use data::ListWidget;
 pub use dialog::{
     ActionableDialogWidget, ConfirmationDialogWidget, DialogAction, DialogError, DialogType,
 };
-pub use gauges::ProgressBarWidget;
+pub use gauges::{ArcGaugeWidget, GaugeThreshold, ProgressBarWidget};
+pub use inverter::InverterWidget;
 pub use notification::{
     NotificationAction, NotificationError, NotificationPriority, NotificationSheetWidget,
 };
@@ -62,13 +65,14 @@ pub use picker::{NumberPickerWidget, PickerError, TimeFormat, TimePickerField, T
 pub use repeater::RepeaterWidget;
 pub use rich_text_node::{RichTextError, RichTextNodeWidget, TextSpan};
 pub use scale::{ScaleMode, ScaleWidget};
+pub use sparkline::SparklineWidget;
 pub use spinbox::SpinboxWidget;
 pub use status_bar::{BatteryState, StatusBarError, StatusBarMode, StatusBarWidget};
 pub use table::TableWidget;
 pub use timeline::{PeekBannerWidget, TimelineNodeState, TimelineNodeWidget};
 pub use wearable::{
-    ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget, CrumbsIndicatorWidget,
-    SelectionWidget,
+    ActionBarSlot, ActionBarWidget, ContentIndicatorDirection, ContentIndicatorWidget,
+    CrumbsIndicatorWidget, SelectionWidget,
 };
 
 pub const TEXTAREA_CAPACITY: usize = 128;

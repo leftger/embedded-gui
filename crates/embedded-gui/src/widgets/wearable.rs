@@ -246,6 +246,14 @@ impl<'a, const MAX_CELLS: usize> Widget for SelectionWidget<'a, MAX_CELLS> {
     }
 }
 
+/// Identification for the 3 hardware action bar button slots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionBarSlot {
+    Up,
+    Select,
+    Down,
+}
+
 /// 3-Slot contextual Action Bar widget mapping hardware buttons (Up, Select, Down).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ActionBarWidget<'a> {
@@ -257,6 +265,9 @@ pub struct ActionBarWidget<'a> {
     pub down_label: Option<&'a str>,
     pub background_color: Rgb565,
     pub icon_color: Rgb565,
+    pub pressed_slot: Option<ActionBarSlot>,
+    pub highlight_color: Rgb565,
+    pub divider_color: Option<Rgb565>,
 }
 
 impl<'a> Default for ActionBarWidget<'a> {
@@ -276,7 +287,38 @@ impl<'a> ActionBarWidget<'a> {
             down_label: None,
             background_color: Rgb565::new(0, 0, 0),
             icon_color: Rgb565::new(31, 63, 31),
+            pressed_slot: None,
+            highlight_color: Rgb565::new(10, 20, 10),
+            divider_color: Some(Rgb565::new(4, 8, 4)),
         }
+    }
+
+    pub const fn with_up(mut self, icon: Option<char>, label: Option<&'a str>) -> Self {
+        self.up_icon = icon;
+        self.up_label = label;
+        self
+    }
+
+    pub const fn with_select(mut self, icon: Option<char>, label: Option<&'a str>) -> Self {
+        self.select_icon = icon;
+        self.select_label = label;
+        self
+    }
+
+    pub const fn with_down(mut self, icon: Option<char>, label: Option<&'a str>) -> Self {
+        self.down_icon = icon;
+        self.down_label = label;
+        self
+    }
+
+    pub const fn with_pressed(mut self, slot: Option<ActionBarSlot>) -> Self {
+        self.pressed_slot = slot;
+        self
+    }
+
+    pub const fn with_divider(mut self, divider: Option<Rgb565>) -> Self {
+        self.divider_color = divider;
+        self
     }
 
     pub fn render<D, C>(&self, ctx: &mut RenderCtx<'_, D, C>, bounds: Rect) -> Result<(), D::Error>
@@ -290,11 +332,34 @@ impl<'a> ActionBarWidget<'a> {
         let icon_x = bounds.x + (bounds.w as i32 / 2) - 3;
 
         // Slot 0: Up
+        if self.pressed_slot == Some(ActionBarSlot::Up) {
+            let slot_rect = Rect::new(bounds.x, bounds.y, bounds.w, slot_h as u32);
+            ctx.fill_rect(slot_rect, self.highlight_color)?;
+        }
         if let Some(lbl) = self.up_label {
             ctx.draw_text(icon_x, bounds.y + (slot_h / 2) - 3, lbl, self.icon_color)?;
+        } else if let Some(ch) = self.up_icon {
+            let mut buf = [0u8; 4];
+            let s = ch.encode_utf8(&mut buf);
+            ctx.draw_text(icon_x, bounds.y + (slot_h / 2) - 3, s, self.icon_color)?;
+        }
+
+        // Divider 1
+        if let Some(div_col) = self.divider_color {
+            ctx.draw_line(
+                bounds.x + 2,
+                bounds.y + slot_h,
+                bounds.right() - 2,
+                bounds.y + slot_h,
+                div_col,
+            )?;
         }
 
         // Slot 1: Select
+        if self.pressed_slot == Some(ActionBarSlot::Select) {
+            let slot_rect = Rect::new(bounds.x, bounds.y + slot_h, bounds.w, slot_h as u32);
+            ctx.fill_rect(slot_rect, self.highlight_color)?;
+        }
         if let Some(lbl) = self.select_label {
             ctx.draw_text(
                 icon_x,
@@ -302,14 +367,52 @@ impl<'a> ActionBarWidget<'a> {
                 lbl,
                 self.icon_color,
             )?;
+        } else if let Some(ch) = self.select_icon {
+            let mut buf = [0u8; 4];
+            let s = ch.encode_utf8(&mut buf);
+            ctx.draw_text(
+                icon_x,
+                bounds.y + slot_h + (slot_h / 2) - 3,
+                s,
+                self.icon_color,
+            )?;
+        }
+
+        // Divider 2
+        if let Some(div_col) = self.divider_color {
+            ctx.draw_line(
+                bounds.x + 2,
+                bounds.y + slot_h * 2,
+                bounds.right() - 2,
+                bounds.y + slot_h * 2,
+                div_col,
+            )?;
         }
 
         // Slot 2: Down
+        if self.pressed_slot == Some(ActionBarSlot::Down) {
+            let slot_rect = Rect::new(
+                bounds.x,
+                bounds.y + slot_h * 2,
+                bounds.w,
+                (bounds.h as i32 - slot_h * 2).max(0) as u32,
+            );
+            ctx.fill_rect(slot_rect, self.highlight_color)?;
+        }
         if let Some(lbl) = self.down_label {
             ctx.draw_text(
                 icon_x,
                 bounds.y + (slot_h * 2) + (slot_h / 2) - 3,
                 lbl,
+                self.icon_color,
+            )?;
+        } else if let Some(ch) = self.down_icon {
+            let mut buf = [0u8; 4];
+            let s = ch.encode_utf8(&mut buf);
+            ctx.draw_text(
+                icon_x,
+                bounds.y + (slot_h * 2) + (slot_h / 2) - 3,
+                s,
                 self.icon_color,
             )?;
         }
@@ -356,5 +459,23 @@ mod tests {
         let mut fb = Framebuffer::<1200>::new(60, 20);
         let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 60, 20));
         assert!(sel.render(&mut ctx, Rect::new(0, 0, 60, 20)).is_ok());
+    }
+
+    #[test]
+    fn test_action_bar_widget_render() {
+        let bar = ActionBarWidget::new()
+            .with_up(Some('+'), None)
+            .with_select(None, Some("OK"))
+            .with_down(Some('-'), None)
+            .with_pressed(Some(ActionBarSlot::Select));
+
+        let mut fb = Framebuffer::<600>::new(20, 30);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 20, 30));
+        assert!(bar.render(&mut ctx, Rect::new(0, 0, 20, 30)).is_ok());
+
+        assert_eq!(
+            bar.get_property(PropertyKey::Text),
+            Some(PropertyValue::Str("OK"))
+        );
     }
 }

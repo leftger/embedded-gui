@@ -149,6 +149,33 @@ impl<const N: usize> Framebuffer<N> {
         self.blur_rect(rect, blur_degree);
     }
 
+    /// Invert colors in a rectangular sub-region `rect` in place (PebbleOS-style inverter layer).
+    ///
+    /// Performs in-place color channel inversion (`31 - r`, `63 - g`, `31 - b`) on all pixels within `rect`.
+    pub fn invert_rect(&mut self, rect: Rect) {
+        if self.width == 0 || self.height == 0 {
+            return;
+        }
+        let x0 = rect.x.max(0) as u32;
+        let y0 = rect.y.max(0) as u32;
+        let x1 = (rect.right() as u32).min(self.width);
+        let y1 = (rect.bottom() as u32).min(self.height);
+
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+
+        let w = self.width as usize;
+        for y in y0..y1 {
+            let row_start = y as usize * w;
+            for x in x0..x1 {
+                let idx = row_start + x as usize;
+                let c = self.pixels[idx];
+                self.pixels[idx] = Rgb565::new(31 - c.r(), 63 - c.g(), 31 - c.b());
+            }
+        }
+    }
+
     /// Apply Fast IIR Blur to a sub-region `rect` of the framebuffer.
     pub fn blur_rect(&mut self, rect: Rect, blur_degree: u8) {
         if blur_degree == 0 || self.width == 0 || self.height == 0 {
