@@ -30,7 +30,7 @@ embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.3" }
 
 embedded-graphics-core = "0.4.1"
 embedded-draw-target = "0.1.1"
-embedded-graphics-framebuf = "0.3"
+embedded-graphics-framebuf = "0.5"
 critical-section = "1.1"
 heapless = "0.9"
 embassy-time = { version = "0.5", git = "https://github.com/embassy-rs/embassy", default-features = false }
@@ -40,14 +40,14 @@ micromath = { version = "2.1" }
 embedded-graphics = { version = "0.8" }
 embedded-text = { version = "0.7.3" }
 embedded-layout = { version = "0.4.2" }
-embedded-dsp = { version = "0.2.0", default-features = false }
-embedded-3dgfx = { version = "0.5.5" }
+embedded-dsp = { version = "0.4.1", default-features = false }
+embedded-3dgfx = { version = "0.6.1" }
 nalgebra = { version = "0.35", default-features = false }
 
 embedded-graphics-simulator = "0.8"
-criterion = { version = "0.5", features = ["html_reports"] }
-kdl = "4.7"
+criterion = { version = "0.8", features = ["html_reports"] }
+kdl = "6.7"
 thiserror = "2.0"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
+syn = { version = "3.0", features = ["full"] }

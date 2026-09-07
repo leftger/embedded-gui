@@ -19,11 +19,11 @@ embedded-gui-codegen = { workspace = true }
 embedded-gui-live = { workspace = true, features = ["std"] }
 embedded-graphics-core = { workspace = true }
 kdl = { workspace = true }
-eframe = { version = "0.31", default-features = true }
-egui_extras = { version = "0.31", features = ["syntect"] }
+eframe = { version = "0.36", default-features = true }
+egui_extras = { version = "0.36", features = ["syntect"] }
 nusb = "0.2"
-rfd = "0.15"
-zip = { version = "2.2", default-features = false, features = ["deflate"] }
+rfd = "0.17"
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
 zstd = "0.13"
 flate2 = "1.0"
 image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp"] }
