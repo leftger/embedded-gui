@@ -61,7 +61,7 @@ pub struct WidgetAnimationDef {
     pub trigger: String,
     pub duration_ms: u32,
     pub delay_ms: u32,
-    /// An [`embedded_gui::animation::Easing`] variant in snake case.
+    /// An `embedded_gui::animation::Easing` variant in snake case.
     pub easing: String,
     /// Number of plays. `0` means repeat forever.
     pub repeat: u16,

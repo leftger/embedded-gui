@@ -101,7 +101,7 @@ pub use widgets::segmented::{SegmentStyle, SevenSegmentDisplay, encode_7seg, enc
 
 /// Canonical pixel color type for the active target configuration.
 ///
-/// Defaults to [`Rgb565`], but can be selected at compile time via the
+/// Defaults to [`embedded_graphics_core::pixelcolor::Rgb565`], but can be selected at compile time via the
 /// `color-rgb888` or `color-gray8` feature flags for zero-cost hardware specialization.
 #[cfg(feature = "color-rgb888")]
 pub type ActiveColor = embedded_graphics_core::pixelcolor::Rgb888;
@@ -115,7 +115,7 @@ pub type CanvasColor = ActiveColor;
 
 /// Alias for [`ActiveColor`].
 ///
-/// Note: Omitted from [`prelude`] to avoid colliding with [`embedded_graphics_core::drawable::Pixel`]
+/// Note: Omitted from [`prelude`] to avoid colliding with [`embedded_graphics_core::Pixel`]
 /// when both preludes are glob-imported in the same module.
 pub type Pixel = ActiveColor;
 

@@ -6,7 +6,8 @@
 
 [![crates.io](https://img.shields.io/crates/v/embedded-gui.svg)](https://crates.io/crates/embedded-gui)
 [![docs.rs](https://img.shields.io/docsrs/embedded-gui)](https://docs.rs/embedded-gui)
-[![CI](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml/badge.svg)](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml)
+[![CI](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/leftger/embedded-gui/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/leftger/embedded-gui/branch/master/graph/badge.svg)](https://codecov.io/gh/leftger/embedded-gui)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 
 `embedded-gui` is a lightweight, deterministic, zero-allocation (`no_std`) GUI & HUD framework for microcontrollers and [`embedded-graphics`](https://crates.io/crates/embedded-graphics) displays.

@@ -11,3 +11,5 @@ else
   # shellcheck disable=SC2086
   cargo doc ${DOCS_ARGS:---lib --no-deps --all-features}
 fi
+
+echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=embedded_gui/index.html"></head></html>' > target/doc/index.html
