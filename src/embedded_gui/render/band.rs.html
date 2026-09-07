@@ -383,5 +383,68 @@
 <a href=#383 id=383 data-nosnippet>383</a>        <span class="macro">assert_eq!</span>(target.pixels[<span class="number">20 </span>* <span class="number">9 </span>+ <span class="number">5</span>], Rgb565::GREEN);
 <a href=#384 id=384 data-nosnippet>384</a>        <span class="macro">assert_eq!</span>(target.pixels[<span class="number">20 </span>* <span class="number">11 </span>+ <span class="number">5</span>], Rgb565::BLACK);
 <a href=#385 id=385 data-nosnippet>385</a>    }
-<a href=#386 id=386 data-nosnippet>386</a>}
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="attr">#[test]
+<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="kw">fn </span>test_partial_band_buffer_direct_drawing() {
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">let </span><span class="kw-2">mut </span>band = PartialBandBuffer::&lt;<span class="number">20</span>&gt;::new(<span class="number">5</span>, <span class="number">4</span>);
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="macro">assert_eq!</span>(band.size(), Size::new(<span class="number">5</span>, <span class="number">4</span>));
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="macro">assert_eq!</span>(band.buffer().len(), <span class="number">20</span>);
+<a href=#392 id=392 data-nosnippet>392</a>        band.clear_color(Rgb565::RED);
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="macro">assert_eq!</span>(band.buffer()[<span class="number">0</span>], Rgb565::RED);
+<a href=#394 id=394 data-nosnippet>394</a>        band.buffer_mut()[<span class="number">1</span>] = Rgb565::GREEN;
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="macro">assert_eq!</span>(band.buffer()[<span class="number">1</span>], Rgb565::GREEN);
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>        band.draw_iter([Pixel(Point::new(<span class="number">1</span>, <span class="number">1</span>), Rgb565::BLUE)])
+<a href=#398 id=398 data-nosnippet>398</a>            .unwrap();
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="macro">assert_eq!</span>(band.buffer()[<span class="number">6</span>], Rgb565::BLUE);
+<a href=#400 id=400 data-nosnippet>400</a>        band.draw_iter([Pixel(Point::new(<span class="number">99</span>, <span class="number">99</span>), Rgb565::WHITE)])
+<a href=#401 id=401 data-nosnippet>401</a>            .unwrap();
+<a href=#402 id=402 data-nosnippet>402</a>        band.draw_iter([Pixel(Point::new(-<span class="number">1</span>, <span class="number">0</span>), Rgb565::WHITE)])
+<a href=#403 id=403 data-nosnippet>403</a>            .unwrap();
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>area = Rectangle::new(Point::new(-<span class="number">1</span>, -<span class="number">1</span>), Size::new(<span class="number">10</span>, <span class="number">10</span>));
+<a href=#406 id=406 data-nosnippet>406</a>        band.fill_solid(<span class="kw-2">&amp;</span>area, Rgb565::YELLOW).unwrap();
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="macro">assert_eq!</span>(band.buffer()[<span class="number">0</span>], Rgb565::YELLOW);
+<a href=#408 id=408 data-nosnippet>408</a>
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">let </span><span class="kw-2">mut </span>band2 = PartialBandBuffer::&lt;<span class="number">20</span>&gt;::new(<span class="number">5</span>, <span class="number">4</span>);
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span>area2 = Rectangle::new(Point::new(<span class="number">1</span>, <span class="number">1</span>), Size::new(<span class="number">2</span>, <span class="number">2</span>));
+<a href=#411 id=411 data-nosnippet>411</a>        band2
+<a href=#412 id=412 data-nosnippet>412</a>            .fill_contiguous(
+<a href=#413 id=413 data-nosnippet>413</a>                <span class="kw-2">&amp;</span>area2,
+<a href=#414 id=414 data-nosnippet>414</a>                [Rgb565::RED, Rgb565::GREEN, Rgb565::BLUE, Rgb565::WHITE],
+<a href=#415 id=415 data-nosnippet>415</a>            )
+<a href=#416 id=416 data-nosnippet>416</a>            .unwrap();
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="macro">assert_eq!</span>(band2.get_pixel(Point::new(<span class="number">1</span>, <span class="number">1</span>)), Rgb565::RED);
+<a href=#418 id=418 data-nosnippet>418</a>        <span class="macro">assert_eq!</span>(band2.get_pixel(Point::new(<span class="number">2</span>, <span class="number">2</span>)), Rgb565::WHITE);
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="macro">assert_eq!</span>(band2.get_pixel(Point::new(<span class="number">50</span>, <span class="number">50</span>)), Rgb565::BLACK);
+<a href=#420 id=420 data-nosnippet>420</a>        band2.clear(Rgb565::CYAN).unwrap();
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="macro">assert_eq!</span>(band2.buffer()[<span class="number">0</span>], Rgb565::CYAN);
+<a href=#422 id=422 data-nosnippet>422</a>    }
+<a href=#423 id=423 data-nosnippet>423</a>
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="attr">#[test]
+<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">fn </span>test_band_target_wrapper_geometry() {
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span><span class="kw-2">mut </span>band = PartialBandBuffer::&lt;<span class="number">20</span>&gt;::new(<span class="number">5</span>, <span class="number">4</span>);
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">let </span><span class="kw-2">mut </span>wrapper = BandTargetWrapper {
+<a href=#428 id=428 data-nosnippet>428</a>            parent: <span class="kw-2">&amp;mut </span>band,
+<a href=#429 id=429 data-nosnippet>429</a>            band_origin: Point::new(<span class="number">10</span>, <span class="number">20</span>),
+<a href=#430 id=430 data-nosnippet>430</a>        };
+<a href=#431 id=431 data-nosnippet>431</a>        wrapper
+<a href=#432 id=432 data-nosnippet>432</a>            .draw_iter([Pixel(Point::new(<span class="number">11</span>, <span class="number">21</span>), Rgb565::RED)])
+<a href=#433 id=433 data-nosnippet>433</a>            .unwrap();
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="macro">assert_eq!</span>(wrapper.parent.get_pixel(Point::new(<span class="number">1</span>, <span class="number">1</span>)), Rgb565::RED);
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a>        wrapper
+<a href=#437 id=437 data-nosnippet>437</a>            .draw_iter([Pixel(Point::new(<span class="number">99</span>, <span class="number">99</span>), Rgb565::RED)])
+<a href=#438 id=438 data-nosnippet>438</a>            .unwrap();
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw">let </span>area = Rectangle::new(Point::new(<span class="number">10</span>, <span class="number">20</span>), Size::new(<span class="number">2</span>, <span class="number">2</span>));
+<a href=#441 id=441 data-nosnippet>441</a>        wrapper.fill_solid(<span class="kw-2">&amp;</span>area, Rgb565::GREEN).unwrap();
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="macro">assert_eq!</span>(wrapper.parent.get_pixel(Point::new(<span class="number">1</span>, <span class="number">1</span>)), Rgb565::GREEN);
+<a href=#443 id=443 data-nosnippet>443</a>
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw">let </span>area2 = Rectangle::new(Point::new(<span class="number">11</span>, <span class="number">21</span>), Size::new(<span class="number">1</span>, <span class="number">1</span>));
+<a href=#445 id=445 data-nosnippet>445</a>        wrapper.fill_contiguous(<span class="kw-2">&amp;</span>area2, [Rgb565::BLUE]).unwrap();
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="macro">assert_eq!</span>(wrapper.parent.get_pixel(Point::new(<span class="number">1</span>, <span class="number">1</span>)), Rgb565::BLUE);
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="macro">assert_eq!</span>(wrapper.get_pixel(Point::new(<span class="number">11</span>, <span class="number">21</span>)), Rgb565::BLUE);
+<a href=#448 id=448 data-nosnippet>448</a>    }
+<a href=#449 id=449 data-nosnippet>449</a>}
 </code></pre></div></section></main></body></html>

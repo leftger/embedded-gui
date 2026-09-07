@@ -487,5 +487,91 @@
 <a href=#487 id=487 data-nosnippet>487</a>        </span><span class="kw">let </span>evt3 = recognizer.on_release();
 <a href=#488 id=488 data-nosnippet>488</a>        <span class="macro">assert_eq!</span>(evt3, <span class="prelude-val">Some</span>(ClickEvent::LongClickEnd));
 <a href=#489 id=489 data-nosnippet>489</a>    }
-<a href=#490 id=490 data-nosnippet>490</a>}
+<a href=#490 id=490 data-nosnippet>490</a>
+<a href=#491 id=491 data-nosnippet>491</a>    <span class="attr">#[test]
+<a href=#492 id=492 data-nosnippet>492</a>    </span><span class="kw">fn </span>test_event_filters_masks_and_ui_event_targets() {
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">let </span><span class="kw-2">mut </span>filter = UiEventFilter::empty();
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="macro">assert!</span>(UiEventFilter::ALL.contains(UiEventFilter::FOCUS));
+<a href=#495 id=495 data-nosnippet>495</a>        filter.insert(UiEventFilter::POINTER);
+<a href=#496 id=496 data-nosnippet>496</a>        filter.insert(UiEventFilter::VALUE | UiEventFilter::BACK);
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="macro">assert!</span>(filter.contains(UiEventFilter::POINTER));
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="macro">assert!</span>(filter.contains(UiEventFilter::VALUE));
+<a href=#499 id=499 data-nosnippet>499</a>        filter.remove(UiEventFilter::POINTER);
+<a href=#500 id=500 data-nosnippet>500</a>        <span class="macro">assert!</span>(!filter.contains(UiEventFilter::POINTER));
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">let </span>id = WidgetId::new(<span class="number">3</span>);
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">let </span>events = [
+<a href=#504 id=504 data-nosnippet>504</a>            UiEvent::FocusChanged {
+<a href=#505 id=505 data-nosnippet>505</a>                old: <span class="prelude-val">None</span>,
+<a href=#506 id=506 data-nosnippet>506</a>                new: <span class="prelude-val">Some</span>(id),
+<a href=#507 id=507 data-nosnippet>507</a>            },
+<a href=#508 id=508 data-nosnippet>508</a>            UiEvent::Activate(id),
+<a href=#509 id=509 data-nosnippet>509</a>            UiEvent::Back,
+<a href=#510 id=510 data-nosnippet>510</a>            UiEvent::Pressed(id),
+<a href=#511 id=511 data-nosnippet>511</a>            UiEvent::Released(id),
+<a href=#512 id=512 data-nosnippet>512</a>            UiEvent::Clicked(id),
+<a href=#513 id=513 data-nosnippet>513</a>            UiEvent::DoubleClicked(id),
+<a href=#514 id=514 data-nosnippet>514</a>            UiEvent::LongPressed(id),
+<a href=#515 id=515 data-nosnippet>515</a>            UiEvent::Opened(id),
+<a href=#516 id=516 data-nosnippet>516</a>            UiEvent::Closed(id),
+<a href=#517 id=517 data-nosnippet>517</a>            UiEvent::PointerPressed(id),
+<a href=#518 id=518 data-nosnippet>518</a>            UiEvent::PointerReleased(id),
+<a href=#519 id=519 data-nosnippet>519</a>            UiEvent::Gesture(id),
+<a href=#520 id=520 data-nosnippet>520</a>            UiEvent::ValueChanged(id),
+<a href=#521 id=521 data-nosnippet>521</a>            UiEvent::TextInput { id, ch: <span class="string">'x' </span>},
+<a href=#522 id=522 data-nosnippet>522</a>            UiEvent::Focused(id),
+<a href=#523 id=523 data-nosnippet>523</a>            UiEvent::Defocused(id),
+<a href=#524 id=524 data-nosnippet>524</a>            UiEvent::Scroll { id, delta: <span class="number">1 </span>},
+<a href=#525 id=525 data-nosnippet>525</a>            UiEvent::LayoutChanged(id),
+<a href=#526 id=526 data-nosnippet>526</a>            UiEvent::StyleChanged(id),
+<a href=#527 id=527 data-nosnippet>527</a>        ];
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">for </span>e <span class="kw">in </span>events {
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="kw">let _ </span>= e.target();
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="kw">let _ </span>= e.filter();
+<a href=#531 id=531 data-nosnippet>531</a>        }
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="macro">assert_eq!</span>(UiEvent::Back.target(), <span class="prelude-val">None</span>);
+<a href=#533 id=533 data-nosnippet>533</a>
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw">let </span><span class="kw-2">mut </span>wf = WidgetEventFilter::ALL;
+<a href=#535 id=535 data-nosnippet>535</a>        <span class="macro">assert!</span>(wf.contains(WidgetEventFilter::POINTER));
+<a href=#536 id=536 data-nosnippet>536</a>        wf = WidgetEventFilter::POINTER | WidgetEventFilter::VALUE;
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="macro">assert!</span>(wf.contains(WidgetEventFilter::POINTER));
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="macro">assert!</span>(!wf.contains(WidgetEventFilter::FOCUS));
+<a href=#539 id=539 data-nosnippet>539</a>
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>kinds = [
+<a href=#541 id=541 data-nosnippet>541</a>            WidgetEventKind::Pressed,
+<a href=#542 id=542 data-nosnippet>542</a>            WidgetEventKind::Released,
+<a href=#543 id=543 data-nosnippet>543</a>            WidgetEventKind::Clicked,
+<a href=#544 id=544 data-nosnippet>544</a>            WidgetEventKind::DoubleClicked,
+<a href=#545 id=545 data-nosnippet>545</a>            WidgetEventKind::LongPressed,
+<a href=#546 id=546 data-nosnippet>546</a>            WidgetEventKind::Opened,
+<a href=#547 id=547 data-nosnippet>547</a>            WidgetEventKind::Closed,
+<a href=#548 id=548 data-nosnippet>548</a>            WidgetEventKind::ValueChanged,
+<a href=#549 id=549 data-nosnippet>549</a>            WidgetEventKind::Focused,
+<a href=#550 id=550 data-nosnippet>550</a>            WidgetEventKind::Defocused,
+<a href=#551 id=551 data-nosnippet>551</a>            WidgetEventKind::Scroll { delta: <span class="number">1 </span>},
+<a href=#552 id=552 data-nosnippet>552</a>            WidgetEventKind::Gesture,
+<a href=#553 id=553 data-nosnippet>553</a>            WidgetEventKind::LayoutChanged,
+<a href=#554 id=554 data-nosnippet>554</a>            WidgetEventKind::StyleChanged,
+<a href=#555 id=555 data-nosnippet>555</a>        ];
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="kw">for </span>k <span class="kw">in </span>kinds {
+<a href=#557 id=557 data-nosnippet>557</a>            <span class="kw">let _ </span>= k.filter();
+<a href=#558 id=558 data-nosnippet>558</a>        }
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="macro">assert!</span>(EventPhaseMask::ALL.contains(EventPhase::Capture));
+<a href=#561 id=561 data-nosnippet>561</a>        <span class="macro">assert!</span>(EventPhaseMask::ALL.contains(EventPhase::Bubble));
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span>policy = WidgetDispatchPolicy::stop(WidgetEventFilter::POINTER, EventPhaseMask::ALL);
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="macro">assert!</span>(policy.stop);
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="macro">assert!</span>(policy.allows(WidgetEventKind::Pressed, EventPhase::Target));
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="macro">assert!</span>(!policy.allows(WidgetEventKind::Clicked, EventPhase::Target));
+<a href=#566 id=566 data-nosnippet>566</a>    }
+<a href=#567 id=567 data-nosnippet>567</a>
+<a href=#568 id=568 data-nosnippet>568</a>    <span class="attr">#[test]
+<a href=#569 id=569 data-nosnippet>569</a>    </span><span class="kw">fn </span>test_click_recognizer_reset_and_release_without_press() {
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="kw">let </span><span class="kw-2">mut </span>recognizer = ClickRecognizer::default();
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="macro">assert_eq!</span>(recognizer.on_release(), <span class="prelude-val">None</span>);
+<a href=#572 id=572 data-nosnippet>572</a>        recognizer.on_press();
+<a href=#573 id=573 data-nosnippet>573</a>        recognizer.reset();
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="macro">assert_eq!</span>(recognizer.on_release(), <span class="prelude-val">None</span>);
+<a href=#575 id=575 data-nosnippet>575</a>    }
+<a href=#576 id=576 data-nosnippet>576</a>}
 </code></pre></div></section></main></body></html>

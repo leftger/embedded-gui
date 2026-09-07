@@ -273,5 +273,52 @@
 <a href=#273 id=273 data-nosnippet>273</a>        <span class="macro">assert_eq!</span>(ctx.widgets().len(), <span class="number">4</span>); <span class="comment">// panel container + 3 children
 <a href=#274 id=274 data-nosnippet>274</a>        </span><span class="macro">assert!</span>(ctx.node(root).is_some());
 <a href=#275 id=275 data-nosnippet>275</a>    }
-<a href=#276 id=276 data-nosnippet>276</a>}
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="attr">#[test]
+<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">fn </span>test_view_row_panel_and_flex_when_child_false() {
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span><span class="kw-2">mut </span>ctx: GuiContext&lt;<span class="number">32</span>, <span class="number">16</span>, <span class="number">16</span>&gt; = GuiContext::new(Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">320</span>, <span class="number">240</span>));
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="kw">let </span>root = ctx
+<a href=#281 id=281 data-nosnippet>281</a>            .build_view(|cx| {
+<a href=#282 id=282 data-nosnippet>282</a>                cx.row(|row| {
+<a href=#283 id=283 data-nosnippet>283</a>                    row.child(|c| c.styled_label(<span class="string">"A"</span>, <span class="kw">crate</span>::style::Style::label()))<span class="question-mark">?
+<a href=#284 id=284 data-nosnippet>284</a>                        </span>.child(|c| {
+<a href=#285 id=285 data-nosnippet>285</a>                            c.panel(|panel| panel.styled_label(<span class="string">"P"</span>, <span class="kw">crate</span>::style::Style::label()))
+<a href=#286 id=286 data-nosnippet>286</a>                        })<span class="question-mark">?
+<a href=#287 id=287 data-nosnippet>287</a>                        </span>.when_child(<span class="bool-val">false</span>, |c| c.label(<span class="string">"never"</span>))<span class="question-mark">?
+<a href=#288 id=288 data-nosnippet>288</a>                        </span>.build()
+<a href=#289 id=289 data-nosnippet>289</a>                })
+<a href=#290 id=290 data-nosnippet>290</a>            })
+<a href=#291 id=291 data-nosnippet>291</a>            .unwrap();
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="macro">assert!</span>(ctx.node(root).is_some());
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="kw">let </span>root2 = ctx
+<a href=#295 id=295 data-nosnippet>295</a>            .build_view(|cx| {
+<a href=#296 id=296 data-nosnippet>296</a>                cx.column(|col| {
+<a href=#297 id=297 data-nosnippet>297</a>                    col.cross_align(Align::Center)
+<a href=#298 id=298 data-nosnippet>298</a>                        .justify(JustifyContent::SpaceBetween)
+<a href=#299 id=299 data-nosnippet>299</a>                        .child(|c| c.button(<span class="string">"B"</span>))<span class="question-mark">?
+<a href=#300 id=300 data-nosnippet>300</a>                        </span>.build()
+<a href=#301 id=301 data-nosnippet>301</a>                })
+<a href=#302 id=302 data-nosnippet>302</a>            })
+<a href=#303 id=303 data-nosnippet>303</a>            .unwrap();
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="macro">assert!</span>(ctx.node(root2).is_some());
+<a href=#305 id=305 data-nosnippet>305</a>    }
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="attr">#[cfg(feature = <span class="string">"rich-widgets"</span>)]
+<a href=#308 id=308 data-nosnippet>308</a>    #[test]
+<a href=#309 id=309 data-nosnippet>309</a>    </span><span class="kw">fn </span>test_view_rich_widget_builders() {
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span><span class="kw-2">mut </span>ctx: GuiContext&lt;<span class="number">16</span>, <span class="number">16</span>, <span class="number">16</span>&gt; = GuiContext::new(Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">160</span>, <span class="number">120</span>));
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw">let </span>root = ctx
+<a href=#312 id=312 data-nosnippet>312</a>            .build_view(|cx| {
+<a href=#313 id=313 data-nosnippet>313</a>                cx.column(|col| {
+<a href=#314 id=314 data-nosnippet>314</a>                    col.child(|c| c.toggle(<span class="string">"T"</span>, <span class="bool-val">true</span>))<span class="question-mark">?
+<a href=#315 id=315 data-nosnippet>315</a>                        </span>.child(|c| c.slider(<span class="number">0.5</span>, <span class="number">0.0</span>, <span class="number">1.0</span>))<span class="question-mark">?
+<a href=#316 id=316 data-nosnippet>316</a>                        </span>.child(|c| c.progress_bar(<span class="number">0.7</span>))<span class="question-mark">?
+<a href=#317 id=317 data-nosnippet>317</a>                        </span>.build()
+<a href=#318 id=318 data-nosnippet>318</a>                })
+<a href=#319 id=319 data-nosnippet>319</a>            })
+<a href=#320 id=320 data-nosnippet>320</a>            .unwrap();
+<a href=#321 id=321 data-nosnippet>321</a>        <span class="macro">assert!</span>(ctx.node(root).is_some());
+<a href=#322 id=322 data-nosnippet>322</a>    }
+<a href=#323 id=323 data-nosnippet>323</a>}
 </code></pre></div></section></main></body></html>
