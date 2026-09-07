@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["accelerator","band","compositor","line_buffer","stroke","task","text_style"],"struct":["RenderCtx"],"trait":["PixelRead","WindowedDrawTarget"]};
+window.SIDEBAR_ITEMS = {"mod":["accelerator","band","compositor","line_buffer","span","stroke","task","text_style"],"struct":["RenderCtx"],"trait":["PixelRead","WindowedDrawTarget"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["InputEvent","NavDirection","PointerButton","PointerState","UiEvent","WidgetEventKind"],"struct":["EventPhaseMask","UiEventFilter","WidgetDispatchPolicy","WidgetEvent","WidgetEventFilter"]};
+window.SIDEBAR_ITEMS = {"enum":["ClickEvent","InputEvent","NavDirection","PointerButton","PointerState","UiEvent","WidgetEventKind"],"struct":["ClickRecognizer","EventPhaseMask","UiEventFilter","WidgetDispatchPolicy","WidgetEvent","WidgetEventFilter"]};
