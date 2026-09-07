@@ -24,6 +24,7 @@ pub mod action_menu;
 pub mod bandmeter;
 pub mod basic;
 pub mod cinematic;
+pub mod compass;
 pub mod controls;
 pub mod data;
 pub mod dialog;
@@ -54,6 +55,7 @@ pub use action_menu::{ActionMenuError, ActionMenuItem, ActionMenuWidget};
 pub use bandmeter::{BandMeterWidget, MeterOrientation};
 pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
 pub use cinematic::GlanceTileWidget;
+pub use compass::{CompassMode, CompassWidget};
 pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
 pub use data::ListWidget;
 pub use dialog::{
