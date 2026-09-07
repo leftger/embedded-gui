@@ -377,4 +377,19 @@ mod tests {
         assert_eq!(segs[0].w, 16);
         assert_eq!(segs[0].h, 2);
     }
+
+    #[test]
+    fn test_7seg_and_14seg_all_ascii_and_symbols() {
+        for c in (0u32..=127).filter_map(char::from_u32) {
+            let _ = encode_7seg(c);
+            let _ = encode_14seg(c);
+        }
+        let _ = encode_7seg('°');
+        let _ = encode_14seg('*');
+
+        for digit in '0'..='9' {
+            assert_ne!(encode_7seg(digit), 0);
+            assert_ne!(encode_14seg(digit), 0);
+        }
+    }
 }
