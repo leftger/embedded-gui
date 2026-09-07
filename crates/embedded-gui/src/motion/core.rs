@@ -913,3 +913,88 @@ impl<const N: usize> PathAnimator<N> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_easing_variants_hit_endpoints() {
+        let variants = [
+            Easing::Linear,
+            Easing::EaseIn,
+            Easing::EaseOut,
+            Easing::EaseInOut,
+            Easing::Smoothstep,
+            Easing::Smootherstep,
+            Easing::Steps(4),
+            Easing::InCubic,
+            Easing::OutCubic,
+            Easing::InOutCubic,
+            Easing::InQuart,
+            Easing::OutQuart,
+            Easing::InOutQuart,
+            Easing::InQuint,
+            Easing::OutQuint,
+            Easing::InOutQuint,
+            Easing::InSine,
+            Easing::OutSine,
+            Easing::InOutSine,
+            Easing::InExpo,
+            Easing::OutExpo,
+            Easing::InOutExpo,
+            Easing::InCirc,
+            Easing::OutCirc,
+            Easing::InOutCirc,
+            Easing::InBack,
+            Easing::OutBack,
+            Easing::InOutBack,
+            Easing::InBounce,
+            Easing::OutBounce,
+            Easing::InOutBounce,
+            Easing::InElastic,
+            Easing::OutElastic,
+            Easing::InOutElastic,
+            Easing::Moook,
+        ];
+
+        for easing in variants {
+            let t0 = apply_easing(0.0, easing);
+            let t1 = apply_easing(1.0, easing);
+            assert!(
+                (t0 - 0.0).abs() < 1e-5,
+                "{easing:?} should start at 0, got {t0}"
+            );
+            assert!(
+                (t1 - 1.0).abs() < 1e-5,
+                "{easing:?} should end at 1, got {t1}"
+            );
+            let mid = apply_easing(0.5, easing);
+            assert!(mid.is_finite(), "{easing:?} should stay finite");
+        }
+    }
+
+    #[test]
+    fn timer_once_repeating_and_tween_value() {
+        let mut timer = Timer::new(100);
+        assert!(!timer.tick(50));
+        assert!(!timer.tick(49));
+        assert!(timer.tick(1));
+        assert_eq!(timer.progress(), 1.0);
+        timer.reset();
+        assert_eq!(timer.progress(), 0.0);
+
+        let mut repeat = Timer::repeating(10);
+        assert!(repeat.tick(10));
+        assert_eq!(repeat.elapsed_ms, 0);
+        assert!(repeat.tick(25));
+        assert_eq!(repeat.elapsed_ms, 5);
+
+        let mut tween = Tween::new(0.0, 100.0, 100, Easing::Linear);
+        assert!(!tween.tick(50));
+        assert_eq!(tween.value(), 50.0);
+        assert!(tween.tick(50));
+        assert_eq!(tween.value(), 100.0);
+        assert!(tween.is_done());
+    }
+}

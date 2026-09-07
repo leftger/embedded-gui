@@ -184,11 +184,12 @@ jobs:
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           cargo llvm-cov --all-features --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cargo llvm-cov --all-features --lcov --output-path lcov.info
+          cargo llvm-cov --all-features --lcov --output-path lcov-all.info
+          cargo llvm-cov -p embedded-gui --no-default-features --features rich-widgets,libm --lcov --output-path lcov-nostd.info
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
-          files: lcov.info
+          files: lcov-all.info,lcov-nostd.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: leftger/embedded-gui

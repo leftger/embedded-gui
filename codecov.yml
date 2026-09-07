@@ -1,0 +1,18 @@
+ignore:
+  - "crates/embedded-gui-studio/**"
+  - "size_harness/**"
+  - "examples/**"
+  - "assets/**"
+  - "docs/**"
+  - "figma-plugin/**"
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 60%
+        threshold: 1%

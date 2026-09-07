@@ -1,4 +1,8 @@
 use embedded_gui::prelude::*;
+use embedded_gui::{
+    EventPhaseMask, FocusGroupId, NavDirection, UiEventFilter, WidgetDispatchPolicy,
+    WidgetEventFilter,
+};
 
 #[test]
 fn focus_moves_between_buttons() {
@@ -108,4 +112,93 @@ fn test_haptics_sequencer_and_widget_triggers() {
     .unwrap();
 
     assert!(gui.haptic_intensity() > 0);
+}
+
+#[test]
+fn event_filters_and_dispatch_policies() {
+    let mut gui = GuiContext::<4, 8, 8>::new(Rect::new(0, 0, 64, 32));
+    let btn = gui
+        .add_button(Rect::new(0, 0, 30, 10), "B", Style::button())
+        .unwrap();
+
+    gui.set_event_filter(btn, UiEventFilter::ACTIVATE | UiEventFilter::VALUE)
+        .unwrap();
+    assert!(
+        gui.event_filter(btn)
+            .unwrap()
+            .contains(UiEventFilter::ACTIVATE)
+    );
+    gui.clear_event_filter(btn).unwrap();
+    assert!(gui.event_filter(btn).unwrap().contains(UiEventFilter::ALL));
+
+    gui.set_dispatch_policy(
+        btn,
+        WidgetDispatchPolicy::stop(WidgetEventFilter::ALL, EventPhaseMask::ALL),
+    )
+    .unwrap();
+    assert!(gui.dispatch_policy(btn).unwrap().is_some());
+    gui.clear_dispatch_policy(btn).unwrap();
+    assert!(gui.dispatch_policy(btn).unwrap().is_none());
+}
+
+#[test]
+fn spatial_focus_groups_and_keyboard_navigation() {
+    static ITEMS: [&str; 3] = ["A", "B", "C"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 128, 96));
+
+    let left = gui
+        .add_button(Rect::new(0, 0, 20, 10), "L", Style::button())
+        .unwrap();
+    let right = gui
+        .add_button(Rect::new(40, 0, 20, 10), "R", Style::button())
+        .unwrap();
+    let menu = gui
+        .add_menu(Rect::new(0, 30, 60, 30), &ITEMS, 0, Style::panel())
+        .unwrap();
+
+    gui.set_focus_group(left, FocusGroupId::new(1)).unwrap();
+    gui.set_focus_group(right, FocusGroupId::new(1)).unwrap();
+    gui.set_active_focus_group(Some(FocusGroupId::new(1)));
+
+    assert!(gui.move_focus_direction(NavDirection::Right).unwrap());
+    assert_eq!(gui.focus(), Some(right));
+    assert!(gui.move_focus_direction(NavDirection::Left).unwrap());
+    assert_eq!(gui.focus(), Some(left));
+    gui.set_active_focus_group(None);
+
+    gui.set_focus(Some(menu)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.menu_selected(menu), Some(1));
+    gui.handle_input(InputEvent::Up).unwrap();
+    assert_eq!(gui.menu_selected(menu), Some(0));
+    gui.handle_input(InputEvent::Select).unwrap();
+    while gui.pop_event().is_some() {}
+    gui.handle_input(InputEvent::Back).unwrap();
+    gui.tick_input(10).unwrap();
+    gui.pop_event();
+}
+
+#[test]
+fn textarea_key_events_and_long_press_repeat() {
+    let mut gui = GuiContext::<8, 16, 8>::new(Rect::new(0, 0, 128, 64));
+    let textarea = gui
+        .add_textarea(Rect::new(0, 0, 80, 30), "hello world", "", Style::panel())
+        .unwrap();
+
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.handle_input(InputEvent::End).unwrap();
+    gui.handle_input(InputEvent::Home).unwrap();
+    gui.handle_input(InputEvent::WordRight).unwrap();
+    gui.handle_input(InputEvent::WordLeft).unwrap();
+    gui.handle_input(InputEvent::SelectEnd).unwrap();
+    gui.handle_input(InputEvent::SelectHome).unwrap();
+    gui.handle_input(InputEvent::SelectWordLeft).unwrap();
+    gui.handle_input(InputEvent::SelectWordRight).unwrap();
+    gui.handle_input(InputEvent::Encoder { delta: 2 }).unwrap();
+    gui.handle_input(InputEvent::Left).unwrap();
+    gui.handle_input(InputEvent::Right).unwrap();
+    gui.handle_input(InputEvent::SelectLeft).unwrap();
+    gui.handle_input(InputEvent::SelectRight).unwrap();
+    gui.tick_input(200).unwrap();
+    while gui.pop_event().is_some() {}
 }
