@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/embedded-gui/src/motion/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="embedded_gui" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">embedded_gui/motion/</div>core.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Core animation primitives for `embedded-gui`.
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/embedded-gui/src/motion/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="embedded_gui" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">embedded_gui/motion/</div>core.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Core animation primitives for `embedded-gui`.
 <a href=#2 id=2 data-nosnippet>2</a>//! Designed for deterministic, fixed-capacity operation.
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="attr">#[cfg(not(feature = <span class="string">"std"</span>))]
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span><span class="kw">crate</span>::math::F32Ext <span class="kw">as _</span>;
@@ -913,4 +913,89 @@
 <a href=#913 id=913 data-nosnippet>913</a>        })
 <a href=#914 id=914 data-nosnippet>914</a>    }
 <a href=#915 id=915 data-nosnippet>915</a>}
+<a href=#916 id=916 data-nosnippet>916</a>
+<a href=#917 id=917 data-nosnippet>917</a><span class="attr">#[cfg(test)]
+<a href=#918 id=918 data-nosnippet>918</a></span><span class="kw">mod </span>tests {
+<a href=#919 id=919 data-nosnippet>919</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#920 id=920 data-nosnippet>920</a>
+<a href=#921 id=921 data-nosnippet>921</a>    <span class="attr">#[test]
+<a href=#922 id=922 data-nosnippet>922</a>    </span><span class="kw">fn </span>all_easing_variants_hit_endpoints() {
+<a href=#923 id=923 data-nosnippet>923</a>        <span class="kw">let </span>variants = [
+<a href=#924 id=924 data-nosnippet>924</a>            Easing::Linear,
+<a href=#925 id=925 data-nosnippet>925</a>            Easing::EaseIn,
+<a href=#926 id=926 data-nosnippet>926</a>            Easing::EaseOut,
+<a href=#927 id=927 data-nosnippet>927</a>            Easing::EaseInOut,
+<a href=#928 id=928 data-nosnippet>928</a>            Easing::Smoothstep,
+<a href=#929 id=929 data-nosnippet>929</a>            Easing::Smootherstep,
+<a href=#930 id=930 data-nosnippet>930</a>            Easing::Steps(<span class="number">4</span>),
+<a href=#931 id=931 data-nosnippet>931</a>            Easing::InCubic,
+<a href=#932 id=932 data-nosnippet>932</a>            Easing::OutCubic,
+<a href=#933 id=933 data-nosnippet>933</a>            Easing::InOutCubic,
+<a href=#934 id=934 data-nosnippet>934</a>            Easing::InQuart,
+<a href=#935 id=935 data-nosnippet>935</a>            Easing::OutQuart,
+<a href=#936 id=936 data-nosnippet>936</a>            Easing::InOutQuart,
+<a href=#937 id=937 data-nosnippet>937</a>            Easing::InQuint,
+<a href=#938 id=938 data-nosnippet>938</a>            Easing::OutQuint,
+<a href=#939 id=939 data-nosnippet>939</a>            Easing::InOutQuint,
+<a href=#940 id=940 data-nosnippet>940</a>            Easing::InSine,
+<a href=#941 id=941 data-nosnippet>941</a>            Easing::OutSine,
+<a href=#942 id=942 data-nosnippet>942</a>            Easing::InOutSine,
+<a href=#943 id=943 data-nosnippet>943</a>            Easing::InExpo,
+<a href=#944 id=944 data-nosnippet>944</a>            Easing::OutExpo,
+<a href=#945 id=945 data-nosnippet>945</a>            Easing::InOutExpo,
+<a href=#946 id=946 data-nosnippet>946</a>            Easing::InCirc,
+<a href=#947 id=947 data-nosnippet>947</a>            Easing::OutCirc,
+<a href=#948 id=948 data-nosnippet>948</a>            Easing::InOutCirc,
+<a href=#949 id=949 data-nosnippet>949</a>            Easing::InBack,
+<a href=#950 id=950 data-nosnippet>950</a>            Easing::OutBack,
+<a href=#951 id=951 data-nosnippet>951</a>            Easing::InOutBack,
+<a href=#952 id=952 data-nosnippet>952</a>            Easing::InBounce,
+<a href=#953 id=953 data-nosnippet>953</a>            Easing::OutBounce,
+<a href=#954 id=954 data-nosnippet>954</a>            Easing::InOutBounce,
+<a href=#955 id=955 data-nosnippet>955</a>            Easing::InElastic,
+<a href=#956 id=956 data-nosnippet>956</a>            Easing::OutElastic,
+<a href=#957 id=957 data-nosnippet>957</a>            Easing::InOutElastic,
+<a href=#958 id=958 data-nosnippet>958</a>            Easing::Moook,
+<a href=#959 id=959 data-nosnippet>959</a>        ];
+<a href=#960 id=960 data-nosnippet>960</a>
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">for </span>easing <span class="kw">in </span>variants {
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="kw">let </span>t0 = apply_easing(<span class="number">0.0</span>, easing);
+<a href=#963 id=963 data-nosnippet>963</a>            <span class="kw">let </span>t1 = apply_easing(<span class="number">1.0</span>, easing);
+<a href=#964 id=964 data-nosnippet>964</a>            <span class="macro">assert!</span>(
+<a href=#965 id=965 data-nosnippet>965</a>                (t0 - <span class="number">0.0</span>).abs() &lt; <span class="number">1e-5</span>,
+<a href=#966 id=966 data-nosnippet>966</a>                <span class="string">"{easing:?} should start at 0, got {t0}"
+<a href=#967 id=967 data-nosnippet>967</a>            </span>);
+<a href=#968 id=968 data-nosnippet>968</a>            <span class="macro">assert!</span>(
+<a href=#969 id=969 data-nosnippet>969</a>                (t1 - <span class="number">1.0</span>).abs() &lt; <span class="number">1e-5</span>,
+<a href=#970 id=970 data-nosnippet>970</a>                <span class="string">"{easing:?} should end at 1, got {t1}"
+<a href=#971 id=971 data-nosnippet>971</a>            </span>);
+<a href=#972 id=972 data-nosnippet>972</a>            <span class="kw">let </span>mid = apply_easing(<span class="number">0.5</span>, easing);
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="macro">assert!</span>(mid.is_finite(), <span class="string">"{easing:?} should stay finite"</span>);
+<a href=#974 id=974 data-nosnippet>974</a>        }
+<a href=#975 id=975 data-nosnippet>975</a>    }
+<a href=#976 id=976 data-nosnippet>976</a>
+<a href=#977 id=977 data-nosnippet>977</a>    <span class="attr">#[test]
+<a href=#978 id=978 data-nosnippet>978</a>    </span><span class="kw">fn </span>timer_once_repeating_and_tween_value() {
+<a href=#979 id=979 data-nosnippet>979</a>        <span class="kw">let </span><span class="kw-2">mut </span>timer = Timer::new(<span class="number">100</span>);
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="macro">assert!</span>(!timer.tick(<span class="number">50</span>));
+<a href=#981 id=981 data-nosnippet>981</a>        <span class="macro">assert!</span>(!timer.tick(<span class="number">49</span>));
+<a href=#982 id=982 data-nosnippet>982</a>        <span class="macro">assert!</span>(timer.tick(<span class="number">1</span>));
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="macro">assert_eq!</span>(timer.progress(), <span class="number">1.0</span>);
+<a href=#984 id=984 data-nosnippet>984</a>        timer.reset();
+<a href=#985 id=985 data-nosnippet>985</a>        <span class="macro">assert_eq!</span>(timer.progress(), <span class="number">0.0</span>);
+<a href=#986 id=986 data-nosnippet>986</a>
+<a href=#987 id=987 data-nosnippet>987</a>        <span class="kw">let </span><span class="kw-2">mut </span>repeat = Timer::repeating(<span class="number">10</span>);
+<a href=#988 id=988 data-nosnippet>988</a>        <span class="macro">assert!</span>(repeat.tick(<span class="number">10</span>));
+<a href=#989 id=989 data-nosnippet>989</a>        <span class="macro">assert_eq!</span>(repeat.elapsed_ms, <span class="number">0</span>);
+<a href=#990 id=990 data-nosnippet>990</a>        <span class="macro">assert!</span>(repeat.tick(<span class="number">25</span>));
+<a href=#991 id=991 data-nosnippet>991</a>        <span class="macro">assert_eq!</span>(repeat.elapsed_ms, <span class="number">5</span>);
+<a href=#992 id=992 data-nosnippet>992</a>
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span><span class="kw-2">mut </span>tween = Tween::new(<span class="number">0.0</span>, <span class="number">100.0</span>, <span class="number">100</span>, Easing::Linear);
+<a href=#994 id=994 data-nosnippet>994</a>        <span class="macro">assert!</span>(!tween.tick(<span class="number">50</span>));
+<a href=#995 id=995 data-nosnippet>995</a>        <span class="macro">assert_eq!</span>(tween.value(), <span class="number">50.0</span>);
+<a href=#996 id=996 data-nosnippet>996</a>        <span class="macro">assert!</span>(tween.tick(<span class="number">50</span>));
+<a href=#997 id=997 data-nosnippet>997</a>        <span class="macro">assert_eq!</span>(tween.value(), <span class="number">100.0</span>);
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="macro">assert!</span>(tween.is_done());
+<a href=#999 id=999 data-nosnippet>999</a>    }
+<a href=#1000 id=1000 data-nosnippet>1000</a>}
 </code></pre></div></section></main></body></html>
