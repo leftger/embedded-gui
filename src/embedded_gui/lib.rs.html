@@ -215,8 +215,8 @@
 <a href=#215 id=215 data-nosnippet>215</a>};
 <a href=#216 id=216 data-nosnippet>216</a><span class="kw">pub use </span>widgets::{
 <a href=#217 id=217 data-nosnippet>217</a>    ActionBarSlot, ActionBarWidget, ActionMenuError, ActionMenuItem, ActionMenuWidget,
-<a href=#218 id=218 data-nosnippet>218</a>    ActionableDialogWidget, ArcGaugeWidget, BandMeterWidget, BatteryState,
-<a href=#219 id=219 data-nosnippet>219</a>    ConfirmationDialogWidget, ContentIndicatorDirection, ContentIndicatorWidget,
+<a href=#218 id=218 data-nosnippet>218</a>    ActionableDialogWidget, ArcGaugeWidget, BandMeterWidget, BatteryState, CompassMode,
+<a href=#219 id=219 data-nosnippet>219</a>    CompassWidget, ConfirmationDialogWidget, ContentIndicatorDirection, ContentIndicatorWidget,
 <a href=#220 id=220 data-nosnippet>220</a>    CrumbsIndicatorWidget, DialogAction, DialogError, DialogType, GaugeThreshold, InverterWidget,
 <a href=#221 id=221 data-nosnippet>221</a>    MatrixWidget, MeterOrientation, NotificationAction, NotificationError, NotificationPriority,
 <a href=#222 id=222 data-nosnippet>222</a>    NotificationSheetWidget, NumberPickerWidget, PeekBannerWidget, PickerError, ProgressBarWidget,
@@ -243,60 +243,61 @@
 <a href=#243 id=243 data-nosnippet>243</a>        BitmapFont, Blend, BlendMode, Block, Border, BorderRect, CallbackSlot, CanvasColor,
 <a href=#244 id=244 data-nosnippet>244</a>        CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, CarouselSpec,
 <a href=#245 id=245 data-nosnippet>245</a>        CatmullRomSpline, ChartMode, CinematicPreset, ColorConvertedDrawTarget, ColorFormat,
-<a href=#246 id=246 data-nosnippet>246</a>        ColorOps, ColorStop, ComposedAnimation, ComposedAnimationCallbacks,
-<a href=#247 id=247 data-nosnippet>247</a>        ComposedAnimationPlayer, ComposedAnimationStatus, CompositeIconSpec, CompositionControls,
-<a href=#248 id=248 data-nosnippet>248</a>        CompositionMode, Compositor, Constraint, DirtyBandAccumulator, DirtyRectVisualizer,
-<a href=#249 id=249 data-nosnippet>249</a>        DirtyTracker, Dither, DrawTargetColorExt, Easing, EdgeInsets, EllipsisMode, EventContext,
-<a href=#250 id=250 data-nosnippet>250</a>        EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FlexBuilder, FluentBuilder,
-<a href=#251 id=251 data-nosnippet>251</a>        FocusGroupId, Font, FontId, FrameBudgetTracker, Framebuffer, FramebufferGray8,
-<a href=#252 id=252 data-nosnippet>252</a>        FramebufferRgba8888, FramebufferSlice, GaugeThreshold, GlanceTileSpec, GradientDirection,
-<a href=#253 id=253 data-nosnippet>253</a>        GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern,
-<a href=#254 id=254 data-nosnippet>254</a>        HapticSequencer, Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry,
-<a href=#255 id=255 data-nosnippet>255</a>        ImageFit, ImageRef, InertiaAnimator, InputEvent, InverterWidget, KeyBindingAction,
-<a href=#256 id=256 data-nosnippet>256</a>        KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LayerState,
-<a href=#257 id=257 data-nosnippet>257</a>        LayoutItem, Length, Line, LineBufferRenderer, LinearGradient, LinearLayout, ListState,
-<a href=#258 id=258 data-nosnippet>258</a>        MatrixWidget, MenuContract, MeterOrientation, ModelChange, MonoBitmap, MotionTokens,
-<a href=#259 id=259 data-nosnippet>259</a>        MultiStopGradient, NavDirection, NineSlice, NineSliceLayout, NotificationLevel, PackedFont,
-<a href=#260 id=260 data-nosnippet>260</a>        PathAnimator, PathPoint, PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton,
-<a href=#261 id=261 data-nosnippet>261</a>        PointerState, PowerConfig, PowerEvent, PowerManager, PowerState, PresentRegion,
-<a href=#262 id=262 data-nosnippet>262</a>        PressTiming, ProgressBarWidget, PropertySignal, Rect, ReelFrame, ReelPlayer, Render,
-<a href=#263 id=263 data-nosnippet>263</a>        RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888,
-<a href=#264 id=264 data-nosnippet>264</a>        ScaleMode, ScaleWidget, ScanlineTarget, Screen, ScreenCommand, ScreenId,
-<a href=#265 id=265 data-nosnippet>265</a>        ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
-<a href=#266 id=266 data-nosnippet>266</a>        ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
-<a href=#267 id=267 data-nosnippet>267</a>        ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SegmentStyle, SequencePlayer,
-<a href=#268 id=268 data-nosnippet>268</a>        SequencePlayerStatus, SequenceRepeatMode, SevenSegmentDisplay, Shadow, ShapedGlyph,
-<a href=#269 id=269 data-nosnippet>269</a>        ShapingConfig, Signal, SliceModel, SlicePair, SliceScaleMode, SliderState,
-<a href=#270 id=270 data-nosnippet>270</a>        Software2DAccelerator, Span, SparklineWidget, SpinboxWidget, SpringAnimator, SpriteSheet,
-<a href=#271 id=271 data-nosnippet>271</a>        StateStyle, StateTransition, StatefulWidget, Stopwatch, StringArena, StrokeCap, StrokeDash,
-<a href=#272 id=272 data-nosnippet>272</a>        StrokeJoin, StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TableWidget,
-<a href=#273 id=273 data-nosnippet>273</a>        TabsState, Text, TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy,
-<a href=#274 id=274 data-nosnippet>274</a>        TextShaper, TextSlice, TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError,
-<a href=#275 id=275 data-nosnippet>275</a>        TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset, TranslationEntry,
-<a href=#276 id=276 data-nosnippet>276</a>        TranslationTable, Tween, UiEvent, UiEventFilter, VectorPath, VerticalAlign, ViewContext,
-<a href=#277 id=277 data-nosnippet>277</a>        VisualState, WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator,
-<a href=#278 id=278 data-nosnippet>278</a>        WidgetDispatchPolicy, WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags,
-<a href=#279 id=279 data-nosnippet>279</a>        WidgetId, WidgetKeyBindings, WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind,
-<a href=#280 id=280 data-nosnippet>280</a>        WidgetNode, WidgetPropertyKeyframe, WidgetStateMachine, WidgetStyle, animate_glance_focus,
-<a href=#281 id=281 data-nosnippet>281</a>        animate_peek_reveal, apply_carddeck_visibility, apply_easing, bayer_1bit, bayer_2bit,
-<a href=#282 id=282 data-nosnippet>282</a>        bayer_4bit, bayer_dither_rgb565, colors, encode_7seg, encode_14seg, lerp_style, presets,
-<a href=#283 id=283 data-nosnippet>283</a>        render_transition_pair, setup_card_story, setup_launcher_glance,
-<a href=#284 id=284 data-nosnippet>284</a>        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
-<a href=#285 id=285 data-nosnippet>285</a>    };
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>    <span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, feature = <span class="string">"image-decode"</span>))]
-<a href=#288 id=288 data-nosnippet>288</a>    </span><span class="kw">pub use crate</span>::{
-<a href=#289 id=289 data-nosnippet>289</a>        BasicImageDecoder, EncodedImageFormat, ImageDecodeError, ImageDecoder, LayerCanvas,
-<a href=#290 id=290 data-nosnippet>290</a>        TestBuffer, decode_image_auto, decode_image_with, decode_ppm_ascii,
-<a href=#291 id=291 data-nosnippet>291</a>    };
-<a href=#292 id=292 data-nosnippet>292</a>
-<a href=#293 id=293 data-nosnippet>293</a>    <span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, not(feature = <span class="string">"image-decode"</span>)))]
-<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="kw">pub use crate</span>::{LayerCanvas, TestBuffer};
-<a href=#295 id=295 data-nosnippet>295</a>
-<a href=#296 id=296 data-nosnippet>296</a>    <span class="attr">#[cfg(feature = <span class="string">"macros"</span>)]
-<a href=#297 id=297 data-nosnippet>297</a>    </span><span class="kw">pub use </span>embedded_gui_macros::{gui_kdl, include_gui};
-<a href=#298 id=298 data-nosnippet>298</a>}
-<a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a><span class="attr">#[cfg(feature = <span class="string">"macros"</span>)]
-<a href=#301 id=301 data-nosnippet>301</a></span><span class="kw">pub use </span>embedded_gui_macros::{gui_kdl, include_gui};
+<a href=#246 id=246 data-nosnippet>246</a>        ColorOps, ColorStop, CompassMode, CompassWidget, ComposedAnimation,
+<a href=#247 id=247 data-nosnippet>247</a>        ComposedAnimationCallbacks, ComposedAnimationPlayer, ComposedAnimationStatus,
+<a href=#248 id=248 data-nosnippet>248</a>        CompositeIconSpec, CompositionControls, CompositionMode, Compositor, Constraint,
+<a href=#249 id=249 data-nosnippet>249</a>        DirtyBandAccumulator, DirtyRectVisualizer, DirtyTracker, Dither, DrawTargetColorExt,
+<a href=#250 id=250 data-nosnippet>250</a>        Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
+<a href=#251 id=251 data-nosnippet>251</a>        FeedTimelineState, FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId,
+<a href=#252 id=252 data-nosnippet>252</a>        FrameBudgetTracker, Framebuffer, FramebufferGray8, FramebufferRgba8888, FramebufferSlice,
+<a href=#253 id=253 data-nosnippet>253</a>        GaugeThreshold, GlanceTileSpec, GradientDirection, GridLayout, GridPlacement, GridTrack,
+<a href=#254 id=254 data-nosnippet>254</a>        GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer, Hardware2DAccelerator,
+<a href=#255 id=255 data-nosnippet>255</a>        IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator,
+<a href=#256 id=256 data-nosnippet>256</a>        InputEvent, InverterWidget, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
+<a href=#257 id=257 data-nosnippet>257</a>        KeyframeTrackCallbacks, LanguageId, LayerState, LayoutItem, Length, Line,
+<a href=#258 id=258 data-nosnippet>258</a>        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MatrixWidget, MenuContract,
+<a href=#259 id=259 data-nosnippet>259</a>        MeterOrientation, ModelChange, MonoBitmap, MotionTokens, MultiStopGradient, NavDirection,
+<a href=#260 id=260 data-nosnippet>260</a>        NineSlice, NineSliceLayout, NotificationLevel, PackedFont, PathAnimator, PathPoint,
+<a href=#261 id=261 data-nosnippet>261</a>        PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState,
+<a href=#262 id=262 data-nosnippet>262</a>        PowerConfig, PowerEvent, PowerManager, PowerState, PresentRegion, PressTiming,
+<a href=#263 id=263 data-nosnippet>263</a>        ProgressBarWidget, PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps,
+<a href=#264 id=264 data-nosnippet>264</a>        RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
+<a href=#265 id=265 data-nosnippet>265</a>        ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
+<a href=#266 id=266 data-nosnippet>266</a>        ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
+<a href=#267 id=267 data-nosnippet>267</a>        ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
+<a href=#268 id=268 data-nosnippet>268</a>        SegmentStyle, SequencePlayer, SequencePlayerStatus, SequenceRepeatMode,
+<a href=#269 id=269 data-nosnippet>269</a>        SevenSegmentDisplay, Shadow, ShapedGlyph, ShapingConfig, Signal, SliceModel, SlicePair,
+<a href=#270 id=270 data-nosnippet>270</a>        SliceScaleMode, SliderState, Software2DAccelerator, Span, SparklineWidget, SpinboxWidget,
+<a href=#271 id=271 data-nosnippet>271</a>        SpringAnimator, SpriteSheet, StateStyle, StateTransition, StatefulWidget, Stopwatch,
+<a href=#272 id=272 data-nosnippet>272</a>        StringArena, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle, Style, StyleClassId,
+<a href=#273 id=273 data-nosnippet>273</a>        StyleTransition, SurfaceState, TableWidget, TabsState, Text, TextAlign, TextDirection,
+<a href=#274 id=274 data-nosnippet>274</a>        TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper, TextSlice, TextStyle, TextWrap,
+<a href=#275 id=275 data-nosnippet>275</a>        Theme, TileMode, TileRef, TimelineError, TimelineMotionPreset, TimelineStep, Timer,
+<a href=#276 id=276 data-nosnippet>276</a>        Transform2D, TransitionPreset, TranslationEntry, TranslationTable, Tween, UiEvent,
+<a href=#277 id=277 data-nosnippet>277</a>        UiEventFilter, VectorPath, VerticalAlign, ViewContext, VisualState,
+<a href=#278 id=278 data-nosnippet>278</a>        WidgetAnimationCallbacks, WidgetAnimationError, WidgetAnimator, WidgetDispatchPolicy,
+<a href=#279 id=279 data-nosnippet>279</a>        WidgetEvent, WidgetEventFilter, WidgetEventKind, WidgetFlags, WidgetId, WidgetKeyBindings,
+<a href=#280 id=280 data-nosnippet>280</a>        WidgetKeyInputPolicy, WidgetKeyframeState, WidgetKind, WidgetNode, WidgetPropertyKeyframe,
+<a href=#281 id=281 data-nosnippet>281</a>        WidgetStateMachine, WidgetStyle, animate_glance_focus, animate_peek_reveal,
+<a href=#282 id=282 data-nosnippet>282</a>        apply_carddeck_visibility, apply_easing, bayer_1bit, bayer_2bit, bayer_4bit,
+<a href=#283 id=283 data-nosnippet>283</a>        bayer_dither_rgb565, colors, encode_7seg, encode_14seg, lerp_style, presets,
+<a href=#284 id=284 data-nosnippet>284</a>        render_transition_pair, setup_card_story, setup_launcher_glance,
+<a href=#285 id=285 data-nosnippet>285</a>        setup_launcher_glance_with_tokens, setup_peek_timeline, setup_peek_timeline_with_tokens,
+<a href=#286 id=286 data-nosnippet>286</a>    };
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, feature = <span class="string">"image-decode"</span>))]
+<a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">pub use crate</span>::{
+<a href=#290 id=290 data-nosnippet>290</a>        BasicImageDecoder, EncodedImageFormat, ImageDecodeError, ImageDecoder, LayerCanvas,
+<a href=#291 id=291 data-nosnippet>291</a>        TestBuffer, decode_image_auto, decode_image_with, decode_ppm_ascii,
+<a href=#292 id=292 data-nosnippet>292</a>    };
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="attr">#[cfg(all(feature = <span class="string">"std"</span>, not(feature = <span class="string">"image-decode"</span>)))]
+<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">pub use crate</span>::{LayerCanvas, TestBuffer};
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a>    <span class="attr">#[cfg(feature = <span class="string">"macros"</span>)]
+<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">pub use </span>embedded_gui_macros::{gui_kdl, include_gui};
+<a href=#299 id=299 data-nosnippet>299</a>}
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a><span class="attr">#[cfg(feature = <span class="string">"macros"</span>)]
+<a href=#302 id=302 data-nosnippet>302</a></span><span class="kw">pub use </span>embedded_gui_macros::{gui_kdl, include_gui};
 </code></pre></div></section></main></body></html>
