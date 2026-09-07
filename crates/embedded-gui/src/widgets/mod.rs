@@ -3902,3 +3902,211 @@ impl Default for WidgetNode<'_> {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::framebuffer::Framebuffer;
+
+    fn node<'a>(kind: WidgetKind<'a>) -> WidgetNode<'a> {
+        WidgetNode::new(
+            WidgetId::new(1),
+            Rect::new(0, 0, 10, 10),
+            kind,
+            Style::new(),
+        )
+    }
+
+    #[test]
+    fn widget_node_property_get_set() {
+        let mut progress = node(WidgetKind::ProgressBar { value: 0.25 });
+        assert_eq!(
+            progress.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(0.25))
+        );
+        assert!(
+            progress
+                .set_property(PropertyKey::Progress, PropertyValue::Float(2.0))
+                .is_ok()
+        );
+        assert_eq!(
+            progress.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(1.0))
+        );
+
+        let mut label = node(WidgetKind::Label("hi"));
+        assert_eq!(
+            label.get_property(PropertyKey::Text),
+            Some(PropertyValue::Str("hi"))
+        );
+        assert!(
+            label
+                .set_property(PropertyKey::Text, PropertyValue::Str("yo"))
+                .is_ok()
+        );
+
+        let mut button = node(WidgetKind::Button("a"));
+        assert!(
+            button
+                .set_property(PropertyKey::Text, PropertyValue::Str("b"))
+                .is_ok()
+        );
+        assert_eq!(
+            button.get_property(PropertyKey::Text),
+            Some(PropertyValue::Str("b"))
+        );
+
+        let mut slider = node(WidgetKind::Slider {
+            value: 5.0,
+            min: 0.0,
+            max: 10.0,
+        });
+        assert_eq!(
+            slider.get_property(PropertyKey::Min),
+            Some(PropertyValue::Float(0.0))
+        );
+        assert_eq!(
+            slider.get_property(PropertyKey::Max),
+            Some(PropertyValue::Float(10.0))
+        );
+        assert!(
+            slider
+                .set_property(PropertyKey::Value, PropertyValue::Float(99.0))
+                .is_ok()
+        );
+        assert_eq!(
+            slider.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(10.0))
+        );
+
+        let mut toggle = node(WidgetKind::Toggle {
+            label: "t",
+            on: false,
+        });
+        assert!(
+            toggle
+                .set_property(PropertyKey::State, PropertyValue::Bool(true))
+                .is_ok()
+        );
+        assert_eq!(
+            toggle.get_property(PropertyKey::State),
+            Some(PropertyValue::Bool(true))
+        );
+
+        let mut checkbox = node(WidgetKind::Checkbox {
+            label: "c",
+            checked: true,
+        });
+        assert!(
+            checkbox
+                .set_property(PropertyKey::State, PropertyValue::Bool(false))
+                .is_ok()
+        );
+        assert_eq!(
+            checkbox.get_property(PropertyKey::State),
+            Some(PropertyValue::Bool(false))
+        );
+
+        let mut list = node(WidgetKind::List {
+            items: &["a", "b"],
+            selected: 0,
+            offset: 0,
+            visible_rows: 2,
+        });
+        assert!(
+            list.set_property(PropertyKey::Selected, PropertyValue::Usize(1))
+                .is_ok()
+        );
+        assert_eq!(
+            list.get_property(PropertyKey::Selected),
+            Some(PropertyValue::Usize(1))
+        );
+
+        let mut tabs = node(WidgetKind::Tabs {
+            labels: &["a", "b"],
+            selected: 0,
+        });
+        assert!(
+            tabs.set_property(PropertyKey::Selected, PropertyValue::Usize(1))
+                .is_ok()
+        );
+
+        let cells = [
+            MenuCell::new("one").with_subtitle("sub"),
+            MenuCell::new("two").with_enabled(false),
+        ];
+        let mut rich = node(WidgetKind::RichMenu {
+            cells: &cells,
+            selected: 0,
+            offset: 0,
+            visible_rows: 2,
+        });
+        assert_eq!(
+            rich.get_property(PropertyKey::Selected),
+            Some(PropertyValue::Usize(0))
+        );
+        assert!(
+            rich.set_property(PropertyKey::Selected, PropertyValue::Usize(5))
+                .is_ok()
+        );
+        assert_eq!(
+            rich.get_property(PropertyKey::Selected),
+            Some(PropertyValue::Usize(1))
+        );
+
+        let mut spacer = node(WidgetKind::Spacer);
+        assert_eq!(spacer.get_property(PropertyKey::Value), None);
+        assert!(
+            spacer
+                .set_property(PropertyKey::Value, PropertyValue::Float(0.0))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn widget_node_flags_and_focusability() {
+        let mut btn = node(WidgetKind::Button("x"));
+        assert!(btn.clickable());
+        assert!(btn.focusable());
+
+        let panel = node(WidgetKind::Panel);
+        assert!(!panel.focusable());
+        assert!(panel.clips_children());
+
+        btn.flags.insert(WidgetFlags::SCROLLABLE);
+        assert!(btn.scrollable());
+
+        btn.flags.insert(WidgetFlags::CLIP_CHILDREN);
+        assert!(btn.clips_children());
+
+        btn.flags.set(WidgetFlags::HIDDEN, true);
+        assert!(btn.hidden());
+        assert!(!btn.focusable());
+
+        btn.flags.set(WidgetFlags::HIDDEN, false);
+        btn.flags.set(WidgetFlags::DISABLED, true);
+        assert!(btn.disabled());
+        assert!(!btn.focusable());
+
+        let spec = CarouselSpec::new(12, 4);
+        assert_eq!(spec.item_step, 12);
+        assert_eq!(spec.visible_slots, 4);
+    }
+
+    #[test]
+    fn widget_node_render_and_hidden_noop() {
+        let mut fb = Framebuffer::<100>::new(10, 10);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 10, 10));
+        let panel_node = node(WidgetKind::Panel);
+        assert!(panel_node.render(&mut ctx, VisualState::Normal).is_ok());
+
+        let mut hidden = node(WidgetKind::Button("x"));
+        hidden.flags.insert(WidgetFlags::HIDDEN);
+        assert!(hidden.render(&mut ctx, VisualState::Normal).is_ok());
+        assert!(
+            hidden
+                .render_at(&mut ctx, Rect::new(0, 0, 5, 5), VisualState::Pressed)
+                .is_ok()
+        );
+    }
+}

@@ -196,3 +196,130 @@ impl<const MAX_VISIBLE: usize> Widget for RepeaterWidget<MAX_VISIBLE> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::UiEvent;
+    use crate::widget::EventPhase;
+
+    #[test]
+    fn repeater_selection_scroll_property_logic() {
+        let mut r = RepeaterWidget::<3>::new(20)
+            .with_spacing(4)
+            .with_background(Rgb565::new(1, 2, 3));
+        assert_eq!(r.spacing, 4);
+        assert_eq!(r.background, Some(Rgb565::new(1, 2, 3)));
+        assert_eq!(r.item_height, 20);
+
+        r.total_count = 5;
+        r.scroll_offset = 2;
+        r.set_selected(1);
+        assert_eq!(
+            r.scroll_offset, 1,
+            "selected before scroll moves offset down"
+        );
+
+        r.set_selected(4);
+        assert_eq!(
+            r.scroll_offset, 2,
+            "selected after visible window moves offset up"
+        );
+
+        r.scroll_offset = 0;
+        r.selected = 0;
+        assert!(r.bump_selection(-1), "wrap from first item to last");
+        assert_eq!(r.selected, 4);
+
+        r.total_count = 0;
+        assert!(!r.bump_selection(1));
+
+        let bounds = r.item_bounds(Rect::new(5, 10, 40, 20), 2);
+        assert_eq!(bounds.y, 10 + 2 * (20 + r.spacing) as i32);
+
+        let mut total0 = RepeaterWidget::<4>::default();
+        assert!(!total0.set_selected(7));
+        assert_eq!(total0.selected, 0);
+    }
+
+    #[test]
+    fn repeater_widget_property_events() {
+        let mut r = RepeaterWidget::<3> {
+            total_count: 4,
+            selected: 1,
+            scroll_offset: 1,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            r.get_property(PropertyKey::Selected),
+            Some(PropertyValue::Usize(1))
+        );
+        assert_eq!(
+            r.get_property(PropertyKey::Offset),
+            Some(PropertyValue::Usize(1))
+        );
+        assert_eq!(
+            r.get_property(PropertyKey::Value),
+            Some(PropertyValue::Usize(4))
+        );
+        assert_eq!(r.get_property(PropertyKey::Min), None);
+
+        assert!(
+            r.set_property(PropertyKey::Selected, PropertyValue::Usize(3))
+                .is_ok()
+        );
+        assert!(
+            r.set_property(PropertyKey::Offset, PropertyValue::Usize(0))
+                .is_ok()
+        );
+        assert!(
+            r.set_property(PropertyKey::Value, PropertyValue::Usize(9))
+                .is_ok()
+        );
+        assert!(
+            r.set_property(PropertyKey::Min, PropertyValue::Usize(0))
+                .is_err()
+        );
+
+        let mut ctx = EventContext {
+            target: WidgetId::new(1),
+            current: WidgetId::new(1),
+            phase: EventPhase::Bubble,
+        };
+        assert_eq!(
+            r.handle_widget_event(
+                &UiEvent::Scroll {
+                    id: WidgetId::new(1),
+                    delta: 1
+                },
+                &mut ctx
+            ),
+            EventPolicy::Stop
+        );
+        assert_eq!(
+            r.handle_widget_event(
+                &UiEvent::Scroll {
+                    id: WidgetId::new(1),
+                    delta: -1
+                },
+                &mut ctx
+            ),
+            EventPolicy::Stop
+        );
+        assert_eq!(
+            r.handle_widget_event(
+                &UiEvent::Scroll {
+                    id: WidgetId::new(1),
+                    delta: 0
+                },
+                &mut ctx
+            ),
+            EventPolicy::Continue
+        );
+        assert_eq!(
+            r.handle_widget_event(&UiEvent::Clicked(WidgetId::new(1)), &mut ctx),
+            EventPolicy::Continue
+        );
+    }
+}
