@@ -366,3 +366,123 @@ impl Widget for ScaleWidget {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::framebuffer::Framebuffer;
+    use crate::render::RenderCtx;
+
+    #[test]
+    fn scale_constructors_and_properties() {
+        let radial = ScaleWidget::new(0.0, 100.0, 50.0);
+        assert_eq!(radial.mode, ScaleMode::Radial);
+        assert_eq!(radial.value, 50.0);
+
+        let horizontal = ScaleWidget::linear_horizontal(-10.0, 10.0, 20.0);
+        assert_eq!(horizontal.mode, ScaleMode::LinearHorizontal);
+        assert_eq!(horizontal.value, 10.0, "value is clamped to max");
+
+        let vertical = ScaleWidget::linear_vertical(0.0, 100.0, 0.0)
+            .with_ticks(3, 2)
+            .with_angles(90, 270)
+            .with_labels(false)
+            .with_needle(false, Rgb565::CSS_BLUE);
+        assert_eq!(vertical.mode, ScaleMode::LinearVertical);
+        assert_eq!(vertical.major_ticks, 3);
+        assert_eq!(vertical.minor_ticks, 2);
+        assert!(!vertical.show_labels);
+        assert!(!vertical.show_needle);
+
+        let mut scale = vertical;
+        assert_eq!(
+            scale.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(0.0))
+        );
+        assert!(
+            scale
+                .set_property(PropertyKey::Value, PropertyValue::Float(150.0))
+                .is_ok()
+        );
+        assert_eq!(scale.value, 100.0);
+        assert!(
+            scale
+                .set_property(PropertyKey::Min, PropertyValue::Float(-5.0))
+                .is_ok()
+        );
+        assert!(
+            scale
+                .set_property(PropertyKey::Max, PropertyValue::Float(120.0))
+                .is_ok()
+        );
+        assert_eq!(
+            scale.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(100.0))
+        );
+        assert!(
+            scale
+                .set_property(PropertyKey::Offset, PropertyValue::Usize(1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn scale_render_all_modes() {
+        let style = crate::style::WidgetStyle::new(Style::new());
+        let mut fb = Framebuffer::<10_000>::new(100, 100);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 100, 100));
+
+        let horizontal = ScaleWidget::linear_horizontal(0.0, 100.0, 50.0);
+        assert!(
+            horizontal
+                .render(
+                    &mut ctx,
+                    Rect::new(0, 0, 100, 60),
+                    style,
+                    VisualState::Normal
+                )
+                .is_ok()
+        );
+
+        let vertical = ScaleWidget::linear_vertical(0.0, 100.0, 50.0)
+            .with_labels(false)
+            .with_needle(false, Rgb565::CSS_BLUE);
+        assert!(
+            vertical
+                .render(
+                    &mut ctx,
+                    Rect::new(0, 0, 60, 100),
+                    style,
+                    VisualState::Focused
+                )
+                .is_ok()
+        );
+
+        let radial = ScaleWidget::new(0.0, 100.0, 75.0)
+            .with_labels(false)
+            .with_needle(true, Rgb565::CSS_RED);
+        assert!(
+            radial
+                .render(
+                    &mut ctx,
+                    Rect::new(0, 0, 100, 100),
+                    style,
+                    VisualState::Pressed
+                )
+                .is_ok()
+        );
+
+        // Radial too small to draw should be a no-op but still succeed.
+        let small_radial = ScaleWidget::new(0.0, 100.0, 50.0);
+        assert!(
+            small_radial
+                .render(
+                    &mut ctx,
+                    Rect::new(0, 0, 10, 10),
+                    style,
+                    VisualState::Disabled
+                )
+                .is_ok()
+        );
+    }
+}

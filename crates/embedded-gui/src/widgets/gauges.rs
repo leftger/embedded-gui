@@ -225,6 +225,7 @@ impl<const MAX_THRESHOLDS: usize> Widget for ArcGaugeWidget<MAX_THRESHOLDS> {
 mod tests {
     use super::*;
     use crate::framebuffer::Framebuffer;
+    use embedded_graphics_core::pixelcolor::WebColors;
 
     #[test]
     fn test_arc_gauge_properties() {
@@ -257,5 +258,58 @@ mod tests {
 
         // Hub pixel at center (15, 15) should be hub_color (WHITE)
         assert_eq!(fb.pixels()[15 * 30 + 15], Rgb565::new(31, 63, 31));
+    }
+
+    #[test]
+    fn test_progress_bar_properties_and_gauges_extra_paths() {
+        let mut bar = ProgressBarWidget::new(1.5);
+        assert_eq!(bar.value, 1.0);
+        assert_eq!(
+            bar.get_property(PropertyKey::Progress),
+            Some(PropertyValue::Float(1.0))
+        );
+        assert!(
+            bar.set_property(PropertyKey::Value, PropertyValue::Float(-1.0))
+                .is_ok()
+        );
+        assert_eq!(bar.value, 0.0);
+        assert!(
+            bar.set_property(PropertyKey::Min, PropertyValue::Float(0.0))
+                .is_err()
+        );
+
+        let mut gauge = ArcGaugeWidget::<2>::default()
+            .with_angles(180, 360)
+            .with_colors(Rgb565::new(1, 2, 3), Rgb565::new(4, 5, 6));
+        assert_eq!(gauge.start_deg, 180);
+        assert_eq!(gauge.end_deg, 360);
+        assert!(gauge.add_threshold(10.0, 20.0, Rgb565::CSS_GREEN));
+        assert!(gauge.add_threshold(20.0, 30.0, Rgb565::CSS_RED));
+        assert!(!gauge.add_threshold(30.0, 40.0, Rgb565::CSS_BLUE));
+
+        assert!(
+            gauge
+                .set_property(PropertyKey::Min, PropertyValue::Float(-10.0))
+                .is_ok()
+        );
+        assert!(
+            gauge
+                .set_property(PropertyKey::Max, PropertyValue::Float(110.0))
+                .is_ok()
+        );
+        assert!(
+            gauge
+                .set_property(PropertyKey::Offset, PropertyValue::Usize(0))
+                .is_err()
+        );
+
+        let mut fb = Framebuffer::<900>::new(30, 30);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 30, 30));
+        assert!(gauge.render(&mut ctx, Rect::new(0, 0, 30, 30)).is_ok());
+        assert!(gauge.render(&mut ctx, Rect::new(0, 0, 2, 2)).is_ok());
+
+        let mut equal = ArcGaugeWidget::<1>::new(50.0, 0.0, 100.0);
+        assert!(equal.add_threshold(50.0, 50.0, Rgb565::CSS_RED));
+        assert!(equal.render(&mut ctx, Rect::new(0, 0, 30, 30)).is_ok());
     }
 }

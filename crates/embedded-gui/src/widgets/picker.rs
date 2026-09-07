@@ -433,4 +433,57 @@ mod tests {
         np.decrement();
         assert_eq!(np.value, 50);
     }
+
+    #[test]
+    fn test_time_picker_24h_period_and_boundaries() {
+        let mut picker = TimePickerWidget::new_24h(23, 59);
+        assert_eq!(picker.hour, 23);
+        assert_eq!(picker.format, TimeFormat::Hour24);
+
+        picker.increment_focused();
+        assert_eq!(picker.hour, 0);
+        picker.decrement_focused();
+        assert_eq!(picker.hour, 23);
+
+        picker.next_field();
+        assert_eq!(picker.focused_field, TimePickerField::Minute);
+        picker.increment_focused();
+        assert_eq!(picker.minute, 0);
+        picker.decrement_focused();
+        assert_eq!(picker.minute, 59);
+        picker.prev_field();
+        assert_eq!(picker.focused_field, TimePickerField::Hour);
+
+        let mut twelve = TimePickerWidget::new_12h(1, 0, false);
+        twelve.decrement_focused();
+        assert_eq!(twelve.hour, 12);
+        twelve.focused_field = TimePickerField::Period;
+        twelve.increment_focused();
+        assert!(twelve.is_pm);
+        twelve.decrement_focused();
+        assert!(!twelve.is_pm);
+        twelve.next_field();
+        assert_eq!(twelve.focused_field, TimePickerField::Hour);
+        twelve.prev_field();
+        assert_eq!(twelve.focused_field, TimePickerField::Period);
+    }
+
+    #[test]
+    fn test_picker_renders_24h_and_number_picker() {
+        let mut fb = Framebuffer::<{ 120 * 80 }>::new(120, 80);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 120, 80));
+
+        let mut picker = TimePickerWidget::new_24h(9, 5);
+        picker.focused_field = TimePickerField::Minute;
+        assert!(picker.render(&mut ctx, Rect::new(10, 10, 100, 40)).is_ok());
+        assert!(picker.render(&mut ctx, Rect::new(0, 0, 0, 0)).is_ok());
+
+        let mut np = NumberPickerWidget::new(0, 3, 99, "%");
+        assert_eq!(np.value, 3);
+        np.increment();
+        assert_eq!(np.value, 3);
+        np.is_focused = false;
+        assert!(np.render(&mut ctx, Rect::new(10, 50, 60, 20)).is_ok());
+        assert!(np.render(&mut ctx, Rect::new(0, 0, 0, 0)).is_ok());
+    }
 }

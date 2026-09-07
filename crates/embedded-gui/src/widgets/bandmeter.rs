@@ -327,4 +327,43 @@ mod tests {
             "unlit segment pixel should remain black"
         );
     }
+
+    #[test]
+    fn test_band_meter_vertical_peak_and_empty_bounds() {
+        let meter = BandMeterWidget::<16>::new(0.85)
+            .with_segments(10)
+            .with_orientation(MeterOrientation::Vertical)
+            .with_peak(0.95)
+            .with_thresholds(0.6, 0.8);
+
+        let mut fb = Framebuffer::<1024>::new(16, 64);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 16, 64));
+        assert!(meter.render(Rect::new(0, 0, 16, 64), &mut ctx).is_ok());
+        assert!(meter.peak.is_some());
+        assert_eq!(meter.orientation, MeterOrientation::Vertical);
+
+        let mut empty = Framebuffer::<1>::new(1, 1);
+        let mut ctx_empty = RenderCtx::new(&mut empty, Rect::new(0, 0, 1, 1));
+        assert!(meter.render(Rect::new(0, 0, 0, 0), &mut ctx_empty).is_ok());
+
+        let zero_segments = meter.with_segments(0);
+        assert_eq!(zero_segments.segments, 0);
+        assert!(
+            zero_segments
+                .render(Rect::new(0, 0, 8, 8), &mut ctx_empty)
+                .is_ok()
+        );
+
+        let mut m = BandMeterWidget::<16>::new(0.0);
+        assert!(
+            m.set_property(PropertyKey::Progress, PropertyValue::Float(-2.0))
+                .is_ok()
+        );
+        assert_eq!(m.value, 0.0);
+        assert!(
+            m.set_property(PropertyKey::Offset, PropertyValue::Usize(0))
+                .is_err()
+        );
+        let _ = BandMeterWidget::<16>::default();
+    }
 }
