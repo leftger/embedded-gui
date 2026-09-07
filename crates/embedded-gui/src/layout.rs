@@ -910,4 +910,36 @@ mod tests {
         assert_eq!(out[2].x, 10);
         assert_eq!(out[2].y, 45); // 10 + 30 + 5 = 45
     }
+
+    #[test]
+    fn layout_builder_helpers_and_zero_items() {
+        let row = LinearLayout::flex_row();
+        assert_eq!(row.axis, Axis::Horizontal);
+        let column = LinearLayout::flex_column();
+        assert_eq!(column.axis, Axis::Vertical);
+        let custom = LinearLayout::column()
+            .with_gap(3)
+            .with_padding(EdgeInsets::all(1))
+            .with_justify(JustifyContent::Center)
+            .with_cross_align(Align::End);
+        assert_eq!(custom.gap, 3);
+        assert_eq!(custom.justify, JustifyContent::Center);
+
+        let mut out = [];
+        assert_eq!(row.arrange(Rect::new(0, 0, 10, 10), 0, &mut out), 0);
+        assert_eq!(column.arrange(Rect::new(0, 0, 10, 10), 1, &mut []), 0);
+
+        let c_length = Constraint::length(3);
+        assert_eq!(c_length.fixed_size(10), Some(3));
+        let c_min = Constraint::min(2);
+        assert_eq!(c_min.fixed_size(10), Some(2));
+        let c_max = Constraint::max(8);
+        assert_eq!(c_max.fixed_size(10), Some(8));
+        let c_pct = Constraint::percent(50);
+        assert_eq!(c_pct.fixed_size(100), Some(50));
+        let c_ratio = Constraint::ratio(1, 2);
+        assert_eq!(c_ratio.fixed_size(100), Some(50));
+        let c_fill = Constraint::fill(3);
+        assert_eq!(c_fill.fixed_size(100), None);
+    }
 }

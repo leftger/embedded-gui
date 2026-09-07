@@ -324,4 +324,45 @@ mod tests {
         let confirm = ConfirmationDialogWidget::new("SYNC DATA", "Upload 12 pending logs?", 10, 20);
         assert_eq!(confirm.dialog.actions.len(), 2);
     }
+
+    #[test]
+    fn dialog_all_types_prev_capacity_and_confirmation_render() {
+        let mut fb = Framebuffer::<{ 160 * 120 }>::new(160, 120);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 160, 120));
+
+        for kind in [
+            DialogType::Info,
+            DialogType::Warning,
+            DialogType::Error,
+            DialogType::Success,
+            DialogType::Question,
+        ] {
+            let mut dialog = ActionableDialogWidget::<2>::new("T", "M", kind);
+            let _ = dialog.add_action(DialogAction::new("A", 1));
+            let _ = dialog.add_action(DialogAction::destructive("B", 2));
+            assert!(dialog.add_action(DialogAction::new("C", 3)).is_err());
+            dialog.selected_action = 1;
+            dialog.select_next();
+            dialog.select_next();
+            dialog.select_prev();
+            assert_eq!(dialog.current_action_id(), Some(1));
+            dialog.select_prev();
+            assert_eq!(dialog.current_action_id(), Some(2));
+            assert!(dialog.render(&mut ctx, Rect::new(0, 0, 150, 100)).is_ok());
+        }
+
+        let mut no_actions = ActionableDialogWidget::<1>::new("T", "M", DialogType::Info);
+        no_actions.select_next();
+        no_actions.select_prev();
+        assert_eq!(no_actions.current_action_id(), None);
+        assert!(
+            no_actions
+                .render(&mut ctx, Rect::new(0, 0, 150, 100))
+                .is_ok()
+        );
+        assert!(no_actions.render(&mut ctx, Rect::empty()).is_ok());
+
+        let confirm = ConfirmationDialogWidget::new("SYNC", "Continue?", 10, 20);
+        assert!(confirm.render(&mut ctx, Rect::new(0, 0, 150, 100)).is_ok());
+    }
 }

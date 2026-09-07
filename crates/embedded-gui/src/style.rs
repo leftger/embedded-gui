@@ -1770,4 +1770,38 @@ mod tests {
         );
         let _ = MultiPartStyle::<2>::default();
     }
+
+    #[test]
+    fn test_style_builders_and_all_theme_variants() {
+        let style = Style::new()
+            .with_background(Some(Rgb565::new(1, 2, 3)))
+            .with_bg(Rgb565::new(4, 5, 6))
+            .with_gradient(Some(LinearGradient::vertical(
+                Rgb565::new(1, 1, 1),
+                Rgb565::new(2, 2, 2),
+            )))
+            .with_foreground(Rgb565::new(7, 8, 9))
+            .with_fg(Rgb565::new(10, 11, 12))
+            .with_text(Rgb565::new(13, 14, 15))
+            .with_text_color(Rgb565::new(16, 17, 18))
+            .with_accent(Rgb565::new(19, 20, 21))
+            .with_opacity(100)
+            .with_corner_radius(2)
+            .with_shadow(Some(Shadow::soft()))
+            .with_border(Border::one(Rgb565::new(22, 23, 24)))
+            .with_border_color(Rgb565::new(25, 26, 27))
+            .with_padding(EdgeInsets::all(2))
+            .with_font_id(FontId::Medium4x7)
+            .with_font(FontId::Tiny3x5)
+            .selected(true);
+        assert_eq!(style.opacity, 100);
+        assert_eq!(style.corner_radius, 2);
+        assert_eq!(style.font, FontId::Tiny3x5);
+        assert!(style.border.width > 0);
+
+        let _ = Theme::light();
+        let _ = Theme::amber_crt();
+        let _ = Theme::emerald_matrix();
+        let _ = Theme::soft_ui();
+    }
 }

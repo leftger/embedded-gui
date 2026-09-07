@@ -232,4 +232,42 @@ mod tests {
         assert_eq!(layout.bottom_right.source, Rect::new(12, 12, 4, 4));
         assert_eq!(layout.bottom_right.dest, Rect::new(106, 66, 4, 4));
     }
+
+    #[test]
+    fn test_border_rect_helpers_modes_and_iter() {
+        assert_eq!(
+            BorderRect::all(3),
+            BorderRect {
+                top: 3,
+                right: 3,
+                bottom: 3,
+                left: 3
+            }
+        );
+        assert_eq!(
+            BorderRect::symmetric(2, 5),
+            BorderRect {
+                top: 2,
+                right: 5,
+                bottom: 2,
+                left: 5
+            }
+        );
+        assert_eq!(BorderRect::default().top, 0);
+
+        let slicer = NineSlice::with_modes(
+            BorderRect::all(4),
+            SliceScaleMode::Tile,
+            SliceScaleMode::Stretch,
+        );
+        assert_eq!(slicer.center_mode, SliceScaleMode::Tile);
+        assert_eq!(slicer.sides_mode, SliceScaleMode::Stretch);
+
+        let source = Rect::new(0, 0, 16, 16);
+        let layout = slicer.compute_slices(source, Rect::new(0, 0, 6, 6));
+        assert_eq!(layout.top_left.dest, Rect::new(0, 0, 3, 3));
+        assert_eq!(layout.top_right.dest.w, 3);
+        assert_eq!(layout.bottom_right.dest.h, 3);
+        assert_eq!(layout.iter().count(), 9);
+    }
 }

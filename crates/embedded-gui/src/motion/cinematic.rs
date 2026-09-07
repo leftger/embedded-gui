@@ -614,4 +614,73 @@ mod tests {
         assert_eq!(CinematicPreset::LauncherGlance.name(), "launcher-glance");
         assert_eq!(CinematicPreset::CardStory.name(), "card-story");
     }
+
+    #[test]
+    fn cinematic_setup_helpers_and_story_apply() {
+        let mut gui: GuiContext<12, 8, 8> =
+            GuiContext::new(crate::geometry::Rect::new(0, 0, 200, 100));
+        let id1 = gui
+            .add_label(
+                crate::geometry::Rect::new(0, 0, 20, 10),
+                "1",
+                crate::style::Style::label(),
+            )
+            .unwrap();
+        let id2 = gui
+            .add_label(
+                crate::geometry::Rect::new(0, 20, 20, 10),
+                "2",
+                crate::style::Style::label(),
+            )
+            .unwrap();
+        let id3 = gui
+            .add_label(
+                crate::geometry::Rect::new(0, 40, 20, 10),
+                "3",
+                crate::style::Style::label(),
+            )
+            .unwrap();
+        let cards = [id1, id2, id3];
+        let mut deck = CardDeckState::new(3);
+        setup_card_story(&mut gui, &cards, &deck).unwrap();
+        deck.move_next();
+        setup_card_story(&mut gui, &cards, &deck).unwrap();
+
+        let mut story = CardStory::new(&cards, TimelineMotionPreset::PeekIn);
+        story.next();
+        story.apply(&mut gui).unwrap();
+
+        let mut animator = WidgetAnimator::<32, 32>::new();
+        animate_glance_focus(
+            &mut animator,
+            id1,
+            &[id2, id3],
+            10,
+            20,
+            GlanceTileSpec::default(),
+        )
+        .unwrap();
+        setup_peek_timeline(&mut animator, id1, Some(id2), Some(id3), 10, 20).unwrap();
+        setup_peek_timeline_with_tokens(
+            &mut animator,
+            id1,
+            Some(id2),
+            None,
+            10,
+            20,
+            MotionTokens::default(),
+        )
+        .unwrap();
+        setup_launcher_glance(&mut animator, id1, &[id2, id3], 10, 20).unwrap();
+        setup_launcher_glance_with_tokens(
+            &mut animator,
+            id1,
+            &[id2],
+            10,
+            20,
+            MotionTokens::default(),
+        )
+        .unwrap();
+        assert!(animator.active_count() > 0);
+    }
 }

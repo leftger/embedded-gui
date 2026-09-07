@@ -220,4 +220,40 @@ mod tests {
         // Start pixel of line is RED
         assert_eq!(fb.pixels()[19 * 20], Rgb565::RED);
     }
+
+    #[test]
+    fn sparkline_clear_bounds_properties_and_small_render() {
+        let mut spark = SparklineWidget::<4>::new()
+            .with_bounds(-100, 100)
+            .with_fill_color(None);
+        assert_eq!(spark.min_val, Some(-100));
+        assert_eq!(spark.max_val, Some(100));
+        assert_eq!(
+            spark.get_property(PropertyKey::Offset),
+            Some(PropertyValue::Usize(0))
+        );
+        assert_eq!(spark.get_property(PropertyKey::Value), None);
+        spark.push(5);
+        spark.push(10);
+        assert_eq!(
+            spark.get_property(PropertyKey::Value),
+            Some(PropertyValue::Int(10))
+        );
+        spark.clear();
+        assert_eq!(spark.count, 0);
+
+        let zero: SparklineWidget<0> = SparklineWidget::new();
+        let mut zero_mut = zero;
+        zero_mut.push(1);
+        assert_eq!(zero_mut.count, 0);
+
+        for v in [1, 2] {
+            spark.push(v);
+        }
+        let mut fb = Framebuffer::<400>::new(20, 20);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 20, 20));
+        assert!(spark.render(&mut ctx, Rect::new(0, 0, 1, 20)).is_ok());
+        assert!(spark.render(&mut ctx, Rect::new(0, 0, 20, 1)).is_ok());
+        assert!(spark.render(&mut ctx, Rect::new(0, 0, 20, 20)).is_ok());
+    }
 }

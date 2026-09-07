@@ -218,4 +218,25 @@ mod tests {
         assert_eq!(m.color_for(255).r(), 31);
         assert_eq!(m.color_for(255).g(), 63);
     }
+
+    #[test]
+    fn matrix_mid_intensity_properties_oob_and_empty_render() {
+        let m = MatrixWidget::<2, 2>::default();
+        assert!(m.color_for(128).g() > 8);
+        assert_eq!(m.get_property(PropertyKey::Value), None);
+        let mut m = m;
+        assert!(
+            m.set_property(PropertyKey::Value, PropertyValue::Int(1))
+                .is_err()
+        );
+
+        m.set(99, 99, 255);
+        assert_eq!(m.get(99, 99), None);
+
+        let zero: MatrixWidget<0, 0> = MatrixWidget::new();
+        let mut fb = Framebuffer::<16>::new(4, 4);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 4, 4));
+        zero.render(Rect::new(0, 0, 4, 4), &mut ctx).unwrap();
+        m.render(Rect::new(0, 0, 0, 0), &mut ctx).unwrap();
+    }
 }

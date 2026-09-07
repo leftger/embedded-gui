@@ -3904,4 +3904,32 @@ screen id="FullSuite" width=320 height=240 theme="dark" {
         assert!(rust_code.contains(".with_disabled_bg(Rgb565::new(4, 34, 4))")); // forestgreen
         assert!(rust_code.contains(".with_disabled_text(Rgb565::new(27, 5, 7))")); // crimson
     }
+
+    #[test]
+    fn default_defs_parse_tracks_errors_and_relative_svg_paths() {
+        assert_eq!(GridPlacementDef::default().col_span, 1);
+        let anim = WidgetAnimationDef::default();
+        assert_eq!(anim.repeat, 1);
+        let transition = ScreenTransitionDef::default();
+        assert_eq!(transition.duration_ms, 300);
+
+        assert!(parse_tracks("badfr").is_err());
+        assert!(parse_tracks("bogus").is_err());
+        assert_eq!(parse_tracks("").unwrap(), vec![GridTrackDef::Fr(1)]);
+        assert_eq!(
+            parse_tracks("64 1fr auto").unwrap(),
+            vec![
+                GridTrackDef::Px(64),
+                GridTrackDef::Fr(1),
+                GridTrackDef::Auto
+            ]
+        );
+
+        let rel = parse_svg_path_d("m 10 10 l 5 0 h -2 v 3 c 1 1 2 2 3 0 z");
+        assert!(rel.iter().any(|v| matches!(v, PathVerbDef::LineTo(15, 10))));
+        assert!(rel.iter().any(|v| matches!(v, PathVerbDef::Close)));
+
+        let with_separators = parse_svg_path_d("M0,0 5,5 Z");
+        assert_eq!(with_separators.len(), 3);
+    }
 }

@@ -344,4 +344,45 @@ mod tests {
                 .is_ok()
         );
     }
+
+    #[test]
+    fn test_compass_extra_renders_and_properties() {
+        let mut fb = Framebuffer::<4096>::new(128, 16);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 128, 16));
+
+        for heading in [
+            0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0, 359.0, 361.0, -1.0,
+        ] {
+            let compass = CompassWidget::new(heading).with_colors(
+                Rgb565::new(1, 1, 1),
+                Rgb565::new(2, 2, 2),
+                Rgb565::new(3, 3, 3),
+                Rgb565::new(4, 4, 4),
+            );
+            let _ = compass.cardinal_name();
+            assert!(compass.render(Rect::new(0, 0, 128, 16), &mut ctx).is_ok());
+        }
+
+        let short = CompassWidget::new(90.0).with_mode(CompassMode::CompactDial);
+        assert!(short.render(Rect::new(0, 0, 32, 8), &mut ctx).is_ok());
+        let empty = CompassWidget::new(0.0);
+        assert!(empty.render(Rect::empty(), &mut ctx).is_ok());
+
+        let mut widget = CompassWidget::default();
+        assert_eq!(
+            widget.get_property(PropertyKey::Value),
+            Some(PropertyValue::Float(0.0))
+        );
+        assert!(
+            widget
+                .set_property(PropertyKey::Value, PropertyValue::Float(720.0))
+                .is_ok()
+        );
+        assert_eq!(widget.heading_deg, 0.0);
+        assert!(
+            widget
+                .set_property(PropertyKey::Text, PropertyValue::Str("N"))
+                .is_err()
+        );
+    }
 }

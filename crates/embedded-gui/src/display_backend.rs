@@ -338,4 +338,27 @@ mod tests {
         assert_eq!(backend.region_calls.get(), 1);
         let _ = xfer.wait();
     }
+
+    #[test]
+    fn test_region_backend_full_transfer_and_defaults() {
+        let mut backend = RegionTrackingBackend::new();
+        let fb = make_fb::<2, 2>();
+        let xfer =
+            <RegionTrackingBackend as DisplayBackend<2, 2, TestBackend>>::start_dma_transfer(
+                &mut backend,
+                fb,
+            )
+            .unwrap();
+        assert!(xfer.is_done());
+        let _ = xfer.wait();
+
+        let mut sim = SimulatorBackend;
+        let fb = make_fb::<2, 2>();
+        let xfer = <SimulatorBackend as DisplayBackend<2, 2, TestBackend>>::start_dma_transfer(
+            &mut sim, fb,
+        )
+        .unwrap();
+        assert!(xfer.is_done());
+        let _ = xfer.wait();
+    }
 }

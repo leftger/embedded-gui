@@ -232,3 +232,94 @@ impl Widget for SpinboxWidget {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::framebuffer::Framebuffer;
+    use crate::render::RenderCtx;
+    use embedded_graphics_core::pixelcolor::RgbColor;
+
+    #[test]
+    fn spinbox_helpers_format_and_properties() {
+        let mut spin = SpinboxWidget::new(0, 100, 5)
+            .with_step(3)
+            .with_digits(0)
+            .with_decimals(2);
+        assert_eq!(spin.step, 3);
+        assert_eq!(spin.digits, 1);
+        assert_eq!(spin.decimals, 2);
+
+        spin.focused_digit = 1;
+        spin.next_digit();
+        assert_eq!(spin.focused_digit, 0);
+        spin.next_digit();
+        assert_eq!(spin.focused_digit, 0);
+
+        let mut d5 = SpinboxWidget::new(0, 100, 5).with_digits(5);
+        d5.focused_digit = 3;
+        d5.prev_digit();
+        assert_eq!(d5.focused_digit, 4);
+        d5.prev_digit();
+        assert_eq!(d5.focused_digit, 4);
+        d5.next_digit();
+        assert_eq!(d5.focused_digit, 3);
+
+        spin.value = 10;
+        spin.increment();
+        assert_eq!(spin.value, 11);
+        spin.decrement();
+        assert_eq!(spin.value, 10);
+
+        let mut out = String::<16>::new();
+        spin.format_text(&mut out);
+        assert!(!out.is_empty());
+
+        assert_eq!(
+            spin.get_property(PropertyKey::Value),
+            Some(PropertyValue::Int(10))
+        );
+        assert_eq!(
+            spin.get_property(PropertyKey::Min),
+            Some(PropertyValue::Int(0))
+        );
+        assert_eq!(
+            spin.get_property(PropertyKey::Max),
+            Some(PropertyValue::Int(100))
+        );
+        assert_eq!(spin.get_property(PropertyKey::Text), None);
+        assert!(
+            spin.set_property(PropertyKey::Value, PropertyValue::Int(200))
+                .is_ok()
+        );
+        assert_eq!(spin.value, 100);
+        assert!(
+            spin.set_property(PropertyKey::Min, PropertyValue::Int(-5))
+                .is_ok()
+        );
+        assert!(
+            spin.set_property(PropertyKey::Max, PropertyValue::Int(500))
+                .is_ok()
+        );
+        assert!(
+            spin.set_property(PropertyKey::Text, PropertyValue::Str("x"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn spinbox_wide_render_with_decimal_focus() {
+        let mut fb = Framebuffer::<6000>::new(100, 30);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 100, 30));
+        let spin = SpinboxWidget::new(0, 1000, 123)
+            .with_decimals(2)
+            .with_digits(5);
+        spin.render(
+            &mut ctx,
+            Rect::new(0, 0, 100, 24),
+            WidgetStyle::panel(),
+            VisualState::Normal,
+        )
+        .unwrap();
+    }
+}

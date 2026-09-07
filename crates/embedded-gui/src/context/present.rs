@@ -95,4 +95,21 @@ mod tests {
         let mut swap = make_swap();
         assert!(gui.try_present_dirty(&mut swap).is_ok());
     }
+
+    #[test]
+    fn present_empty_and_full_frame_paths() {
+        let empty = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 64, 64));
+        let mut swap = make_swap();
+        assert!(empty.try_present_dirty(&mut swap).is_ok());
+
+        let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 64, 64));
+        gui.add_label(Rect::new(0, 0, 4, 4), "x", Style::label())
+            .unwrap();
+        gui.clear_widgets().unwrap();
+        assert!(gui.try_present_dirty(&mut swap).is_ok());
+
+        gui.add_label(Rect::new(2, 2, 4, 4), "y", Style::label())
+            .unwrap();
+        assert!(gui.try_present_frame(&mut swap).is_ok());
+    }
 }

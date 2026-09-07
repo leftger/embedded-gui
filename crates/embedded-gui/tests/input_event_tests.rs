@@ -202,3 +202,99 @@ fn textarea_key_events_and_long_press_repeat() {
     gui.tick_input(200).unwrap();
     while gui.pop_event().is_some() {}
 }
+
+#[test]
+fn key_activation_changes_focusable_widget_state() {
+    static ITEMS: [&str; 3] = ["A", "B", "C"];
+    static KEYS: [char; 4] = ['A', 'B', 'C', 'D'];
+    let mut gui = GuiContext::<16, 128, 8>::new(Rect::new(0, 0, 128, 96));
+    let toggle = gui
+        .add_toggle(Rect::new(0, 0, 20, 10), "T", false, Style::button())
+        .unwrap();
+    let checkbox = gui
+        .add_checkbox(Rect::new(0, 12, 20, 10), "C", false, Style::button())
+        .unwrap();
+    let slider = gui
+        .add_slider(Rect::new(0, 24, 30, 10), 0.5, 0.0, 1.0, Style::panel())
+        .unwrap();
+    let tabs = gui
+        .add_tabs(Rect::new(0, 36, 40, 10), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let textarea = gui
+        .add_textarea(Rect::new(0, 48, 40, 10), "abc", "", Style::panel())
+        .unwrap();
+    let dial = gui
+        .add_dial(Rect::new(0, 60, 20, 20), 5.0, 0.0, 10.0, Style::panel())
+        .unwrap();
+    let keyboard = gui
+        .add_keyboard(
+            Rect::new(0, 80, 30, 16),
+            &KEYS,
+            2,
+            Some(textarea),
+            Style::panel(),
+        )
+        .unwrap();
+
+    gui.set_focus(Some(toggle)).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.toggle_value(toggle), Some(true));
+
+    gui.set_focus(Some(checkbox)).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.checked_value(checkbox), Some(true));
+
+    gui.set_focus(Some(slider)).unwrap();
+    gui.handle_input(InputEvent::Right).unwrap();
+    assert!(gui.slider_value(slider).unwrap() > 0.5);
+    gui.handle_input(InputEvent::Left).unwrap();
+    assert_eq!(gui.slider_value(slider), Some(0.5));
+
+    gui.set_focus(Some(tabs)).unwrap();
+    gui.handle_input(InputEvent::Right).unwrap();
+
+    gui.set_focus(Some(textarea)).unwrap();
+    gui.handle_input(InputEvent::End).unwrap();
+    gui.handle_input(InputEvent::Left).unwrap();
+    assert_eq!(gui.textarea_cursor(textarea), Some(2));
+
+    gui.set_focus(Some(dial)).unwrap();
+    gui.handle_input(InputEvent::Right).unwrap();
+    assert!(gui.dial_value(dial).unwrap() > 5.0);
+
+    gui.set_focus(Some(keyboard)).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    let mut saw_text = false;
+    while let Some(event) = gui.pop_event() {
+        if matches!(event, UiEvent::TextInput { .. }) {
+            saw_text = true;
+        }
+    }
+    assert!(saw_text);
+}
+
+#[test]
+fn select_toggles_dropdown_and_roller() {
+    static ITEMS: [&str; 3] = ["A", "B", "C"];
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 100, 100));
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 0, 40, 20), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let roller = gui
+        .add_roller(Rect::new(0, 30, 40, 20), &ITEMS, 0, Style::panel())
+        .unwrap();
+
+    gui.set_focus(Some(dropdown)).unwrap();
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.dropdown_open(dropdown), Some(true));
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.dropdown_selected(dropdown), Some(1));
+    gui.handle_input(InputEvent::Select).unwrap();
+    assert_eq!(gui.dropdown_open(dropdown), Some(false));
+
+    gui.set_focus(Some(roller)).unwrap();
+    gui.handle_input(InputEvent::Down).unwrap();
+    assert_eq!(gui.roller_selected(roller), Some(1));
+    gui.handle_input(InputEvent::Up).unwrap();
+    assert_eq!(gui.roller_selected(roller), Some(0));
+}

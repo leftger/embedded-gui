@@ -556,3 +556,92 @@ fn widget_animator_extended_policies_presets_and_stops() {
     real.tick(10, &mut gui).unwrap();
     assert_eq!(real.active_count(), 0);
 }
+
+#[test]
+fn widget_animator_tick_all_property_kinds() {
+    static ITEMS: [&str; 3] = ["A", "B", "C"];
+    let mut gui = GuiContext::<32, 16, 16>::new(Rect::new(0, 0, 200, 200));
+    let progress = gui
+        .add_progress_bar(Rect::new(0, 0, 20, 5), 0.0, Style::progress())
+        .unwrap();
+    let meter = gui
+        .add_meter(Rect::new(0, 10, 20, 5), 0.0, 0.0, 10.0, Style::panel())
+        .unwrap();
+    let slider = gui
+        .add_slider(Rect::new(0, 20, 20, 5), 0.0, 0.0, 1.0, Style::panel())
+        .unwrap();
+    let scroll = gui
+        .add_scroll_view(Rect::new(0, 30, 20, 5), 0, 100, Style::panel())
+        .unwrap();
+    let tabs = gui
+        .add_tabs(Rect::new(0, 40, 30, 5), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let dropdown = gui
+        .add_dropdown(Rect::new(0, 50, 30, 5), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let roller = gui
+        .add_roller(Rect::new(0, 60, 30, 5), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let gauge = gui
+        .add_gauge(Rect::new(0, 70, 20, 20), 0.0, 0.0, 10.0, Style::panel())
+        .unwrap();
+    let spinner = gui
+        .add_spinner(Rect::new(0, 95, 10, 10), 0.0, Style::panel())
+        .unwrap();
+    let label = gui
+        .add_label(Rect::new(0, 110, 20, 5), "x", Style::label())
+        .unwrap();
+
+    let mut animator = WidgetAnimator::<32, 32>::new();
+    animator
+        .animate_progress(progress, 0.0, 1.0, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_meter(meter, 0.0, 10.0, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_slider_value(slider, 0.0, 1.0, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_scroll_offset_y(scroll, 0, 50, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_tab_selected(tabs, 0, 1, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_dropdown_selected(dropdown, 0, 1, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_roller_selected(roller, 0, 1, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_gauge_value(gauge, 0.0, 10.0, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_spinner_phase(spinner, 0.0, 1.0, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_widget_x(label, 0, 10, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_widget_y(label, 0, 10, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_widget_width(label, 20, 30, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_widget_height(label, 5, 10, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_opacity(label, 0, 255, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_corner_radius(label, 0, 4, 1, Easing::Linear)
+        .unwrap();
+    animator
+        .animate_accent_color(label, Rgb565::CSS_RED, Rgb565::CSS_BLUE, 1, Easing::Linear)
+        .unwrap();
+
+    animator.tick(5, &mut gui).unwrap();
+    assert_eq!(animator.active_count(), 0);
+}

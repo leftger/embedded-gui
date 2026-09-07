@@ -180,3 +180,88 @@ impl<'a> Widget for TableWidget<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::framebuffer::Framebuffer;
+
+    #[test]
+    fn table_builders_cursor_and_properties() {
+        static ROWS: [&[&str]; 2] = [&["a", "b"], &["c", "d"]];
+        static HEADERS: [&str; 2] = ["H1", "H2"];
+        let mut table = TableWidget::new(&ROWS)
+            .with_headers(&HEADERS)
+            .with_selection(1, 0)
+            .with_separators(false)
+            .with_align(TextAlign::Center);
+        assert_eq!(table.headers, Some(HEADERS.as_slice()));
+        assert_eq!(table.selected, Some((1, 0)));
+        assert!(!table.separators);
+        assert_eq!(table.align, TextAlign::Center);
+
+        table.move_cursor(1, 1);
+        assert_eq!(table.selected, Some((1, 1)));
+        table.move_cursor(100, 100);
+        assert_eq!(table.selected, Some((1, 1)));
+        table.move_cursor(-100, -100);
+        assert_eq!(table.selected, Some((0, 0)));
+
+        let mut no_select = TableWidget::new(&ROWS);
+        no_select.move_cursor(0, 0);
+        assert_eq!(no_select.selected, Some((0, 0)));
+        no_select.move_cursor(-1, -1);
+        assert_eq!(no_select.selected, Some((0, 0)));
+
+        let empty: [&[&str]; 0] = [];
+        let mut empty_table = TableWidget::new(&empty);
+        empty_table.move_cursor(1, 1);
+        assert_eq!(empty_table.selected, None);
+
+        assert_eq!(
+            table.get_property(PropertyKey::Selected),
+            Some(PropertyValue::Int(0))
+        );
+        assert!(
+            table
+                .set_property(PropertyKey::Selected, PropertyValue::Int(1))
+                .is_ok()
+        );
+        assert_eq!(table.selected, Some((1, 0)));
+        assert!(
+            table
+                .set_property(PropertyKey::Value, PropertyValue::Int(1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn table_render_header_selection_and_empty() {
+        static ROWS: [&[&str]; 2] = [&["a", "b"], &["c", "d"]];
+        static HEADERS: [&str; 2] = ["H1", "H2"];
+        let mut fb = Framebuffer::<6000>::new(100, 40);
+        let mut ctx = RenderCtx::new(&mut fb, Rect::new(0, 0, 100, 40));
+        let table = TableWidget::new(&ROWS)
+            .with_headers(&HEADERS)
+            .with_selection(0, 0);
+        table
+            .render(
+                &mut ctx,
+                Rect::new(0, 0, 100, 40),
+                WidgetStyle::panel(),
+                VisualState::Normal,
+            )
+            .unwrap();
+
+        let empty: [&[&str]; 0] = [];
+        let empty_table = TableWidget::new(&empty).with_headers(&HEADERS);
+        empty_table
+            .render(
+                &mut ctx,
+                Rect::new(0, 0, 100, 40),
+                WidgetStyle::panel(),
+                VisualState::Normal,
+            )
+            .unwrap();
+    }
+}

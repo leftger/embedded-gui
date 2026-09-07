@@ -238,3 +238,54 @@ impl<const N: usize> Default for ScreenStack<N> {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::Rect;
+    use crate::style::Style;
+
+    struct DummyScreen;
+
+    impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
+        Screen<'a, NODES, EVENTS, DIRTY> for DummyScreen
+    {
+        fn id(&self) -> ScreenId {
+            ScreenId::new(1)
+        }
+    }
+
+    #[test]
+    fn screen_id_raw_and_default_lifecycle_hooks() {
+        assert_eq!(ScreenId::new(7).raw(), 7);
+
+        let mut gui = GuiContext::<4, 4, 4>::new(Rect::new(0, 0, 32, 32));
+        gui.add_label(Rect::new(0, 0, 4, 4), "x", Style::label())
+            .unwrap();
+        let mut screen = DummyScreen;
+        assert!(screen.on_mount(&mut gui).is_ok());
+        assert!(screen.on_unmount(&mut gui).is_ok());
+        assert!(screen.on_pause(&mut gui).is_ok());
+        assert!(screen.on_resume(&mut gui).is_ok());
+        assert_eq!(
+            screen.handle_input(InputEvent::Select, &mut gui).unwrap(),
+            ScreenCommand::None
+        );
+        assert_eq!(screen.tick(1, &mut gui).unwrap(), ScreenCommand::None);
+    }
+
+    #[test]
+    fn screen_stack_default_clear_to_and_apply_none() {
+        let mut stack = ScreenStack::<2>::default();
+        assert!(stack.is_empty());
+        stack.push(ScreenId::new(1)).unwrap();
+        stack.push(ScreenId::new(2)).unwrap();
+        stack.clear_to(ScreenId::new(3)).unwrap();
+        assert_eq!(stack.as_slice(), &[ScreenId::new(3)]);
+        assert_eq!(stack.current(), Some(ScreenId::new(3)));
+        assert_eq!(stack.apply(ScreenCommand::None).unwrap(), ());
+        assert!(stack.replace(ScreenId::new(4)).is_ok());
+        assert!(stack.pop().is_ok());
+        assert!(stack.replace(ScreenId::new(5)).is_err());
+    }
+}
