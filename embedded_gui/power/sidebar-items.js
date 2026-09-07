@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PowerEvent","PowerState"],"struct":["PowerConfig","PowerManager"]};

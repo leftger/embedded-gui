@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Framebuffer","FramebufferGray8","FramebufferRgba8888","FramebufferSlice","Rgba8888"]};

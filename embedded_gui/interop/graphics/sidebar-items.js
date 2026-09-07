@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["draw_drawable","rect_to_rectangle","rectangle_to_rect","text_style_from_mono"]};

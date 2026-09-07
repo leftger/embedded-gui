@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EventPhase","EventPolicy","PropertyError","PropertyKey","PropertyValue"],"struct":["EventContext","FocusGroupId","MenuContract","StyleClassId","WidgetFlags","WidgetId"],"trait":["StatefulWidget","Widget"]};

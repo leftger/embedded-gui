@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["circle_chord_width","round_screen_line_bounds"],"struct":["UnobstructedArea"]};

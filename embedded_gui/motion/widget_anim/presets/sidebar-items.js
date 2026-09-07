@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["attention_shake","dialog_pop_choreography","entrance_fade_in_up","glance_focus","list_focus_with_neighbors","menu_focus_choreography","orchestrate_stagger_x","path_float_loop","peek_reveal","selection_bump_settle","style_accent_cycle","style_breathe"]};

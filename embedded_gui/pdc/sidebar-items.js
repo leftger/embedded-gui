@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PdcCommandType"],"struct":["PdcCommand","PdcError","PdcImage","PdcPrecisePoint"]};

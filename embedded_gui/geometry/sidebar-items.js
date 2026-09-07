@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Anchor","DirtyError","HorizontalAlign","VerticalAlign"],"struct":["DirtyTracker","EdgeInsets","Rect"],"trait":["FluentBuilder"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["geometry","graphics","layout","text","three_d"]};

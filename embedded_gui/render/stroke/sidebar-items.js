@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AntiAliasMode","PathVerb","RenderQuality","StrokeCap","StrokeJoin"],"struct":["StrokeDash","StrokeStyle","Transform2D","VectorPath"]};
