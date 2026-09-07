@@ -21,6 +21,7 @@ use crate::{
 };
 
 pub mod action_menu;
+pub mod bandmeter;
 pub mod basic;
 pub mod cinematic;
 pub mod controls;
@@ -28,6 +29,7 @@ pub mod data;
 pub mod dialog;
 pub mod gauges;
 pub mod inverter;
+pub mod matrix;
 pub mod notification;
 pub mod picker;
 pub mod repeater;
@@ -49,6 +51,7 @@ pub use segmented::{
 };
 
 pub use action_menu::{ActionMenuError, ActionMenuItem, ActionMenuWidget};
+pub use bandmeter::{BandMeterWidget, MeterOrientation};
 pub use basic::{ButtonWidget, LabelWidget, PanelWidget, SpacerWidget};
 pub use cinematic::GlanceTileWidget;
 pub use controls::{CheckboxWidget, SliderWidget, ToggleWidget};
@@ -58,6 +61,7 @@ pub use dialog::{
 };
 pub use gauges::{ArcGaugeWidget, GaugeThreshold, ProgressBarWidget};
 pub use inverter::InverterWidget;
+pub use matrix::MatrixWidget;
 pub use notification::{
     NotificationAction, NotificationError, NotificationPriority, NotificationSheetWidget,
 };
