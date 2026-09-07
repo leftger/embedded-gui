@@ -3902,4 +3902,212 @@
 <a href=#3902 id=3902 data-nosnippet>3902</a>        )
 <a href=#3903 id=3903 data-nosnippet>3903</a>    }
 <a href=#3904 id=3904 data-nosnippet>3904</a>}
+<a href=#3905 id=3905 data-nosnippet>3905</a>
+<a href=#3906 id=3906 data-nosnippet>3906</a><span class="attr">#[cfg(test)]
+<a href=#3907 id=3907 data-nosnippet>3907</a></span><span class="kw">mod </span>tests {
+<a href=#3908 id=3908 data-nosnippet>3908</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#3909 id=3909 data-nosnippet>3909</a>    <span class="kw">use </span><span class="kw">crate</span>::framebuffer::Framebuffer;
+<a href=#3910 id=3910 data-nosnippet>3910</a>
+<a href=#3911 id=3911 data-nosnippet>3911</a>    <span class="kw">fn </span>node&lt;<span class="lifetime">'a</span>&gt;(kind: WidgetKind&lt;<span class="lifetime">'a</span>&gt;) -&gt; WidgetNode&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#3912 id=3912 data-nosnippet>3912</a>        WidgetNode::new(
+<a href=#3913 id=3913 data-nosnippet>3913</a>            WidgetId::new(<span class="number">1</span>),
+<a href=#3914 id=3914 data-nosnippet>3914</a>            Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">10</span>, <span class="number">10</span>),
+<a href=#3915 id=3915 data-nosnippet>3915</a>            kind,
+<a href=#3916 id=3916 data-nosnippet>3916</a>            Style::new(),
+<a href=#3917 id=3917 data-nosnippet>3917</a>        )
+<a href=#3918 id=3918 data-nosnippet>3918</a>    }
+<a href=#3919 id=3919 data-nosnippet>3919</a>
+<a href=#3920 id=3920 data-nosnippet>3920</a>    <span class="attr">#[test]
+<a href=#3921 id=3921 data-nosnippet>3921</a>    </span><span class="kw">fn </span>widget_node_property_get_set() {
+<a href=#3922 id=3922 data-nosnippet>3922</a>        <span class="kw">let </span><span class="kw-2">mut </span>progress = node(WidgetKind::ProgressBar { value: <span class="number">0.25 </span>});
+<a href=#3923 id=3923 data-nosnippet>3923</a>        <span class="macro">assert_eq!</span>(
+<a href=#3924 id=3924 data-nosnippet>3924</a>            progress.get_property(PropertyKey::Value),
+<a href=#3925 id=3925 data-nosnippet>3925</a>            <span class="prelude-val">Some</span>(PropertyValue::Float(<span class="number">0.25</span>))
+<a href=#3926 id=3926 data-nosnippet>3926</a>        );
+<a href=#3927 id=3927 data-nosnippet>3927</a>        <span class="macro">assert!</span>(
+<a href=#3928 id=3928 data-nosnippet>3928</a>            progress
+<a href=#3929 id=3929 data-nosnippet>3929</a>                .set_property(PropertyKey::Progress, PropertyValue::Float(<span class="number">2.0</span>))
+<a href=#3930 id=3930 data-nosnippet>3930</a>                .is_ok()
+<a href=#3931 id=3931 data-nosnippet>3931</a>        );
+<a href=#3932 id=3932 data-nosnippet>3932</a>        <span class="macro">assert_eq!</span>(
+<a href=#3933 id=3933 data-nosnippet>3933</a>            progress.get_property(PropertyKey::Value),
+<a href=#3934 id=3934 data-nosnippet>3934</a>            <span class="prelude-val">Some</span>(PropertyValue::Float(<span class="number">1.0</span>))
+<a href=#3935 id=3935 data-nosnippet>3935</a>        );
+<a href=#3936 id=3936 data-nosnippet>3936</a>
+<a href=#3937 id=3937 data-nosnippet>3937</a>        <span class="kw">let </span><span class="kw-2">mut </span>label = node(WidgetKind::Label(<span class="string">"hi"</span>));
+<a href=#3938 id=3938 data-nosnippet>3938</a>        <span class="macro">assert_eq!</span>(
+<a href=#3939 id=3939 data-nosnippet>3939</a>            label.get_property(PropertyKey::Text),
+<a href=#3940 id=3940 data-nosnippet>3940</a>            <span class="prelude-val">Some</span>(PropertyValue::Str(<span class="string">"hi"</span>))
+<a href=#3941 id=3941 data-nosnippet>3941</a>        );
+<a href=#3942 id=3942 data-nosnippet>3942</a>        <span class="macro">assert!</span>(
+<a href=#3943 id=3943 data-nosnippet>3943</a>            label
+<a href=#3944 id=3944 data-nosnippet>3944</a>                .set_property(PropertyKey::Text, PropertyValue::Str(<span class="string">"yo"</span>))
+<a href=#3945 id=3945 data-nosnippet>3945</a>                .is_ok()
+<a href=#3946 id=3946 data-nosnippet>3946</a>        );
+<a href=#3947 id=3947 data-nosnippet>3947</a>
+<a href=#3948 id=3948 data-nosnippet>3948</a>        <span class="kw">let </span><span class="kw-2">mut </span>button = node(WidgetKind::Button(<span class="string">"a"</span>));
+<a href=#3949 id=3949 data-nosnippet>3949</a>        <span class="macro">assert!</span>(
+<a href=#3950 id=3950 data-nosnippet>3950</a>            button
+<a href=#3951 id=3951 data-nosnippet>3951</a>                .set_property(PropertyKey::Text, PropertyValue::Str(<span class="string">"b"</span>))
+<a href=#3952 id=3952 data-nosnippet>3952</a>                .is_ok()
+<a href=#3953 id=3953 data-nosnippet>3953</a>        );
+<a href=#3954 id=3954 data-nosnippet>3954</a>        <span class="macro">assert_eq!</span>(
+<a href=#3955 id=3955 data-nosnippet>3955</a>            button.get_property(PropertyKey::Text),
+<a href=#3956 id=3956 data-nosnippet>3956</a>            <span class="prelude-val">Some</span>(PropertyValue::Str(<span class="string">"b"</span>))
+<a href=#3957 id=3957 data-nosnippet>3957</a>        );
+<a href=#3958 id=3958 data-nosnippet>3958</a>
+<a href=#3959 id=3959 data-nosnippet>3959</a>        <span class="kw">let </span><span class="kw-2">mut </span>slider = node(WidgetKind::Slider {
+<a href=#3960 id=3960 data-nosnippet>3960</a>            value: <span class="number">5.0</span>,
+<a href=#3961 id=3961 data-nosnippet>3961</a>            min: <span class="number">0.0</span>,
+<a href=#3962 id=3962 data-nosnippet>3962</a>            max: <span class="number">10.0</span>,
+<a href=#3963 id=3963 data-nosnippet>3963</a>        });
+<a href=#3964 id=3964 data-nosnippet>3964</a>        <span class="macro">assert_eq!</span>(
+<a href=#3965 id=3965 data-nosnippet>3965</a>            slider.get_property(PropertyKey::Min),
+<a href=#3966 id=3966 data-nosnippet>3966</a>            <span class="prelude-val">Some</span>(PropertyValue::Float(<span class="number">0.0</span>))
+<a href=#3967 id=3967 data-nosnippet>3967</a>        );
+<a href=#3968 id=3968 data-nosnippet>3968</a>        <span class="macro">assert_eq!</span>(
+<a href=#3969 id=3969 data-nosnippet>3969</a>            slider.get_property(PropertyKey::Max),
+<a href=#3970 id=3970 data-nosnippet>3970</a>            <span class="prelude-val">Some</span>(PropertyValue::Float(<span class="number">10.0</span>))
+<a href=#3971 id=3971 data-nosnippet>3971</a>        );
+<a href=#3972 id=3972 data-nosnippet>3972</a>        <span class="macro">assert!</span>(
+<a href=#3973 id=3973 data-nosnippet>3973</a>            slider
+<a href=#3974 id=3974 data-nosnippet>3974</a>                .set_property(PropertyKey::Value, PropertyValue::Float(<span class="number">99.0</span>))
+<a href=#3975 id=3975 data-nosnippet>3975</a>                .is_ok()
+<a href=#3976 id=3976 data-nosnippet>3976</a>        );
+<a href=#3977 id=3977 data-nosnippet>3977</a>        <span class="macro">assert_eq!</span>(
+<a href=#3978 id=3978 data-nosnippet>3978</a>            slider.get_property(PropertyKey::Value),
+<a href=#3979 id=3979 data-nosnippet>3979</a>            <span class="prelude-val">Some</span>(PropertyValue::Float(<span class="number">10.0</span>))
+<a href=#3980 id=3980 data-nosnippet>3980</a>        );
+<a href=#3981 id=3981 data-nosnippet>3981</a>
+<a href=#3982 id=3982 data-nosnippet>3982</a>        <span class="kw">let </span><span class="kw-2">mut </span>toggle = node(WidgetKind::Toggle {
+<a href=#3983 id=3983 data-nosnippet>3983</a>            label: <span class="string">"t"</span>,
+<a href=#3984 id=3984 data-nosnippet>3984</a>            on: <span class="bool-val">false</span>,
+<a href=#3985 id=3985 data-nosnippet>3985</a>        });
+<a href=#3986 id=3986 data-nosnippet>3986</a>        <span class="macro">assert!</span>(
+<a href=#3987 id=3987 data-nosnippet>3987</a>            toggle
+<a href=#3988 id=3988 data-nosnippet>3988</a>                .set_property(PropertyKey::State, PropertyValue::Bool(<span class="bool-val">true</span>))
+<a href=#3989 id=3989 data-nosnippet>3989</a>                .is_ok()
+<a href=#3990 id=3990 data-nosnippet>3990</a>        );
+<a href=#3991 id=3991 data-nosnippet>3991</a>        <span class="macro">assert_eq!</span>(
+<a href=#3992 id=3992 data-nosnippet>3992</a>            toggle.get_property(PropertyKey::State),
+<a href=#3993 id=3993 data-nosnippet>3993</a>            <span class="prelude-val">Some</span>(PropertyValue::Bool(<span class="bool-val">true</span>))
+<a href=#3994 id=3994 data-nosnippet>3994</a>        );
+<a href=#3995 id=3995 data-nosnippet>3995</a>
+<a href=#3996 id=3996 data-nosnippet>3996</a>        <span class="kw">let </span><span class="kw-2">mut </span>checkbox = node(WidgetKind::Checkbox {
+<a href=#3997 id=3997 data-nosnippet>3997</a>            label: <span class="string">"c"</span>,
+<a href=#3998 id=3998 data-nosnippet>3998</a>            checked: <span class="bool-val">true</span>,
+<a href=#3999 id=3999 data-nosnippet>3999</a>        });
+<a href=#4000 id=4000 data-nosnippet>4000</a>        <span class="macro">assert!</span>(
+<a href=#4001 id=4001 data-nosnippet>4001</a>            checkbox
+<a href=#4002 id=4002 data-nosnippet>4002</a>                .set_property(PropertyKey::State, PropertyValue::Bool(<span class="bool-val">false</span>))
+<a href=#4003 id=4003 data-nosnippet>4003</a>                .is_ok()
+<a href=#4004 id=4004 data-nosnippet>4004</a>        );
+<a href=#4005 id=4005 data-nosnippet>4005</a>        <span class="macro">assert_eq!</span>(
+<a href=#4006 id=4006 data-nosnippet>4006</a>            checkbox.get_property(PropertyKey::State),
+<a href=#4007 id=4007 data-nosnippet>4007</a>            <span class="prelude-val">Some</span>(PropertyValue::Bool(<span class="bool-val">false</span>))
+<a href=#4008 id=4008 data-nosnippet>4008</a>        );
+<a href=#4009 id=4009 data-nosnippet>4009</a>
+<a href=#4010 id=4010 data-nosnippet>4010</a>        <span class="kw">let </span><span class="kw-2">mut </span>list = node(WidgetKind::List {
+<a href=#4011 id=4011 data-nosnippet>4011</a>            items: <span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"b"</span>],
+<a href=#4012 id=4012 data-nosnippet>4012</a>            selected: <span class="number">0</span>,
+<a href=#4013 id=4013 data-nosnippet>4013</a>            offset: <span class="number">0</span>,
+<a href=#4014 id=4014 data-nosnippet>4014</a>            visible_rows: <span class="number">2</span>,
+<a href=#4015 id=4015 data-nosnippet>4015</a>        });
+<a href=#4016 id=4016 data-nosnippet>4016</a>        <span class="macro">assert!</span>(
+<a href=#4017 id=4017 data-nosnippet>4017</a>            list.set_property(PropertyKey::Selected, PropertyValue::Usize(<span class="number">1</span>))
+<a href=#4018 id=4018 data-nosnippet>4018</a>                .is_ok()
+<a href=#4019 id=4019 data-nosnippet>4019</a>        );
+<a href=#4020 id=4020 data-nosnippet>4020</a>        <span class="macro">assert_eq!</span>(
+<a href=#4021 id=4021 data-nosnippet>4021</a>            list.get_property(PropertyKey::Selected),
+<a href=#4022 id=4022 data-nosnippet>4022</a>            <span class="prelude-val">Some</span>(PropertyValue::Usize(<span class="number">1</span>))
+<a href=#4023 id=4023 data-nosnippet>4023</a>        );
+<a href=#4024 id=4024 data-nosnippet>4024</a>
+<a href=#4025 id=4025 data-nosnippet>4025</a>        <span class="kw">let </span><span class="kw-2">mut </span>tabs = node(WidgetKind::Tabs {
+<a href=#4026 id=4026 data-nosnippet>4026</a>            labels: <span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"b"</span>],
+<a href=#4027 id=4027 data-nosnippet>4027</a>            selected: <span class="number">0</span>,
+<a href=#4028 id=4028 data-nosnippet>4028</a>        });
+<a href=#4029 id=4029 data-nosnippet>4029</a>        <span class="macro">assert!</span>(
+<a href=#4030 id=4030 data-nosnippet>4030</a>            tabs.set_property(PropertyKey::Selected, PropertyValue::Usize(<span class="number">1</span>))
+<a href=#4031 id=4031 data-nosnippet>4031</a>                .is_ok()
+<a href=#4032 id=4032 data-nosnippet>4032</a>        );
+<a href=#4033 id=4033 data-nosnippet>4033</a>
+<a href=#4034 id=4034 data-nosnippet>4034</a>        <span class="kw">let </span>cells = [
+<a href=#4035 id=4035 data-nosnippet>4035</a>            MenuCell::new(<span class="string">"one"</span>).with_subtitle(<span class="string">"sub"</span>),
+<a href=#4036 id=4036 data-nosnippet>4036</a>            MenuCell::new(<span class="string">"two"</span>).with_enabled(<span class="bool-val">false</span>),
+<a href=#4037 id=4037 data-nosnippet>4037</a>        ];
+<a href=#4038 id=4038 data-nosnippet>4038</a>        <span class="kw">let </span><span class="kw-2">mut </span>rich = node(WidgetKind::RichMenu {
+<a href=#4039 id=4039 data-nosnippet>4039</a>            cells: <span class="kw-2">&amp;</span>cells,
+<a href=#4040 id=4040 data-nosnippet>4040</a>            selected: <span class="number">0</span>,
+<a href=#4041 id=4041 data-nosnippet>4041</a>            offset: <span class="number">0</span>,
+<a href=#4042 id=4042 data-nosnippet>4042</a>            visible_rows: <span class="number">2</span>,
+<a href=#4043 id=4043 data-nosnippet>4043</a>        });
+<a href=#4044 id=4044 data-nosnippet>4044</a>        <span class="macro">assert_eq!</span>(
+<a href=#4045 id=4045 data-nosnippet>4045</a>            rich.get_property(PropertyKey::Selected),
+<a href=#4046 id=4046 data-nosnippet>4046</a>            <span class="prelude-val">Some</span>(PropertyValue::Usize(<span class="number">0</span>))
+<a href=#4047 id=4047 data-nosnippet>4047</a>        );
+<a href=#4048 id=4048 data-nosnippet>4048</a>        <span class="macro">assert!</span>(
+<a href=#4049 id=4049 data-nosnippet>4049</a>            rich.set_property(PropertyKey::Selected, PropertyValue::Usize(<span class="number">5</span>))
+<a href=#4050 id=4050 data-nosnippet>4050</a>                .is_ok()
+<a href=#4051 id=4051 data-nosnippet>4051</a>        );
+<a href=#4052 id=4052 data-nosnippet>4052</a>        <span class="macro">assert_eq!</span>(
+<a href=#4053 id=4053 data-nosnippet>4053</a>            rich.get_property(PropertyKey::Selected),
+<a href=#4054 id=4054 data-nosnippet>4054</a>            <span class="prelude-val">Some</span>(PropertyValue::Usize(<span class="number">1</span>))
+<a href=#4055 id=4055 data-nosnippet>4055</a>        );
+<a href=#4056 id=4056 data-nosnippet>4056</a>
+<a href=#4057 id=4057 data-nosnippet>4057</a>        <span class="kw">let </span><span class="kw-2">mut </span>spacer = node(WidgetKind::Spacer);
+<a href=#4058 id=4058 data-nosnippet>4058</a>        <span class="macro">assert_eq!</span>(spacer.get_property(PropertyKey::Value), <span class="prelude-val">None</span>);
+<a href=#4059 id=4059 data-nosnippet>4059</a>        <span class="macro">assert!</span>(
+<a href=#4060 id=4060 data-nosnippet>4060</a>            spacer
+<a href=#4061 id=4061 data-nosnippet>4061</a>                .set_property(PropertyKey::Value, PropertyValue::Float(<span class="number">0.0</span>))
+<a href=#4062 id=4062 data-nosnippet>4062</a>                .is_err()
+<a href=#4063 id=4063 data-nosnippet>4063</a>        );
+<a href=#4064 id=4064 data-nosnippet>4064</a>    }
+<a href=#4065 id=4065 data-nosnippet>4065</a>
+<a href=#4066 id=4066 data-nosnippet>4066</a>    <span class="attr">#[test]
+<a href=#4067 id=4067 data-nosnippet>4067</a>    </span><span class="kw">fn </span>widget_node_flags_and_focusability() {
+<a href=#4068 id=4068 data-nosnippet>4068</a>        <span class="kw">let </span><span class="kw-2">mut </span>btn = node(WidgetKind::Button(<span class="string">"x"</span>));
+<a href=#4069 id=4069 data-nosnippet>4069</a>        <span class="macro">assert!</span>(btn.clickable());
+<a href=#4070 id=4070 data-nosnippet>4070</a>        <span class="macro">assert!</span>(btn.focusable());
+<a href=#4071 id=4071 data-nosnippet>4071</a>
+<a href=#4072 id=4072 data-nosnippet>4072</a>        <span class="kw">let </span>panel = node(WidgetKind::Panel);
+<a href=#4073 id=4073 data-nosnippet>4073</a>        <span class="macro">assert!</span>(!panel.focusable());
+<a href=#4074 id=4074 data-nosnippet>4074</a>        <span class="macro">assert!</span>(panel.clips_children());
+<a href=#4075 id=4075 data-nosnippet>4075</a>
+<a href=#4076 id=4076 data-nosnippet>4076</a>        btn.flags.insert(WidgetFlags::SCROLLABLE);
+<a href=#4077 id=4077 data-nosnippet>4077</a>        <span class="macro">assert!</span>(btn.scrollable());
+<a href=#4078 id=4078 data-nosnippet>4078</a>
+<a href=#4079 id=4079 data-nosnippet>4079</a>        btn.flags.insert(WidgetFlags::CLIP_CHILDREN);
+<a href=#4080 id=4080 data-nosnippet>4080</a>        <span class="macro">assert!</span>(btn.clips_children());
+<a href=#4081 id=4081 data-nosnippet>4081</a>
+<a href=#4082 id=4082 data-nosnippet>4082</a>        btn.flags.set(WidgetFlags::HIDDEN, <span class="bool-val">true</span>);
+<a href=#4083 id=4083 data-nosnippet>4083</a>        <span class="macro">assert!</span>(btn.hidden());
+<a href=#4084 id=4084 data-nosnippet>4084</a>        <span class="macro">assert!</span>(!btn.focusable());
+<a href=#4085 id=4085 data-nosnippet>4085</a>
+<a href=#4086 id=4086 data-nosnippet>4086</a>        btn.flags.set(WidgetFlags::HIDDEN, <span class="bool-val">false</span>);
+<a href=#4087 id=4087 data-nosnippet>4087</a>        btn.flags.set(WidgetFlags::DISABLED, <span class="bool-val">true</span>);
+<a href=#4088 id=4088 data-nosnippet>4088</a>        <span class="macro">assert!</span>(btn.disabled());
+<a href=#4089 id=4089 data-nosnippet>4089</a>        <span class="macro">assert!</span>(!btn.focusable());
+<a href=#4090 id=4090 data-nosnippet>4090</a>
+<a href=#4091 id=4091 data-nosnippet>4091</a>        <span class="kw">let </span>spec = CarouselSpec::new(<span class="number">12</span>, <span class="number">4</span>);
+<a href=#4092 id=4092 data-nosnippet>4092</a>        <span class="macro">assert_eq!</span>(spec.item_step, <span class="number">12</span>);
+<a href=#4093 id=4093 data-nosnippet>4093</a>        <span class="macro">assert_eq!</span>(spec.visible_slots, <span class="number">4</span>);
+<a href=#4094 id=4094 data-nosnippet>4094</a>    }
+<a href=#4095 id=4095 data-nosnippet>4095</a>
+<a href=#4096 id=4096 data-nosnippet>4096</a>    <span class="attr">#[test]
+<a href=#4097 id=4097 data-nosnippet>4097</a>    </span><span class="kw">fn </span>widget_node_render_and_hidden_noop() {
+<a href=#4098 id=4098 data-nosnippet>4098</a>        <span class="kw">let </span><span class="kw-2">mut </span>fb = Framebuffer::&lt;<span class="number">100</span>&gt;::new(<span class="number">10</span>, <span class="number">10</span>);
+<a href=#4099 id=4099 data-nosnippet>4099</a>        <span class="kw">let </span><span class="kw-2">mut </span>ctx = RenderCtx::new(<span class="kw-2">&amp;mut </span>fb, Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">10</span>, <span class="number">10</span>));
+<a href=#4100 id=4100 data-nosnippet>4100</a>        <span class="kw">let </span>panel_node = node(WidgetKind::Panel);
+<a href=#4101 id=4101 data-nosnippet>4101</a>        <span class="macro">assert!</span>(panel_node.render(<span class="kw-2">&amp;mut </span>ctx, VisualState::Normal).is_ok());
+<a href=#4102 id=4102 data-nosnippet>4102</a>
+<a href=#4103 id=4103 data-nosnippet>4103</a>        <span class="kw">let </span><span class="kw-2">mut </span>hidden = node(WidgetKind::Button(<span class="string">"x"</span>));
+<a href=#4104 id=4104 data-nosnippet>4104</a>        hidden.flags.insert(WidgetFlags::HIDDEN);
+<a href=#4105 id=4105 data-nosnippet>4105</a>        <span class="macro">assert!</span>(hidden.render(<span class="kw-2">&amp;mut </span>ctx, VisualState::Normal).is_ok());
+<a href=#4106 id=4106 data-nosnippet>4106</a>        <span class="macro">assert!</span>(
+<a href=#4107 id=4107 data-nosnippet>4107</a>            hidden
+<a href=#4108 id=4108 data-nosnippet>4108</a>                .render_at(<span class="kw-2">&amp;mut </span>ctx, Rect::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">5</span>, <span class="number">5</span>), VisualState::Pressed)
+<a href=#4109 id=4109 data-nosnippet>4109</a>                .is_ok()
+<a href=#4110 id=4110 data-nosnippet>4110</a>        );
+<a href=#4111 id=4111 data-nosnippet>4111</a>    }
+<a href=#4112 id=4112 data-nosnippet>4112</a>}
 </code></pre></div></section></main></body></html>
