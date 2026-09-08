@@ -6,6 +6,7 @@ use crate::{
     style::WidgetStyle,
     widget::WidgetId,
 };
+use embedded_graphics_core::pixelcolor::Rgb565;
 use heapless::Vec;
 
 /// Trait implemented by views and components that declaratively build UI trees in pure Rust.
@@ -53,6 +54,30 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     {
         let flex = FlexBuilder::new(self.ctx, self.bounds, Axis::Horizontal);
         builder(flex)
+    }
+
+    /// Spawns a flex-direction agnostic container (div) builder with default row orientation.
+    pub fn div<F>(&mut self, builder: F) -> Result<WidgetId, GuiError>
+    where
+        F: FnOnce(FlexBuilder<'a, '_, NODES, EVENTS, DIRTY>) -> Result<WidgetId, GuiError>,
+    {
+        self.row(builder)
+    }
+
+    /// Spawns an explicit flex-row container builder.
+    pub fn flex_row<F>(&mut self, builder: F) -> Result<WidgetId, GuiError>
+    where
+        F: FnOnce(FlexBuilder<'a, '_, NODES, EVENTS, DIRTY>) -> Result<WidgetId, GuiError>,
+    {
+        self.row(builder)
+    }
+
+    /// Spawns an explicit flex-column container builder.
+    pub fn flex_col<F>(&mut self, builder: F) -> Result<WidgetId, GuiError>
+    where
+        F: FnOnce(FlexBuilder<'a, '_, NODES, EVENTS, DIRTY>) -> Result<WidgetId, GuiError>,
+    {
+        self.column(builder)
     }
 
     /// Spawns a themed label widget.
@@ -114,6 +139,7 @@ pub struct FlexBuilder<'a, 'ctx, const NODES: usize, const EVENTS: usize, const 
     bounds: Rect,
     layout: LinearLayout,
     children: Vec<WidgetId, 16>,
+    style_override: Option<WidgetStyle>,
 }
 
 impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
@@ -134,7 +160,61 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             bounds,
             layout,
             children: Vec::new(),
+            style_override: None,
         }
+    }
+
+    /// Configures container width and height explicitly.
+    pub fn size(mut self, width: u32, height: u32) -> Self {
+        self.bounds.w = width;
+        self.bounds.h = height;
+        self
+    }
+
+    /// Configures container width explicitly.
+    pub fn width(mut self, width: u32) -> Self {
+        self.bounds.w = width;
+        self
+    }
+
+    /// Configures container height explicitly.
+    pub fn height(mut self, height: u32) -> Self {
+        self.bounds.h = height;
+        self
+    }
+
+    /// Sets flex layout direction (Row or Column).
+    pub fn flex_direction(mut self, axis: Axis) -> Self {
+        self.layout.axis = axis;
+        self
+    }
+
+    /// Configures container background color.
+    pub fn background(mut self, color: Rgb565) -> Self {
+        let style = self.style_override.unwrap_or_else(WidgetStyle::panel);
+        self.style_override = Some(style.with_bg(color));
+        self
+    }
+
+    /// Alias for `background`.
+    pub fn bg(self, color: Rgb565) -> Self {
+        self.background(color)
+    }
+
+    /// Configures container border width and color.
+    pub fn border(mut self, width: u8, color: Rgb565) -> Self {
+        let mut style = self.style_override.unwrap_or_else(WidgetStyle::panel);
+        style.normal.border = crate::style::Border { color, width };
+        self.style_override = Some(style);
+        self
+    }
+
+    /// Configures container corner radius.
+    pub fn corner_radius(mut self, radius: u8) -> Self {
+        let mut style = self.style_override.unwrap_or_else(WidgetStyle::panel);
+        style.normal.corner_radius = radius;
+        self.style_override = Some(style);
+        self
     }
 
     /// Configures gap spacing between children.
@@ -155,10 +235,20 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self
     }
 
+    /// Configures cross-axis alignment (Guillotine / CSS alias for `cross_align`).
+    pub fn align_items(self, align: Align) -> Self {
+        self.cross_align(align)
+    }
+
     /// Configures main-axis content justification.
     pub fn justify(mut self, justify: JustifyContent) -> Self {
         self.layout.justify = justify;
         self
+    }
+
+    /// Configures main-axis content justification (Guillotine / CSS alias for `justify`).
+    pub fn justify_content(self, justify: JustifyContent) -> Self {
+        self.justify(justify)
     }
 
     /// Appends a child element by calling a builder closure.
@@ -181,6 +271,32 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self
     }
 
+    /// Fluent child helper: directly appends a themed label without an inner closure.
+    pub fn child_label(self, text: &'a str) -> Result<Self, GuiError> {
+        self.child(|c| c.label(text))
+    }
+
+    /// Fluent child helper: directly appends a themed button without an inner closure.
+    pub fn child_button(self, text: &'a str) -> Result<Self, GuiError> {
+        self.child(|c| c.button(text))
+    }
+
+    /// Fluent child helper: directly nests a column container.
+    pub fn child_column<F>(self, builder: F) -> Result<Self, GuiError>
+    where
+        F: FnOnce(FlexBuilder<'a, '_, NODES, EVENTS, DIRTY>) -> Result<WidgetId, GuiError>,
+    {
+        self.child(|c| c.column(builder))
+    }
+
+    /// Fluent child helper: directly nests a row container.
+    pub fn child_row<F>(self, builder: F) -> Result<Self, GuiError>
+    where
+        F: FnOnce(FlexBuilder<'a, '_, NODES, EVENTS, DIRTY>) -> Result<WidgetId, GuiError>,
+    {
+        self.child(|c| c.row(builder))
+    }
+
     /// Conditionally appends a child element when `condition` is true.
     pub fn when_child<F>(self, condition: bool, f: F) -> Result<Self, GuiError>
     where
@@ -191,7 +307,11 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     /// Builds and positions all child elements within the layout container.
     pub fn build(self) -> Result<WidgetId, GuiError> {
-        let panel_id = self.ctx.add_themed_panel(self.bounds)?;
+        let panel_id = if let Some(style) = self.style_override {
+            self.ctx.add_panel(self.bounds, style)?
+        } else {
+            self.ctx.add_themed_panel(self.bounds)?
+        };
         let count = self.children.len();
         if count == 0 {
             return Ok(panel_id);
@@ -319,5 +439,37 @@ mod tests {
             })
             .unwrap();
         assert!(ctx.node(root).is_some());
+    }
+
+    #[test]
+    fn test_guillotine_style_declarative_builder() {
+        let mut ctx: GuiContext<32, 16, 16> = GuiContext::new(Rect::new(0, 0, 320, 240));
+        let root = ctx
+            .build_view(|cx| {
+                cx.div(|div| {
+                    div.size(320, 172)
+                        .padding(12)
+                        .gap(8)
+                        .bg(Rgb565::new(2, 4, 6))
+                        .border(1, Rgb565::new(7, 47, 25))
+                        .corner_radius(4)
+                        .align_items(Align::Center)
+                        .justify_content(JustifyContent::SpaceBetween)
+                        .child_label("GUILLOTINE")?
+                        .child_button("READY")?
+                        .child_row(|row| {
+                            row.gap(4)
+                                .child_label("STATUS")?
+                                .child_button("OK")?
+                                .build()
+                        })?
+                        .build()
+                })
+            })
+            .unwrap();
+
+        assert!(ctx.node(root).is_some());
+        // Root panel + label + button + inner row panel + inner label + inner button = 6 widgets
+        assert_eq!(ctx.widgets().len(), 6);
     }
 }

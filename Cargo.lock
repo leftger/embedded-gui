@@ -1200,9 +1200,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-3dgfx"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecb9f19711140a2d5f5f884e540bcf35bafca3446e516e359d1865ff64232975"
+checksum = "964a6f2daf1ec876090956ffb184425392a0ce62e82cc9c05e966233a6a354a0"
 dependencies = [
  "critical-section",
  "embedded-draw-target",
@@ -1301,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "criterion",
  "critical-section",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-codegen"
-version = "0.2.4"
+version = "0.2.6"
 dependencies = [
  "kdl 6.7.1",
  "thiserror 2.0.20",
@@ -1333,11 +1333,11 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-live"
-version = "0.2.4"
+version = "0.2.6"
 
 [[package]]
 name = "embedded-gui-macros"
-version = "0.2.4"
+version = "0.2.6"
 dependencies = [
  "embedded-gui-codegen",
  "image",
@@ -1348,7 +1348,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-studio"
-version = "0.2.4"
+version = "0.2.6"
 dependencies = [
  "eframe",
  "egui_extras",
