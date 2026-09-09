@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["PickerError","TimeFormat","TimePickerField"],"struct":["NumberPickerWidget","TimePickerWidget"]};

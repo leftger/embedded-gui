@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["CompositionMode","SequenceRepeatMode","TimelineError","TimelineStep"],"struct":["AnimationGroup","AnimationSequence","ComposedAnimation","ComposedAnimationCallbacks","ComposedAnimationPlayer","ComposedAnimationStatus","CompositionControls","Keyframe","KeyframeTrack","KeyframeTrackCallbacks","SequencePlayer","SequencePlayerStatus"]};

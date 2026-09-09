@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["EncodedImageFormat","ImageDecodeError","ImageFit","TileMode"],"fn":["decode_image_auto","decode_image_with","decode_ppm_ascii"],"struct":["BasicImageDecoder","ImageAtlas","ImageAtlasEntry","ImageRef","ReelFrame","ReelPlayer","SpriteSheet","TileRef"],"trait":["ImageDecoder"]};

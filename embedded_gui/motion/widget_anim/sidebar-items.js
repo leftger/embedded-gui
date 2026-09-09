@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["AnimatedProperty","AnimationConflictPolicy","WidgetAnimationError"],"mod":["presets"],"struct":["BindingSnapshot","WidgetAnimationCallbacks","WidgetAnimator","WidgetKeyframeState","WidgetPropertyKeyframe"]};

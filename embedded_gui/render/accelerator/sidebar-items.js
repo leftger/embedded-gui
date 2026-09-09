@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["Software2DAccelerator"],"trait":["Hardware2DAccelerator"]};

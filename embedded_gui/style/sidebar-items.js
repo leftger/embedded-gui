@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["GradientDirection","VisualState","WidgetPart"],"fn":["darken","lerp_rgb565_public","lerp_style","lerp_theme","lerp_u8","lighten"],"struct":["AlphaLinearGradient","AlphaRadialGradient","Border","LinearGradient","MultiPartStyle","PartStyleRule","Shadow","StateStyle","Style","StyleTransition","Theme","ThemeTokens","VisualStateMask","WidgetStyle"]};

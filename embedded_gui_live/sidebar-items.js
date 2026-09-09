@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FRAME_OVERHEAD","FRAME_RECT_HEADER","HEADER_LEN","PROTO_VERSION","TRAILER_LEN"],"enum":["DecodeError","EncodeError","Msg","NackCode"],"fn":["crc16","put_rgb565_le","rgb565"],"struct":["Decoder"]};

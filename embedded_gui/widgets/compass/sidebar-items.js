@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["CompassMode"],"fn":["cardinal_for_heading"],"struct":["CompassWidget"]};

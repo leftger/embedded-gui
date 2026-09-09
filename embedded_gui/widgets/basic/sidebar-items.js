@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["ButtonWidget","LabelWidget","PanelWidget","SpacerWidget"]};

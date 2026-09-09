@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["InputResult","MeshPanelError","MeshShading"],"fn":["dispatch_pointer_input","render_mesh_panel"],"struct":["Billboard3d","Geometry","Gui3dPipeline","MeshPanel"],"trait":["Gui3dGizmos","RenderToTextureExt","WorldAnchorExt"]};

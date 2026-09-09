@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["cinematic","core","stopwatch","timeline","timing","transition_preset","transitions","widget_anim"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["BlendMode","ColorFormat"],"fn":["lerp_rgb565"],"struct":["Blend","Dither","LayerState","RenderBackendCaps"],"trait":["Compositor","PixelRead","WindowedDrawTarget"]};

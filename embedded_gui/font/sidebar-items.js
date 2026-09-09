@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["FontId","GlyphOp"],"fn":["get_vector_glyph","glyph_rows","packed_font"],"static":["ASCII_3X5_FONT","ASCII_3X5_GLYPHS","ASCII_4X7_FONT","ASCII_4X7_GLYPHS"],"struct":["BitmapFont","PackedFont"],"trait":["Font"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["builders","core_impl","input","mutators","present","render","types"]};

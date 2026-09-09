@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ClickEvent","InputEvent","NavDirection","PointerButton","PointerState","UiEvent","WidgetEventKind"],"struct":["ClickRecognizer","EventPhaseMask","UiEventFilter","WidgetDispatchPolicy","WidgetEvent","WidgetEventFilter"]};

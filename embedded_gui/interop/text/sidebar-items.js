@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["text_box","text_box_with_style"]};

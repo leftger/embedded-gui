@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DisplayMode","InkRole"],"struct":["DisplayPalette","RoleColors"]};

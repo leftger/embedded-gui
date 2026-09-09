@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ScreenTransitionEffect","ScreenTransitionOrigin"],"fn":["composite_framebuffer_fade","composite_framebuffer_scaled_y","fade_outgoing_opacity","render_transition_pair"],"struct":["ActiveScreenTransition","ScreenTransitionRunner","ScreenTransitionSample","ScreenTransitionSpec"]};

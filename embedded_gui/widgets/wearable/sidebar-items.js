@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ActionBarSlot","ContentIndicatorDirection"],"struct":["ActionBarWidget","ContentIndicatorWidget","CrumbsIndicatorWidget","SelectionWidget"]};

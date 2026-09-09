@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["GuiError","KeyBindingAction"],"struct":["GuiContext","PressTiming","ScrollPhysics","WidgetKeyBindings","WidgetKeyInputPolicy"]};

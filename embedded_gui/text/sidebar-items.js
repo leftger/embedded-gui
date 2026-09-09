@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["TextDirection"],"struct":["BasicTextShaper","Line","ShapedGlyph","ShapingConfig","Span","StringArena","Text","TextSlice"],"trait":["TextShaper"]};

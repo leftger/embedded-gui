@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["BAYER_2X2","BAYER_4X4"],"fn":["bayer_1bit","bayer_2bit","bayer_4bit","bayer_dither_rgb565"],"struct":["DirtyBandAccumulator"]};

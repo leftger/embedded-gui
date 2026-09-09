@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["CHAR_HEIGHT","CHAR_WIDTH"],"enum":["EllipsisMode","TextAlign","TextOverflow","TextOverflowPolicy","TextWrap","VerticalAlign"],"struct":["TextMetrics","TextStyle"]};

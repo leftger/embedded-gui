@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DialogError","DialogType"],"struct":["ActionableDialogWidget","ConfirmationDialogWidget","DialogAction"]};

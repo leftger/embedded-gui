@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ModelChange"],"struct":["CallbackSlot","FeedTimelineState","ListState","ScrollState","Signal","SliceModel","SliderState","StateTransition","TabsState","WidgetStateMachine"],"trait":["GuiModel"],"type":["PropertySignal"]};
