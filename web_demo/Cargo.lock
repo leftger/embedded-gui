@@ -154,6 +154,7 @@ dependencies = [
  "embedded-graphics-web-simulator",
  "embedded-gui",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

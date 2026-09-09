@@ -1,7 +1,7 @@
 # embedded-gui WebAssembly Demo
 
-A minimal browser demo that renders an `embedded-gui` screen into an HTML
-canvas with the same retained widget tree and RGB565 renderer used by
+A browser demo that renders an `embedded-gui` screen into an HTML canvas with
+the same retained widget tree, RGB565 renderer, and input contract used by
 firmware targets.
 
 Community context: LVGL users noted that a great way to iterate on an
@@ -39,6 +39,26 @@ python3 -m http.server 8000
 Open <http://localhost:8000/>. The demo creates a 320×240 RGB565 UI at 2×
 canvas scale and flushes it to the page.
 
+## Interactive input
+
+The demo wires browser events into the same `GuiContext::handle_input` API a
+firmware event loop uses:
+
+| Browser event | `embedded-gui` input |
+|---------------|----------------------|
+| Pointer press/move/release (left button) | `InputEvent::Pointer` with `PointerState::{Pressed, Moved, Released}` |
+| Arrow keys | `Up` / `Down` / `Left` / `Right` spatial navigation |
+| Enter / Space | `Select` (activate focused widget) |
+| Backspace / Escape | `Back` |
+
+Try:
+
+- Click **CLICK ME** to increment the click counter and progress bar.
+- Click the **ENABLE** toggle; its checked state changes immediately.
+- Focus the slider with pointer or arrow keys, then use **Left/Right** to
+  change its value.
+- Use the arrow keys to move focus between controls, then press **Enter**.
+
 ## How it maps to firmware
 
 The demo uses the exact `GuiContext` type and `render()` API a `no_std`
@@ -53,7 +73,6 @@ firmware and `wasm32-unknown-unknown` without changing the widget tree.
 
 ## What is not included yet
 
-This first demo is a static frame. The natural next step is wiring input
-events (`InputEvent::Pointer`, keyboard/encoder events) from browser DOM
-events into `GuiContext::handle_input`, and driving an animation loop with
-`requestAnimationFrame`.
+The demo renders on demand after each input event. It does not yet drive a
+continuous animation loop with `requestAnimationFrame`, so motion presets and
+timeline-driven widgets are not running at 60 FPS in the browser yet.

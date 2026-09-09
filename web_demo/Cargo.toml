@@ -14,6 +14,15 @@ embedded-gui = { path = "../crates/embedded-gui", default-features = false, feat
 embedded-graphics-core = "0.4.1"
 embedded-graphics-web-simulator = "0.4"
 wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "DomRect",
+    "Element",
+    "HtmlCanvasElement",
+    "KeyboardEvent",
+    "PointerEvent",
+    "Window",
+] }
 console_error_panic_hook = "0.1"
 
 [lib]
