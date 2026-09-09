@@ -50,8 +50,9 @@ Each screen is a separate `GuiContext` with its own widget layout:
 | **Controls** | Button, toggle, checkbox, icon button, progress bar, slider, value labels, tabs |
 | **Lists & Menus** | Menu, list, dropdown, roller |
 | **Data & Gauges** | Chart, plotter, arc gauge, gauge |
-| **Text & Input** | Textarea, keyboard, table, autocomplete, spinbox |
-| **Motion & Overlays** | Carousel, card deck, state surface, heads-up banner, notification sheet |
+| **Text & Input** | Textarea, table, keyboard |
+| **Motion** | Carousel, card deck |
+| **Overlays & Feedback** | State surface, heads-up banner, notification sheet |
 
 Navigation uses embedded-gui's real screen-transition renderer with effects
 that rotate per screen: **PushMoook, slide, shutter, round flip, port-hole,
