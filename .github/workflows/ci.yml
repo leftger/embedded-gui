@@ -148,23 +148,6 @@ jobs:
           cat size_harness-thumbv7em-report.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-  docs:
-    name: Docs & GitHub Pages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: bash .github/scripts/ci_docs.sh
-      - name: Deploy Docs to GitHub Pages
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: target/doc
-          branch: gh-pages
-
   publish-dry-run:
     name: Publish dry-run
     runs-on: ubuntu-latest
