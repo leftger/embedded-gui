@@ -79,6 +79,16 @@ struct ScreenIds {
     slider: Option<WidgetId>,
     clicks_label: Option<WidgetId>,
     slider_label: Option<WidgetId>,
+    spinner: Option<WidgetId>,
+    progress: Option<WidgetId>,
+    tabs: Option<WidgetId>,
+    dropdown: Option<WidgetId>,
+    roller: Option<WidgetId>,
+    gauge: Option<WidgetId>,
+    arc_gauge: Option<WidgetId>,
+    carousel: Option<WidgetId>,
+    state_surface: Option<WidgetId>,
+    heads_up: Option<WidgetId>,
 }
 
 struct TransitionState {
@@ -95,6 +105,8 @@ struct App {
     screen: ScreenKind,
     ids: ScreenIds,
     transition: Option<TransitionState>,
+    animator: WidgetAnimator<32, 32>,
+    motion_phase: f32,
     pointer_down: bool,
     clicks: i32,
 }
@@ -117,7 +129,7 @@ impl App {
 
         let (gui, ids) = build_screen(ScreenKind::Controls);
 
-        Ok(Self {
+        let mut app = Self {
             gui: Box::new(gui),
             outgoing: None,
             display,
@@ -125,9 +137,13 @@ impl App {
             screen: ScreenKind::Controls,
             ids,
             transition: None,
+            animator: WidgetAnimator::new(),
+            motion_phase: 0.0,
             pointer_down: false,
             clicks: 0,
-        })
+        };
+        start_screen_animations(ScreenKind::Controls, &app.ids, &mut app.animator);
+        Ok(app)
     }
 
     fn pointer_pos(&self, client_x: i32, client_y: i32) -> (i32, i32) {
@@ -190,6 +206,8 @@ impl App {
         self.ids = new_ids;
         self.screen = next_screen;
         self.outgoing = Some(old_gui);
+        self.animator = WidgetAnimator::new();
+        start_screen_animations(next_screen, &self.ids, &mut self.animator);
         self.transition = Some(TransitionState {
             active: ActiveScreenTransition {
                 from: None,
@@ -205,17 +223,41 @@ impl App {
     }
 
     fn tick(&mut self, dt_ms: u32) {
-        let Some(transition) = &mut self.transition else {
+        if self.transition.is_some() {
+            let mut transition_done = false;
+            if let Some(transition) = &mut self.transition {
+                transition.elapsed_ms = transition.elapsed_ms.saturating_add(dt_ms);
+                transition.active.progress =
+                    (transition.elapsed_ms as f32 / transition.duration_ms as f32).clamp(0.0, 1.0);
+                transition_done = transition.elapsed_ms >= transition.duration_ms;
+            }
+            if transition_done {
+                self.outgoing = None;
+                self.transition = None;
+            }
+            self.redraw();
             return;
-        };
-        transition.elapsed_ms = transition.elapsed_ms.saturating_add(dt_ms);
-        transition.active.progress =
-            (transition.elapsed_ms as f32 / transition.duration_ms as f32).clamp(0.0, 1.0);
-        if transition.elapsed_ms >= transition.duration_ms {
-            self.outgoing = None;
-            self.transition = None;
         }
+
+        self.motion_phase += dt_ms as f32;
+        let _ = self.animator.tick(dt_ms, &mut self.gui);
+        self.tick_screen_motion(dt_ms);
         self.redraw();
+    }
+
+    fn tick_screen_motion(&mut self, dt_ms: u32) {
+        if self.screen == ScreenKind::Motion {
+            if let Some(state) = self.ids.state_surface {
+                let _ = self.gui.tick_state_surface(state, dt_ms, 1.0);
+            }
+            if let Some(heads_up) = self.ids.heads_up {
+                let _ = self.gui.tick_heads_up(heads_up, dt_ms);
+            }
+            if let Some(carousel) = self.ids.carousel {
+                let shift = ((self.motion_phase * 0.006).sin() * 7.0) as i16;
+                let _ = self.gui.set_carousel_shift(carousel, shift);
+            }
+        }
     }
 
     fn redraw(&mut self) {
@@ -235,6 +277,65 @@ impl App {
             let _ = self.gui.render(&mut self.display);
         }
         let _ = self.display.flush();
+    }
+}
+
+fn start_screen_animations(
+    kind: ScreenKind,
+    ids: &ScreenIds,
+    animator: &mut WidgetAnimator<32, 32>,
+) {
+    match kind {
+        ScreenKind::Controls => {
+            if let Some(progress) = ids.progress {
+                let _ = animator.ping_pong_progress(progress, 0.15, 0.95, 1600, Easing::InOutSine);
+            }
+            if let Some(tabs) = ids.tabs {
+                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2400, Easing::Linear)
+                    .with_repeat_mode(RepeatMode::Loop)
+                    .with_repeat_count(None);
+                let _ = animator.bind_property(tabs, AnimatedProperty::TabSelected, animation);
+            }
+        }
+        ScreenKind::Lists => {
+            if let Some(dropdown) = ids.dropdown {
+                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2600, Easing::Linear)
+                    .with_repeat_mode(RepeatMode::Loop)
+                    .with_repeat_count(None);
+                let _ =
+                    animator.bind_property(dropdown, AnimatedProperty::DropdownSelected, animation);
+            }
+            if let Some(roller) = ids.roller {
+                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2800, Easing::Linear)
+                    .with_repeat_mode(RepeatMode::Loop)
+                    .with_repeat_count(None);
+                let _ = animator.bind_property(roller, AnimatedProperty::RollerSelected, animation);
+            }
+        }
+        ScreenKind::Data => {
+            let animation = Animation::new(2.0, 9.0, 1600, Easing::InOutSine)
+                .with_repeat_mode(RepeatMode::PingPong)
+                .with_repeat_count(None);
+            if let Some(gauge) = ids.gauge {
+                let _ = animator.bind_property(gauge, AnimatedProperty::GaugeValue, animation);
+            }
+            let arc_animation = Animation::new(2.0, 9.0, 1900, Easing::InOutSine)
+                .with_repeat_mode(RepeatMode::PingPong)
+                .with_repeat_count(None);
+            if let Some(arc_gauge) = ids.arc_gauge {
+                let _ =
+                    animator.bind_property(arc_gauge, AnimatedProperty::GaugeValue, arc_animation);
+            }
+        }
+        ScreenKind::Text => {
+            if let Some(spinner) = ids.spinner {
+                let animation = Animation::new(0.0, 6.0, 1400, Easing::Linear)
+                    .with_repeat_mode(RepeatMode::Loop)
+                    .with_repeat_count(None);
+                let _ = animator.bind_property(spinner, AnimatedProperty::SpinnerPhase, animation);
+            }
+        }
+        ScreenKind::Motion => {}
     }
 }
 
@@ -468,11 +569,10 @@ fn add_controls(
     let slider_label = gui
         .add_value_label(Rect::new(164, 142, 144, 14), "SLIDER", 50, Style::panel())
         .unwrap();
-    let _tabs = gui
+    let tabs = gui
         .add_tabs(Rect::new(12, 168, 296, 16), &ITEMS, 0, Style::button())
         .unwrap();
 
-    let _ = progress;
     let _ = checkbox;
     let _ = toggle;
 
@@ -484,6 +584,16 @@ fn add_controls(
         slider: Some(slider),
         clicks_label: Some(clicks_label),
         slider_label: Some(slider_label),
+        spinner: None,
+        progress: Some(progress),
+        tabs: Some(tabs),
+        dropdown: None,
+        roller: None,
+        gauge: None,
+        arc_gauge: None,
+        carousel: None,
+        state_surface: None,
+        heads_up: None,
     }
 }
 
@@ -505,10 +615,10 @@ fn add_lists(
     let _list = gui
         .add_list(Rect::new(168, 42, 140, 82), &ITEMS, 0, 5, Style::panel())
         .unwrap();
-    let _dropdown = gui
+    let dropdown = gui
         .add_dropdown(Rect::new(12, 132, 140, 22), &ITEMS, 0, Style::panel())
         .unwrap();
-    let _roller = gui
+    let roller = gui
         .add_roller(Rect::new(168, 130, 140, 62), &ITEMS, 0, Style::panel())
         .unwrap();
 
@@ -520,6 +630,16 @@ fn add_lists(
         slider: None,
         clicks_label: None,
         slider_label: None,
+        spinner: None,
+        progress: None,
+        tabs: None,
+        dropdown: Some(dropdown),
+        roller: Some(roller),
+        gauge: None,
+        arc_gauge: None,
+        carousel: None,
+        state_surface: None,
+        heads_up: None,
     }
 }
 
@@ -554,7 +674,7 @@ fn add_data(
             Style::panel(),
         )
         .unwrap();
-    let _arc = gui
+    let arc_gauge = gui
         .add_arc_gauge(
             Rect::new(12, 136, 140, 66),
             6.5,
@@ -567,7 +687,7 @@ fn add_data(
             Style::panel(),
         )
         .unwrap();
-    let _gauge = gui
+    let gauge = gui
         .add_gauge(Rect::new(168, 136, 140, 66), 7.0, 0.0, 10.0, Style::panel())
         .unwrap();
 
@@ -579,6 +699,16 @@ fn add_data(
         slider: None,
         clicks_label: None,
         slider_label: None,
+        spinner: None,
+        progress: None,
+        tabs: None,
+        dropdown: None,
+        roller: None,
+        gauge: Some(gauge),
+        arc_gauge: Some(arc_gauge),
+        carousel: None,
+        state_surface: None,
+        heads_up: None,
     }
 }
 
@@ -614,6 +744,9 @@ fn add_text(
     let _spinbox = gui
         .add_spinbox(Rect::new(12, 164, 140, 22), 0, 99, 42, Style::panel())
         .unwrap();
+    let spinner = gui
+        .add_spinner(Rect::new(184, 164, 124, 22), 0.0, Style::panel())
+        .unwrap();
 
     ScreenIds {
         prev,
@@ -623,6 +756,16 @@ fn add_text(
         slider: None,
         clicks_label: None,
         slider_label: None,
+        spinner: Some(spinner),
+        progress: None,
+        tabs: None,
+        dropdown: None,
+        roller: None,
+        gauge: None,
+        arc_gauge: None,
+        carousel: None,
+        state_surface: None,
+        heads_up: None,
     }
 }
 
@@ -638,7 +781,7 @@ fn add_motion(
     )
     .unwrap();
 
-    let _carousel = gui
+    let carousel = gui
         .add_carousel(
             Rect::new(12, 42, 296, 62),
             &CAROUSEL_ITEMS,
@@ -650,7 +793,7 @@ fn add_motion(
     let _card_deck = gui
         .add_card_deck(Rect::new(12, 112, 296, 38), &TITLES, 0, Style::panel())
         .unwrap();
-    let _state = gui
+    let state_surface = gui
         .add_state_surface(
             Rect::new(12, 156, 160, 48),
             SurfaceState::Loading,
@@ -660,12 +803,12 @@ fn add_motion(
             Style::panel(),
         )
         .unwrap();
-    let _banner = gui
+    let heads_up = gui
         .add_heads_up_banner(
             Rect::new(184, 158, 124, 20),
             NotificationLevel::Warning,
             "HEADS UP",
-            500,
+            60_000,
             Style::panel(),
         )
         .unwrap();
@@ -690,5 +833,15 @@ fn add_motion(
         slider: None,
         clicks_label: None,
         slider_label: None,
+        spinner: None,
+        progress: None,
+        tabs: None,
+        dropdown: None,
+        roller: None,
+        gauge: None,
+        arc_gauge: None,
+        carousel: Some(carousel),
+        state_surface: Some(state_surface),
+        heads_up: Some(heads_up),
     }
 }

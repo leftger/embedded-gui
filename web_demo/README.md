@@ -57,6 +57,10 @@ Navigation uses embedded-gui's real screen-transition renderer with effects
 that rotate per screen: **PushMoook, slide, shutter, round flip, port-hole,
 wipe, circular reveal, fade, and zoom**.
 
+While a screen is visible, its in-widget motion runs continuously: progress
+bars breathe, gauges sweep, tabs/rollers/dropdowns auto-cycle, carousels drift,
+and the state-surface/heads-up widgets animate on their own timelines.
+
 ## Interactive input
 
 The demo wires browser events into the same `GuiContext::handle_input` API a
@@ -73,6 +77,7 @@ firmware event loop uses:
 
 Try:
 
+- Leave a screen alone for a moment and watch the widgets animate themselves.
 - Cycle through all five category screens and watch the transition effect change.
 - Click **CLICK ME** to increment the click counter.
 - Click the **ENABLE** toggle; its checked state changes immediately.
@@ -93,6 +98,6 @@ firmware and `wasm32-unknown-unknown` without changing the widget tree.
 
 ## What is not included yet
 
-The animation loop currently drives screen transitions at ~30 FPS. Individual
-in-widget motion timelines (springs, keyframes, cinematic decks) are not yet
-running continuously inside each screen.
+The demo drives the animation loop at ~30 FPS and covers the most visible
+in-widget motion paths. It is not yet running full cinematic keyframe decks,
+spring physics, or every motion preset on every screen.
