@@ -1,8 +1,8 @@
-# embedded-gui WebAssembly Demo
+# embedded-gui Kitchen-Sink WebAssembly Demo
 
-A browser demo that renders an `embedded-gui` screen into an HTML canvas with
-the same retained widget tree, RGB565 renderer, and input contract used by
-firmware targets.
+A scrollable browser showcase that renders `embedded-gui` widgets into a
+320×240 "device viewport" inside a taller RGB565 workspace. It uses the same
+retained widget tree, renderer, and input contract as firmware targets.
 
 **Live demo:** <https://leftger.github.io/embedded-gui/>
 
@@ -41,6 +41,16 @@ python3 -m http.server 8000
 Open <http://localhost:8000/>. The demo creates a 320×240 RGB565 UI at 2×
 canvas scale and flushes it to the page.
 
+## What the showcase includes
+
+| Category | Widgets |
+|----------|---------|
+| Basic controls | Button, progress bar, toggle, checkbox, slider, value label, icon button |
+| Lists & menus | List, circular list, tabs, dropdown, roller, menu, rich menu, feed timeline |
+| Data & gauges | Meter, arc gauge, gauge, sweeping arc, gauge needle, chart, plotter, radial scale, linear scale, dial |
+| Text & input | Spinbox, textarea, keyboard, table, autocomplete |
+| Motion & overlays | Spinner, carousel, image, peek reveal, glance tile, card deck, state surface, heads-up banner, notification sheet, toast, dialog |
+
 ## Interactive input
 
 The demo wires browser events into the same `GuiContext::handle_input` API a
@@ -52,14 +62,16 @@ firmware event loop uses:
 | Arrow keys | `Up` / `Down` / `Left` / `Right` spatial navigation |
 | Enter / Space | `Select` (activate focused widget) |
 | Backspace / Escape | `Back` |
+| Mouse wheel, drag, Page Up/Down | Scroll the tall workspace behind the 320×240 viewport |
 
 Try:
 
-- Click **CLICK ME** to increment the click counter and progress bar.
+- Scroll through the whole widget catalog with the wheel or by dragging.
+- Click **CLICK ME** to increment the click counter.
 - Click the **ENABLE** toggle; its checked state changes immediately.
-- Focus the slider with pointer or arrow keys, then use **Left/Right** to
+- Focus a slider with pointer or arrow keys, then use **Left/Right** to
   change its value.
-- Use the arrow keys to move focus between controls, then press **Enter**.
+- Use arrow keys to move focus between controls and press **Enter**.
 
 ## How it maps to firmware
 
