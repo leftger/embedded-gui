@@ -153,6 +153,7 @@ dependencies = [
  "embedded-graphics-core",
  "embedded-graphics-web-simulator",
  "embedded-gui",
+ "js-sys",
  "wasm-bindgen",
  "web-sys",
 ]

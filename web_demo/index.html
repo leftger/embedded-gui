@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>embedded-gui Kitchen-Sink Demo</title>
+  <title>embedded-gui Animated Showcase</title>
   <style>
     body {
       margin: 0;
@@ -39,10 +39,10 @@
 </head>
 <body>
   <main>
-    <h1>embedded-gui kitchen-sink demo</h1>
+    <h1>embedded-gui animated showcase</h1>
     <!-- WebSimulatorDisplay appends its scaled canvas to document.body. -->
-    <p>One RGB565 widget tree rendered from the same <code>no_std</code>-compatible <code>GuiContext</code> used on Cortex-M and RISC-V targets.</p>
-    <p>Scroll inside the device with the mouse wheel, drag, or <kbd>Page Up</kbd>/<kbd>Page Down</kbd>. Click controls or use arrow keys + <kbd>Enter</kbd>.</p>
+    <p>Each screen is a real <code>no_std</code>-compatible <code>GuiContext</code> rendered with embedded-gui's screen transitions.</p>
+    <p>Use <kbd>PREV</kbd>/<kbd>NEXT</kbd>, or <kbd>Shift</kbd>+arrow keys, to flip through animated category screens. Click controls or use arrow keys + <kbd>Enter</kbd>.</p>
     <script type="module">
       import init from './pkg/embedded_gui_web_demo.js';
       await init();

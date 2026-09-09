@@ -1,17 +1,16 @@
-//! Interactive kitchen-sink WebAssembly demo.
+//! Multi-screen animated WebAssembly showcase.
 //!
-//! The canvas is a 320x240 "device viewport" into a much taller
-//! `GuiContext` workspace. The same RGB565 widget tree and input contract used
-//! by firmware is rendered with a scroll offset, so a mouse wheel or drag can
-//! browse through many widget categories without leaving the embedded screen
-//! paradigm.
+//! Each category is its own 320x240 `GuiContext` screen. Navigating between
+//! screens renders the outgoing and incoming contexts through
+//! `render_transition_pair`, giving the browser demo the same
+//! PushMoook/slide/fade/shutter/flip/wipe transitions that firmware can use.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use embedded_graphics_core::{
     draw_target::DrawTarget,
-    pixelcolor::{Rgb565, RgbColor, WebColors},
+    pixelcolor::{Rgb565, RgbColor},
 };
 use embedded_graphics_web_simulator::display::WebSimulatorDisplay;
 use embedded_graphics_web_simulator::output_settings::OutputSettingsBuilder;
@@ -19,50 +18,85 @@ use embedded_gui::prelude::*;
 use embedded_gui::{PropertyKey, PropertyValue};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlCanvasElement, KeyboardEvent, PointerEvent, WheelEvent};
+use web_sys::{HtmlCanvasElement, KeyboardEvent, PointerEvent};
 
 const W: u32 = 320;
 const H: u32 = 240;
-/// Tall virtual workspace behind the 320x240 device viewport.
-const CONTENT_H: u32 = 2400;
+const SCREEN_COUNT: usize = 5;
+const TRANSITION_MS: u32 = 420;
 
 static ITEMS: [&str; 5] = ["HOME", "MEDIA", "MAPS", "SETTINGS", "POWER"];
 static CAROUSEL_ITEMS: [&str; 7] = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN"];
 static ROWS: [&[&str]; 2] = [&["1", "2"], &["3", "4"]];
 static KEYS: [char; 12] = ['1', '2', '3', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 static VALUES: [f32; 8] = [1.0, 2.0, 4.0, 3.0, 5.0, 8.0, 6.0, 7.0];
-static FEED_ITEMS: [&str; 3] = ["Feed 1", "Feed 2", "Feed 3"];
 static TITLES: [&str; 3] = ["Card 1", "Card 2", "Card 3"];
 static ACTIONS: [&str; 2] = ["OK", "Cancel"];
 static SUGGESTIONS: [&str; 2] = ["alpha", "beta"];
-static CELLS: [MenuCell; 3] = [
-    MenuCell::new("One").with_subtitle("first"),
-    MenuCell::new("Two"),
-    MenuCell::new("Three").with_enabled(false),
-];
-static IMAGE_PX: [u16; 16] = [0xFFFF; 16];
 
-struct Ids {
-    button: WidgetId,
-    toggle: WidgetId,
-    slider: WidgetId,
-    clicks_label: WidgetId,
-    slider_label: WidgetId,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScreenKind {
+    Controls,
+    Lists,
+    Data,
+    Text,
+    Motion,
+}
+
+impl ScreenKind {
+    const ALL: [ScreenKind; SCREEN_COUNT] = [
+        ScreenKind::Controls,
+        ScreenKind::Lists,
+        ScreenKind::Data,
+        ScreenKind::Text,
+        ScreenKind::Motion,
+    ];
+
+    fn from_index(index: usize) -> Self {
+        Self::ALL[index % SCREEN_COUNT]
+    }
+
+    fn index(self) -> usize {
+        Self::ALL.iter().position(|&kind| kind == self).unwrap_or(0)
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            ScreenKind::Controls => "CONTROLS",
+            ScreenKind::Lists => "LISTS & MENUS",
+            ScreenKind::Data => "DATA & GAUGES",
+            ScreenKind::Text => "TEXT & INPUT",
+            ScreenKind::Motion => "MOTION & OVERLAYS",
+        }
+    }
+}
+
+struct ScreenIds {
+    prev: WidgetId,
+    next: WidgetId,
+    button: Option<WidgetId>,
+    toggle: Option<WidgetId>,
+    slider: Option<WidgetId>,
+    clicks_label: Option<WidgetId>,
+    slider_label: Option<WidgetId>,
+}
+
+struct TransitionState {
+    active: ActiveScreenTransition,
+    elapsed_ms: u32,
+    duration_ms: u32,
 }
 
 struct App {
-    gui: GuiContext<'static, 256, 128, 64>,
+    gui: Box<GuiContext<'static, 256, 128, 64>>,
+    outgoing: Option<Box<GuiContext<'static, 256, 128, 64>>>,
     display: WebSimulatorDisplay<Rgb565>,
     canvas: HtmlCanvasElement,
-    scroll: i32,
-    content_h: u32,
-    ids: Ids,
+    screen: ScreenKind,
+    ids: ScreenIds,
+    transition: Option<TransitionState>,
     pointer_down: bool,
-    drag_scrolling: bool,
-    pointer_start_y: i32,
-    scroll_start: i32,
     clicks: i32,
-    toggle_on: bool,
 }
 
 impl App {
@@ -81,49 +115,32 @@ impl App {
             .dyn_into()
             .map_err(js_error)?;
 
-        let mut gui = GuiContext::<256, 128, 64>::new(Rect::new(0, 0, W, CONTENT_H));
-        let (content_h, ids) = build_ui(&mut gui);
+        let (gui, ids) = build_screen(ScreenKind::Controls);
 
         Ok(Self {
-            gui,
+            gui: Box::new(gui),
+            outgoing: None,
             display,
             canvas,
-            scroll: 0,
-            content_h,
+            screen: ScreenKind::Controls,
             ids,
+            transition: None,
             pointer_down: false,
-            drag_scrolling: false,
-            pointer_start_y: 0,
-            scroll_start: 0,
             clicks: 0,
-            toggle_on: false,
         })
-    }
-
-    fn max_scroll(&self) -> i32 {
-        (self.content_h as i32 - H as i32).max(0)
-    }
-
-    fn screen_to_content(&self, x: i32, y: i32) -> (i32, i32) {
-        (x, y + self.scroll)
     }
 
     fn pointer_pos(&self, client_x: i32, client_y: i32) -> (i32, i32) {
         let rect = self.canvas.get_bounding_client_rect();
         let x = ((client_x as f64 - rect.left()) / rect.width() * W as f64) as i32;
         let y = ((client_y as f64 - rect.top()) / rect.height() * H as f64) as i32;
-        self.screen_to_content(x.clamp(0, W as i32 - 1), y.clamp(0, H as i32 - 1))
+        (x.clamp(0, W as i32 - 1), y.clamp(0, H as i32 - 1))
     }
 
     fn handle_input(&mut self, event: InputEvent) {
         let _ = self.gui.handle_input(event);
         let _ = self.gui.tick_input(1);
         self.drain_events();
-        self.redraw();
-    }
-
-    fn scroll_by(&mut self, delta: i32) {
-        self.scroll = (self.scroll + delta).clamp(0, self.max_scroll());
         self.redraw();
     }
 
@@ -135,35 +152,88 @@ impl App {
 
     fn on_ui_event(&mut self, event: UiEvent) {
         match event {
-            UiEvent::Activate(id) if id == self.ids.button => {
+            UiEvent::Activate(id) if id == self.ids.prev => self.navigate(-1),
+            UiEvent::Activate(id) if id == self.ids.next => self.navigate(1),
+            UiEvent::Activate(id) if self.ids.button == Some(id) => {
                 self.clicks = self.clicks.saturating_add(1);
-                let _ = self.gui.set_value_label(self.ids.clicks_label, self.clicks);
+                if let Some(label) = self.ids.clicks_label {
+                    let _ = self.gui.set_value_label(label, self.clicks);
+                }
             }
-            UiEvent::ValueChanged(id) if id == self.ids.toggle => {
-                self.toggle_on = !self.toggle_on;
+            UiEvent::ValueChanged(id) if self.ids.toggle == Some(id) => {
+                // The toggle widget mutates its own checked state; nothing else to do.
             }
-            UiEvent::ValueChanged(id) if id == self.ids.slider => {
+            UiEvent::ValueChanged(id) if self.ids.slider == Some(id) => {
                 let value = match self.gui.get_widget_property(id, PropertyKey::Value) {
                     Some(PropertyValue::Float(value)) => value,
                     _ => 0.0,
                 };
-                let _ = self
-                    .gui
-                    .set_value_label(self.ids.slider_label, (value * 100.0).round() as i32);
+                if let Some(label) = self.ids.slider_label {
+                    let _ = self
+                        .gui
+                        .set_value_label(label, (value * 100.0).round() as i32);
+                }
             }
             _ => {}
         }
     }
 
+    fn navigate(&mut self, direction: i8) {
+        if self.transition.is_some() {
+            return;
+        }
+        let next_index = (self.screen.index() as isize + direction as isize)
+            .rem_euclid(SCREEN_COUNT as isize) as usize;
+        let next_screen = ScreenKind::from_index(next_index);
+        let (new_gui, new_ids) = build_screen(next_screen);
+        let old_gui = core::mem::replace(&mut self.gui, Box::new(new_gui));
+        self.ids = new_ids;
+        self.screen = next_screen;
+        self.outgoing = Some(old_gui);
+        self.transition = Some(TransitionState {
+            active: ActiveScreenTransition {
+                from: None,
+                to: None,
+                effect: transition_effect(direction, next_index),
+                origin: ScreenTransitionOrigin::Center,
+                progress: 0.0,
+            },
+            elapsed_ms: 0,
+            duration_ms: TRANSITION_MS,
+        });
+        self.redraw();
+    }
+
+    fn tick(&mut self, dt_ms: u32) {
+        let Some(transition) = &mut self.transition else {
+            return;
+        };
+        transition.elapsed_ms = transition.elapsed_ms.saturating_add(dt_ms);
+        transition.active.progress =
+            (transition.elapsed_ms as f32 / transition.duration_ms as f32).clamp(0.0, 1.0);
+        if transition.elapsed_ms >= transition.duration_ms {
+            self.outgoing = None;
+            self.transition = None;
+        }
+        self.redraw();
+    }
+
     fn redraw(&mut self) {
         let _ = self.display.clear(Rgb565::BLACK);
-        let _ = self.gui.render_with_offset_opacity_and_clip(
-            &mut self.display,
-            0,
-            -self.scroll,
-            255,
-            Rect::new(0, 0, W, H),
-        );
+        if let Some(transition) = &self.transition {
+            if let Some(outgoing) = &self.outgoing {
+                let _ = render_transition_pair(
+                    &mut self.display,
+                    outgoing,
+                    &self.gui,
+                    transition.active,
+                    W,
+                    H,
+                );
+            }
+        } else {
+            let _ = self.gui.render(&mut self.display);
+        }
         let _ = self.display.flush();
     }
 }
@@ -175,45 +245,19 @@ pub fn start() -> Result<(), JsValue> {
     let app = Rc::new(RefCell::new(App::new()?));
     app.borrow_mut().redraw();
 
-    // Pointer input: click/drag widgets or drag to scroll the virtual workspace.
+    // Pointer input.
     {
         let down_app = Rc::clone(&app);
         let pointer_down =
             Closure::<dyn FnMut(PointerEvent)>::wrap(Box::new(move |event: PointerEvent| {
                 if event.button() == 0 {
                     let mut app = down_app.borrow_mut();
-                    let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
                     app.pointer_down = true;
-                    app.drag_scrolling = false;
-                    app.pointer_start_y = event.client_y();
-                    app.scroll_start = app.scroll;
+                    let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
                     app.handle_input(InputEvent::Pointer {
                         x,
                         y,
                         state: PointerState::Pressed,
-                        button: PointerButton::Primary,
-                    });
-                }
-            }));
-
-        let move_app = Rc::clone(&app);
-        let pointer_move =
-            Closure::<dyn FnMut(PointerEvent)>::wrap(Box::new(move |event: PointerEvent| {
-                let mut app = move_app.borrow_mut();
-                if !app.pointer_down {
-                    return;
-                }
-                let dy = event.client_y() - app.pointer_start_y;
-                if app.drag_scrolling || dy.abs() > 6 {
-                    app.drag_scrolling = true;
-                    app.scroll = (app.scroll_start + dy).clamp(0, app.max_scroll());
-                    app.redraw();
-                } else {
-                    let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
-                    app.handle_input(InputEvent::Pointer {
-                        x,
-                        y,
-                        state: PointerState::Moved,
                         button: PointerButton::Primary,
                     });
                 }
@@ -232,16 +276,12 @@ pub fn start() -> Result<(), JsValue> {
                         state: PointerState::Released,
                         button: PointerButton::Primary,
                     });
-                    app.drag_scrolling = false;
                 }
             }));
 
         let canvas = &app.borrow().canvas.clone();
         canvas
             .add_event_listener_with_callback("pointerdown", pointer_down.as_ref().unchecked_ref())
-            .map_err(js_error)?;
-        canvas
-            .add_event_listener_with_callback("pointermove", pointer_move.as_ref().unchecked_ref())
             .map_err(js_error)?;
         canvas
             .add_event_listener_with_callback("pointerup", pointer_up.as_ref().unchecked_ref())
@@ -251,25 +291,10 @@ pub fn start() -> Result<(), JsValue> {
             .map_err(js_error)?;
 
         pointer_down.forget();
-        pointer_move.forget();
         pointer_up.forget();
     }
 
-    // Wheel input scrolls the virtual workspace.
-    {
-        let wheel_app = Rc::clone(&app);
-        let wheel = Closure::<dyn FnMut(WheelEvent)>::wrap(Box::new(move |event: WheelEvent| {
-            event.prevent_default();
-            wheel_app.borrow_mut().scroll_by(event.delta_y() as i32);
-        }));
-        let canvas = &app.borrow().canvas.clone();
-        canvas
-            .add_event_listener_with_callback("wheel", wheel.as_ref().unchecked_ref())
-            .map_err(js_error)?;
-        wheel.forget();
-    }
-
-    // Keyboard input: spatial navigation, select/back, page scroll.
+    // Keyboard input.
     {
         let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
         let key_app = Rc::clone(&app);
@@ -277,14 +302,14 @@ pub fn start() -> Result<(), JsValue> {
             Closure::<dyn FnMut(KeyboardEvent)>::wrap(Box::new(move |event: KeyboardEvent| {
                 let key = event.key();
                 match key.as_str() {
-                    "PageDown" => {
+                    "ArrowRight" if event.shift_key() => {
                         event.prevent_default();
-                        key_app.borrow_mut().scroll_by(48);
+                        key_app.borrow_mut().navigate(1);
                         return;
                     }
-                    "PageUp" => {
+                    "ArrowLeft" if event.shift_key() => {
                         event.prevent_default();
-                        key_app.borrow_mut().scroll_by(-48);
+                        key_app.borrow_mut().navigate(-1);
                         return;
                     }
                     _ => {}
@@ -299,6 +324,23 @@ pub fn start() -> Result<(), JsValue> {
             .add_event_listener_with_callback("keydown", keydown.as_ref().unchecked_ref())
             .map_err(js_error)?;
         keydown.forget();
+    }
+
+    // Animation loop for screen transitions.
+    {
+        let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
+        let tick_app = Rc::clone(&app);
+        let frame = Closure::<dyn FnMut()>::wrap(Box::new(move || {
+            tick_app.borrow_mut().tick(33);
+        }));
+        window
+            .set_interval_with_callback_and_timeout_and_arguments(
+                frame.as_ref().unchecked_ref(),
+                33,
+                &js_sys::Array::new(),
+            )
+            .map_err(js_error)?;
+        frame.forget();
     }
 
     Ok(())
@@ -316,216 +358,337 @@ fn keyboard_input(key: &str) -> Option<InputEvent> {
     }
 }
 
+fn transition_effect(direction: i8, index: usize) -> ScreenTransitionEffect {
+    const FORWARD: [ScreenTransitionEffect; 7] = [
+        ScreenTransitionEffect::PushMoook,
+        ScreenTransitionEffect::SlideLeft,
+        ScreenTransitionEffect::ShutterRight,
+        ScreenTransitionEffect::RoundFlipRight,
+        ScreenTransitionEffect::PortHoleRight,
+        ScreenTransitionEffect::WipeRight,
+        ScreenTransitionEffect::CircularReveal,
+    ];
+    const BACKWARD: [ScreenTransitionEffect; 7] = [
+        ScreenTransitionEffect::PopMoook,
+        ScreenTransitionEffect::SlideRight,
+        ScreenTransitionEffect::ShutterLeft,
+        ScreenTransitionEffect::RoundFlipLeft,
+        ScreenTransitionEffect::PortHoleLeft,
+        ScreenTransitionEffect::WipeLeft,
+        ScreenTransitionEffect::Fade,
+    ];
+    let effects = if direction > 0 { FORWARD } else { BACKWARD };
+    effects[index % effects.len()]
+}
+
 fn js_error(error: impl core::fmt::Debug) -> JsValue {
     JsValue::from_str(&format!("{error:?}"))
 }
 
-macro_rules! add {
-    ($gui:expr, $y:expr, $h:expr, $f:expr) => {{
-        let rect = Rect::new(8, $y, W - 16, $h);
-        let id = $f(rect).unwrap();
-        $y += $h as i32 + 4;
-        id
-    }};
+fn build_screen(kind: ScreenKind) -> (GuiContext<'static, 256, 128, 64>, ScreenIds) {
+    let mut gui = GuiContext::<256, 128, 64>::new(Rect::new(0, 0, W, H));
+    let (prev, next) = add_chrome(&mut gui, kind.title(), kind.index());
+    let ids = match kind {
+        ScreenKind::Controls => add_controls(&mut gui, prev, next),
+        ScreenKind::Lists => add_lists(&mut gui, prev, next),
+        ScreenKind::Data => add_data(&mut gui, prev, next),
+        ScreenKind::Text => add_text(&mut gui, prev, next),
+        ScreenKind::Motion => add_motion(&mut gui, prev, next),
+    };
+    (gui, ids)
 }
 
-#[allow(clippy::too_many_lines)]
-fn build_ui(gui: &mut GuiContext<'static, 256, 128, 64>) -> (u32, Ids) {
-    let mut y = 4i32;
+fn add_chrome(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    title: &'static str,
+    index: usize,
+) -> (WidgetId, WidgetId) {
+    gui.add_label(Rect::new(12, 8, 200, 12), title, Style::label())
+        .unwrap();
+    gui.add_value_label(
+        Rect::new(220, 7, 88, 12),
+        "SCREEN",
+        index as i32 + 1,
+        Style::panel(),
+    )
+    .unwrap();
+    let prev = gui
+        .add_button(Rect::new(12, 212, 84, 22), "PREV", Style::button())
+        .unwrap();
+    let next = gui
+        .add_button(Rect::new(224, 212, 84, 22), "NEXT", Style::button())
+        .unwrap();
+    (prev, next)
+}
 
-    // ── Basic controls ────────────────────────────────────────────────────
-    section(gui, &mut y, "BASIC CONTROLS");
-    let button = add!(gui, y, 22, |r| gui.add_button(
-        r,
-        "CLICK ME",
-        Style::button()
-    ));
-    let clicks_label = add!(gui, y, 14, |r| {
-        gui.add_value_label(r, "CLICKS", 0, Style::panel())
-    });
-    let toggle = add!(gui, y, 16, |r| {
-        gui.add_toggle(r, "ENABLE", false, Style::button())
-    });
-    let _ = add!(gui, y, 16, |r| {
-        gui.add_checkbox(r, "CHECKBOX", true, Style::button())
-    });
-    let _ = add!(gui, y, 14, |r| {
-        gui.add_progress_bar(r, 0.68, Style::progress())
-    });
-    let slider = add!(gui, y, 18, |r| {
-        gui.add_slider(r, 0.5, 0.0, 1.0, Style::progress())
-    });
-    let slider_label = add!(gui, y, 14, |r| {
-        gui.add_value_label(r, "SLIDER", 50, Style::panel())
-    });
-    let _ = add!(gui, y, 18, |r| {
-        gui.add_icon_button(r, '>', "ICON BUTTON", Style::button())
-    });
+fn add_controls(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "BUTTON / TOGGLE / CHECKBOX / SLIDER",
+        Style::label(),
+    )
+    .unwrap();
 
-    // ── Lists & menus ─────────────────────────────────────────────────────
-    section(gui, &mut y, "LISTS & MENUS");
-    let _ = add!(gui, y, 60, |r| {
-        gui.add_list(r, &ITEMS, 0, 4, Style::panel())
-    });
-    let _ = add!(gui, y, 60, |r| {
-        gui.add_circular_list(r, &ITEMS, 0, 4, Style::panel())
-    });
-    let _ = add!(gui, y, 18, |r| {
-        gui.add_tabs(r, &ITEMS, 0, Style::button())
-    });
-    let _ = add!(gui, y, 24, |r| {
-        gui.add_dropdown(r, &ITEMS, 0, Style::panel())
-    });
-    let _ = add!(gui, y, 60, |r| {
-        gui.add_roller(r, &ITEMS, 0, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_menu(r, &ITEMS, 0, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_rich_menu(r, &CELLS, 0, 3, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_feed_timeline(r, &FEED_ITEMS, 0, 3, false, Style::panel())
-    });
-
-    // ── Data visualizations ───────────────────────────────────────────────
-    section(gui, &mut y, "DATA & GAUGES");
-    let _ = add!(gui, y, 26, |r| {
-        gui.add_meter(r, 6.5, 0.0, 10.0, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_arc_gauge(r, 6.5, 0.0, 10.0, 180, 270, 4, false, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_gauge(r, 7.0, 0.0, 10.0, Style::panel())
-    });
-    let _ = add!(gui, y, 44, |r| {
-        gui.add_sweeping_arc(
-            r,
+    let button = gui
+        .add_button(Rect::new(12, 42, 136, 22), "CLICK ME", Style::button())
+        .unwrap();
+    let toggle = gui
+        .add_toggle(
+            Rect::new(164, 44, 144, 16),
+            "ENABLE",
+            false,
+            Style::button(),
+        )
+        .unwrap();
+    let checkbox = gui
+        .add_checkbox(Rect::new(12, 70, 136, 16), "CHECK", true, Style::button())
+        .unwrap();
+    let _icon = gui
+        .add_icon_button(Rect::new(164, 68, 144, 20), '>', "ICON", Style::button())
+        .unwrap();
+    let progress = gui
+        .add_progress_bar(Rect::new(12, 96, 296, 12), 0.68, Style::progress())
+        .unwrap();
+    let slider = gui
+        .add_slider(
+            Rect::new(12, 116, 296, 16),
             0.5,
-            true,
-            16,
-            2,
-            2,
-            Rgb565::CSS_BLACK,
-            Rgb565::CSS_CYAN,
-            Rgb565::CSS_WHITE,
+            0.0,
+            1.0,
+            Style::progress(),
+        )
+        .unwrap();
+    let clicks_label = gui
+        .add_value_label(Rect::new(12, 142, 130, 14), "CLICKS", 0, Style::panel())
+        .unwrap();
+    let slider_label = gui
+        .add_value_label(Rect::new(164, 142, 144, 14), "SLIDER", 50, Style::panel())
+        .unwrap();
+    let _tabs = gui
+        .add_tabs(Rect::new(12, 168, 296, 16), &ITEMS, 0, Style::button())
+        .unwrap();
+
+    let _ = progress;
+    let _ = checkbox;
+    let _ = toggle;
+
+    ScreenIds {
+        prev,
+        next,
+        button: Some(button),
+        toggle: Some(toggle),
+        slider: Some(slider),
+        clicks_label: Some(clicks_label),
+        slider_label: Some(slider_label),
+    }
+}
+
+fn add_lists(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "MENU / LIST / DROPDOWN / ROLLER",
+        Style::label(),
+    )
+    .unwrap();
+
+    let _menu = gui
+        .add_menu(Rect::new(12, 42, 140, 82), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let _list = gui
+        .add_list(Rect::new(168, 42, 140, 82), &ITEMS, 0, 5, Style::panel())
+        .unwrap();
+    let _dropdown = gui
+        .add_dropdown(Rect::new(12, 132, 140, 22), &ITEMS, 0, Style::panel())
+        .unwrap();
+    let _roller = gui
+        .add_roller(Rect::new(168, 130, 140, 62), &ITEMS, 0, Style::panel())
+        .unwrap();
+
+    ScreenIds {
+        prev,
+        next,
+        button: None,
+        toggle: None,
+        slider: None,
+        clicks_label: None,
+        slider_label: None,
+    }
+}
+
+fn add_data(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "CHART / PLOTTER / ARC / GAUGE",
+        Style::label(),
+    )
+    .unwrap();
+
+    let _chart = gui
+        .add_chart(
+            Rect::new(12, 42, 296, 44),
+            &VALUES,
+            0.0,
+            10.0,
             Style::panel(),
         )
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_gauge_needle(r, 7.0, 0.0, 10.0, 180, 270, Style::panel())
-    });
-    let _ = add!(gui, y, 46, |r| {
-        gui.add_chart(r, &VALUES, 0.0, 10.0, Style::panel())
-    });
-    let _ = add!(gui, y, 46, |r| {
-        gui.add_plotter(r, &VALUES, 0, 0.0, 10.0, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_radial_scale(r, 0.0, 10.0, 5.0, Style::panel())
-    });
-    let _ = add!(gui, y, 24, |r| {
-        gui.add_linear_scale(r, 0.0, 10.0, 5.0, Style::panel())
-    });
-    let _ = add!(gui, y, 70, |r| {
-        gui.add_dial(r, 6.0, 0.0, 10.0, Style::panel())
-    });
+        .unwrap();
+    let _plotter = gui
+        .add_plotter(
+            Rect::new(12, 92, 296, 36),
+            &VALUES,
+            0,
+            0.0,
+            10.0,
+            Style::panel(),
+        )
+        .unwrap();
+    let _arc = gui
+        .add_arc_gauge(
+            Rect::new(12, 136, 140, 66),
+            6.5,
+            0.0,
+            10.0,
+            180,
+            270,
+            4,
+            false,
+            Style::panel(),
+        )
+        .unwrap();
+    let _gauge = gui
+        .add_gauge(Rect::new(168, 136, 140, 66), 7.0, 0.0, 10.0, Style::panel())
+        .unwrap();
 
-    // ── Text, input & tables ──────────────────────────────────────────────
-    section(gui, &mut y, "TEXT & INPUT");
-    let _ = add!(gui, y, 24, |r| {
-        gui.add_spinbox(r, 0, 99, 42, Style::panel())
-    });
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_textarea(r, "Edit me", "placeholder", Style::panel())
-    });
-    let _ = add!(gui, y, 44, |r| {
-        gui.add_keyboard(r, &KEYS, 6, None, Style::panel())
-    });
-    let _ = add!(gui, y, 50, |r| { gui.add_table(r, &ROWS, Style::panel()) });
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_autocomplete_widget(r, &SUGGESTIONS, Style::panel())
-    });
+    ScreenIds {
+        prev,
+        next,
+        button: None,
+        toggle: None,
+        slider: None,
+        clicks_label: None,
+        slider_label: None,
+    }
+}
 
-    // ── Motion, surfaces & overlays ───────────────────────────────────────
-    section(gui, &mut y, "MOTION & OVERLAYS");
-    let _ = add!(gui, y, 30, |r| { gui.add_spinner(r, 0.5, Style::panel()) });
-    let _ = add!(gui, y, 60, |r| {
-        gui.add_carousel(
-            r,
+fn add_text(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "TEXTAREA / KEYBOARD / TABLE",
+        Style::label(),
+    )
+    .unwrap();
+
+    let _textarea = gui
+        .add_textarea(
+            Rect::new(12, 42, 140, 48),
+            "Edit me",
+            "placeholder",
+            Style::panel(),
+        )
+        .unwrap();
+    let _keyboard = gui
+        .add_keyboard(Rect::new(168, 42, 140, 72), &KEYS, 5, None, Style::panel())
+        .unwrap();
+    let _table = gui
+        .add_table(Rect::new(12, 100, 160, 56), &ROWS, Style::panel())
+        .unwrap();
+    let _autocomplete = gui
+        .add_autocomplete_widget(Rect::new(184, 100, 124, 48), &SUGGESTIONS, Style::panel())
+        .unwrap();
+    let _spinbox = gui
+        .add_spinbox(Rect::new(12, 164, 140, 22), 0, 99, 42, Style::panel())
+        .unwrap();
+
+    ScreenIds {
+        prev,
+        next,
+        button: None,
+        toggle: None,
+        slider: None,
+        clicks_label: None,
+        slider_label: None,
+    }
+}
+
+fn add_motion(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "CAROUSEL / CARD DECK / OVERLAYS",
+        Style::label(),
+    )
+    .unwrap();
+
+    let _carousel = gui
+        .add_carousel(
+            Rect::new(12, 42, 296, 62),
             &CAROUSEL_ITEMS,
             2,
-            CarouselSpec::new(10, 5),
+            CarouselSpec::new(12, 5),
             Style::panel(),
         )
-    });
-    let image = ImageRef::new(4, 4, &IMAGE_PX);
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_image(r, image, ImageFit::Stretch, Style::panel())
-    });
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_peek_reveal(r, image, "Peek", "Subtitle", Style::panel())
-    });
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_glance_tile(r, 'g', "Glance", "Sub", Style::panel())
-    });
-    let _ = add!(gui, y, 50, |r| {
-        gui.add_card_deck(r, &TITLES, 0, Style::panel())
-    });
-    let _ = add!(gui, y, 50, |r| {
-        gui.add_state_surface(
-            r,
+        .unwrap();
+    let _card_deck = gui
+        .add_card_deck(Rect::new(12, 112, 296, 38), &TITLES, 0, Style::panel())
+        .unwrap();
+    let _state = gui
+        .add_state_surface(
+            Rect::new(12, 156, 160, 48),
             SurfaceState::Loading,
-            "STATE SURFACE",
+            "STATE",
             "Loading...",
             None,
             Style::panel(),
         )
-    });
-    let _ = add!(gui, y, 26, |r| {
-        gui.add_heads_up_banner(
-            r,
+        .unwrap();
+    let _banner = gui
+        .add_heads_up_banner(
+            Rect::new(184, 158, 124, 20),
             NotificationLevel::Warning,
             "HEADS UP",
             500,
             Style::panel(),
         )
-    });
-    let _ = add!(gui, y, 50, |r| {
-        gui.add_notification_action_sheet(
-            r,
+        .unwrap();
+    let _sheet = gui
+        .add_notification_action_sheet(
+            Rect::new(184, 182, 124, 24),
             NotificationLevel::Info,
-            "NOTIFICATION",
+            "NOTIFY",
             "Body",
             &ACTIONS,
             0,
             false,
             Style::panel(),
         )
-    });
-    let _ = add!(gui, y, 24, |r| {
-        gui.add_toast(r, "TOAST", 1000, Style::panel())
-    });
-    let _ = add!(gui, y, 40, |r| {
-        gui.add_dialog(r, "DIALOG", "Body", Style::panel())
-    });
-
-    (
-        y as u32 + 2,
-        Ids {
-            button,
-            toggle,
-            slider,
-            clicks_label,
-            slider_label,
-        },
-    )
-}
-
-fn section(gui: &mut GuiContext<'static, 256, 128, 64>, y: &mut i32, text: &'static str) {
-    gui.add_label(Rect::new(8, *y, 304, 12), text, Style::label())
         .unwrap();
-    *y += 16;
+
+    ScreenIds {
+        prev,
+        next,
+        button: None,
+        toggle: None,
+        slider: None,
+        clicks_label: None,
+        slider_label: None,
+    }
 }

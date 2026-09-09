@@ -1,8 +1,8 @@
-# embedded-gui Kitchen-Sink WebAssembly Demo
+# embedded-gui Animated WebAssembly Showcase
 
-A scrollable browser showcase that renders `embedded-gui` widgets into a
-320×240 "device viewport" inside a taller RGB565 workspace. It uses the same
-retained widget tree, renderer, and input contract as firmware targets.
+A multi-screen browser demo that renders `embedded-gui` widgets into real
+320×240 `GuiContext` screens and animates between them with the same
+transition effects firmware can use.
 
 **Live demo:** <https://leftger.github.io/embedded-gui/>
 
@@ -43,40 +43,46 @@ canvas scale and flushes it to the page.
 
 ## What the showcase includes
 
-| Category | Widgets |
-|----------|---------|
-| Basic controls | Button, progress bar, toggle, checkbox, slider, value label, icon button |
-| Lists & menus | List, circular list, tabs, dropdown, roller, menu, rich menu, feed timeline |
-| Data & gauges | Meter, arc gauge, gauge, sweeping arc, gauge needle, chart, plotter, radial scale, linear scale, dial |
-| Text & input | Spinbox, textarea, keyboard, table, autocomplete |
-| Motion & overlays | Spinner, carousel, image, peek reveal, glance tile, card deck, state surface, heads-up banner, notification sheet, toast, dialog |
+Each screen is a separate `GuiContext` with its own widget layout:
+
+| Screen | Highlights |
+|--------|------------|
+| **Controls** | Button, toggle, checkbox, icon button, progress bar, slider, value labels, tabs |
+| **Lists & Menus** | Menu, list, dropdown, roller |
+| **Data & Gauges** | Chart, plotter, arc gauge, gauge |
+| **Text & Input** | Textarea, keyboard, table, autocomplete, spinbox |
+| **Motion & Overlays** | Carousel, card deck, state surface, heads-up banner, notification sheet |
+
+Navigation uses embedded-gui's real screen-transition renderer with effects
+that rotate per screen: **PushMoook, slide, shutter, round flip, port-hole,
+wipe, circular reveal, fade, and zoom**.
 
 ## Interactive input
 
 The demo wires browser events into the same `GuiContext::handle_input` API a
 firmware event loop uses:
 
-| Browser event | `embedded-gui` input |
-|---------------|----------------------|
-| Pointer press/move/release (left button) | `InputEvent::Pointer` with `PointerState::{Pressed, Moved, Released}` |
+| Browser event | `embedded-gui` action |
+|---------------|------------------------|
+| Pointer press/release (left button) | `InputEvent::Pointer` with `PointerState::{Pressed, Released}` |
 | Arrow keys | `Up` / `Down` / `Left` / `Right` spatial navigation |
 | Enter / Space | `Select` (activate focused widget) |
 | Backspace / Escape | `Back` |
-| Mouse wheel, drag, Page Up/Down | Scroll the tall workspace behind the 320×240 viewport |
+| `PREV` / `NEXT` buttons | Animated screen transition |
+| Shift + Left / Right | Animated screen transition |
 
 Try:
 
-- Scroll through the whole widget catalog with the wheel or by dragging.
+- Cycle through all five category screens and watch the transition effect change.
 - Click **CLICK ME** to increment the click counter.
 - Click the **ENABLE** toggle; its checked state changes immediately.
-- Focus a slider with pointer or arrow keys, then use **Left/Right** to
-  change its value.
-- Use arrow keys to move focus between controls and press **Enter**.
+- Use arrow keys + **Enter** to interact with menus, dropdowns, and lists.
 
 ## How it maps to firmware
 
-The demo uses the exact `GuiContext` type and `render()` API a `no_std`
-application uses. Only the final `DrawTarget` changes:
+The demo uses the exact `GuiContext` type, `render()` API, and
+`render_transition_pair` transition renderer a `no_std` application uses. Only
+the final `DrawTarget` changes:
 
 - Embedded: SPI/parallel display driver or a `Framebuffer` + `DisplayBackend`
 - Browser: `WebSimulatorDisplay` → HTML canvas
@@ -87,6 +93,6 @@ firmware and `wasm32-unknown-unknown` without changing the widget tree.
 
 ## What is not included yet
 
-The demo renders on demand after each input event. It does not yet drive a
-continuous animation loop with `requestAnimationFrame`, so motion presets and
-timeline-driven widgets are not running at 60 FPS in the browser yet.
+The animation loop currently drives screen transitions at ~30 FPS. Individual
+in-widget motion timelines (springs, keyframes, cinematic decks) are not yet
+running continuously inside each screen.
