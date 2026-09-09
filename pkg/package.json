@@ -1,0 +1,15 @@
+{
+  "name": "embedded-gui-web-demo",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "embedded_gui_web_demo_bg.wasm",
+    "embedded_gui_web_demo.js",
+    "embedded_gui_web_demo.d.ts"
+  ],
+  "main": "embedded_gui_web_demo.js",
+  "types": "embedded_gui_web_demo.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
