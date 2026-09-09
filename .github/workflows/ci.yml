@@ -116,6 +116,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo bench -p embedded-gui --no-run --all-features
 
+  web-demo:
+    name: WebAssembly Demo Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --manifest-path web_demo/Cargo.toml --target wasm32-unknown-unknown
+
   size-harness:
     name: Embedded Size Harness Footprint Budget
     runs-on: ubuntu-latest
@@ -125,8 +136,17 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
+      - name: Install binutils for size reporting
+        run: sudo apt-get update && sudo apt-get install -y binutils-arm-none-eabi
       - name: Build size harness release binary
         run: cargo build --manifest-path size_harness/Cargo.toml --target thumbv7em-none-eabihf --release
+      - name: Measure and summarize footprint
+        run: |
+          arm-none-eabi-size size_harness/target/thumbv7em-none-eabihf/release/size_harness | tee size_harness-thumbv7em-report.txt
+          echo "### Embedded Size Harness (thumbv7em-none-eabihf)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat size_harness-thumbv7em-report.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: Docs & GitHub Pages

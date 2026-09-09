@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>embedded-gui WebAssembly Demo</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #121417;
+      font-family: system-ui, sans-serif;
+      color: #e6e6e6;
+    }
+    main {
+      text-align: center;
+    }
+    canvas {
+      border-radius: 12px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+      max-width: 100%;
+    }
+    p {
+      margin-top: 18px;
+      opacity: 0.75;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>embedded-gui in the browser</h1>
+    <!-- WebSimulatorDisplay appends its scaled canvas to document.body. -->
+    <p>Built from the same <code>no_std</code>-compatible <code>GuiContext</code> + RGB565 renderer used on Cortex-M and RISC-V targets.</p>
+    <script type="module">
+      import init from './pkg/embedded_gui_web_demo.js';
+      await init();
+    </script>
+  </main>
+</body>
+</html>

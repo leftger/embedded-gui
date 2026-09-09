@@ -1,0 +1,8 @@
+# Cortex-M linker configuration used by the `size_harness` footprint binary.
+# `cortex-m-rt` generates `link.x` from the package-local `memory.x`; cargo must
+# pass `-Tlink.x` for the ELF to contain real .text/.data/.bss sections.
+[target.thumbv7em-none-eabihf]
+rustflags = ["-C", "link-arg=-Tlink.x"]
+
+[target.thumbv7em-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]

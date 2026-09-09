@@ -1,0 +1,8 @@
+# Ensures the Cortex-M RT entry point and memory layout are linked into the
+# size harness. Without these flags cargo produces an unlinked ELF and the
+# published footprint numbers are meaningless.
+[target.thumbv7em-none-eabihf]
+rustflags = ["-C", "link-arg=-Tlink.x"]
+
+[target.thumbv7em-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]

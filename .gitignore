@@ -1,5 +1,6 @@
 /target
 **/target
+/web_demo/pkg
 .claude
 docs/screenshots/motion_*.png
 docs/screenshots/flipcard_*.png

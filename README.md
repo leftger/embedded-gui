@@ -225,6 +225,11 @@ Detailed architecture specifications and integration guides are available in [`d
 - 🔀 **[Transition Presets Guide](./docs/transition-presets.md)**: Screen stack slide, fade, portal, and flip-card transition rules.
 - 🎹 **[TextArea & Keybindings Specification](./docs/textarea-input-keybindings.md)**: Input policies, key bindings, and text editing behavior.
 - 🎯 **[Interaction Behavior Contract](./docs/interaction-behavior-contract.md)**: Focus management, event bubble paths, and pointer semantics.
+- 🚀 **[Platform Bring-Up Guide](./docs/platform-bring-up-guide.md)**: Step-by-step wiring for `DrawTarget`s, framebuffers, DMA backends, frame loops, and real hardware bring-up.
+- 🧠 **[Hardware Acceleration](./docs/hardware-acceleration.md)**: `Hardware2DAccelerator`, draw-unit dispatch, and DMA2D/PXP/ESP32 blitter integration.
+- 📦 **[Memory Footprint Transparency](./docs/memory-footprint.md)**: Public `size_harness` flash/RAM numbers, reproduction steps, and footprint budgeting.
+- 🧩 **[VSCode Workflow Guide](./docs/vscode-editor-guide.md)**: In-editor KDL snippets, codegen loop, and roadmap to an LSP-based extension.
+- 🌐 **[WebAssembly Demo](./web_demo/README.md)**: Run the same `GuiContext`/RGB565 UI in a browser via WASM.
 
 ---
 

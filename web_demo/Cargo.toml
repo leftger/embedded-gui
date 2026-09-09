@@ -1,0 +1,26 @@
+[package]
+name = "embedded-gui-web-demo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# This crate is intentionally standalone (like `size_harness/`) so it can be
+# built against `wasm32-unknown-unknown` without pulling web tooling into the
+# main workspace CI matrix.
+[workspace]
+
+[dependencies]
+embedded-gui = { path = "../crates/embedded-gui", default-features = false, features = ["rich-widgets", "libm"] }
+embedded-graphics-core = "0.4.1"
+embedded-graphics-web-simulator = "0.4"
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

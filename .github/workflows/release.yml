@@ -37,7 +37,7 @@ jobs:
       - name: Build embedded size-harness ELF (thumbv7em)
         run: |
           cargo build --manifest-path size_harness/Cargo.toml --target thumbv7em-none-eabihf --release
-          cp target/thumbv7em-none-eabihf/release/size_harness size_harness-thumbv7em.elf
+          cp size_harness/target/thumbv7em-none-eabihf/release/size_harness size_harness-thumbv7em.elf
           arm-none-eabi-size size_harness-thumbv7em.elf > size_harness-thumbv7em-report.txt
 
       - name: Publish to crates.io
