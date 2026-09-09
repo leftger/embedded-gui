@@ -107,6 +107,7 @@ struct App {
     transition: Option<TransitionState>,
     animator: WidgetAnimator<32, 32>,
     motion_phase: f32,
+    autoplay_ms: u32,
     pointer_down: bool,
     clicks: i32,
 }
@@ -139,6 +140,7 @@ impl App {
             transition: None,
             animator: WidgetAnimator::new(),
             motion_phase: 0.0,
+            autoplay_ms: 0,
             pointer_down: false,
             clicks: 0,
         };
@@ -154,6 +156,7 @@ impl App {
     }
 
     fn handle_input(&mut self, event: InputEvent) {
+        self.autoplay_ms = 0;
         let _ = self.gui.handle_input(event);
         let _ = self.gui.tick_input(1);
         self.drain_events();
@@ -240,22 +243,68 @@ impl App {
         }
 
         self.motion_phase += dt_ms as f32;
+        self.autoplay_ms = self.autoplay_ms.saturating_add(dt_ms);
+        if self.autoplay_ms >= 7000 {
+            self.autoplay_ms = 0;
+            self.navigate(1);
+            self.redraw();
+            return;
+        }
         let _ = self.animator.tick(dt_ms, &mut self.gui);
         self.tick_screen_motion(dt_ms);
         self.redraw();
     }
 
     fn tick_screen_motion(&mut self, dt_ms: u32) {
-        if self.screen == ScreenKind::Motion {
-            if let Some(state) = self.ids.state_surface {
-                let _ = self.gui.tick_state_surface(state, dt_ms, 1.0);
+        let phase = self.motion_phase;
+        match self.screen {
+            ScreenKind::Controls => {
+                if let Some(progress) = self.ids.progress {
+                    let value = 0.5 + 0.45 * (phase * 0.004).sin();
+                    let _ = self.gui.set_progress(progress, value);
+                }
+                if let Some(tabs) = self.ids.tabs {
+                    let index = ((phase * 0.0012) as usize) % ITEMS.len();
+                    let _ = self.gui.set_tab_selected(tabs, index);
+                }
             }
-            if let Some(heads_up) = self.ids.heads_up {
-                let _ = self.gui.tick_heads_up(heads_up, dt_ms);
+            ScreenKind::Lists => {
+                if let Some(dropdown) = self.ids.dropdown {
+                    let index = ((phase * 0.001) as usize) % ITEMS.len();
+                    let _ = self.gui.set_dropdown_selected(dropdown, index);
+                }
+                if let Some(roller) = self.ids.roller {
+                    let index = ((phase * 0.0008) as usize) % ITEMS.len();
+                    let _ = self.gui.set_roller_selected(roller, index);
+                }
             }
-            if let Some(carousel) = self.ids.carousel {
-                let shift = ((self.motion_phase * 0.006).sin() * 7.0) as i16;
-                let _ = self.gui.set_carousel_shift(carousel, shift);
+            ScreenKind::Data => {
+                if let Some(gauge) = self.ids.gauge {
+                    let value = 5.5 + 4.0 * (phase * 0.0035).sin();
+                    let _ = self.gui.set_gauge_value(gauge, value);
+                }
+                if let Some(arc_gauge) = self.ids.arc_gauge {
+                    let value = 5.5 + 4.0 * (phase * 0.0028).sin();
+                    let _ = self.gui.set_gauge_value(arc_gauge, value);
+                }
+            }
+            ScreenKind::Text => {
+                if let Some(spinner) = self.ids.spinner {
+                    let value = (phase * 0.0015).fract();
+                    let _ = self.gui.set_spinner_phase(spinner, value);
+                }
+            }
+            ScreenKind::Motion => {
+                if let Some(state) = self.ids.state_surface {
+                    let _ = self.gui.tick_state_surface(state, dt_ms, 1.0);
+                }
+                if let Some(heads_up) = self.ids.heads_up {
+                    let _ = self.gui.tick_heads_up(heads_up, dt_ms);
+                }
+                if let Some(carousel) = self.ids.carousel {
+                    let shift = ((phase * 0.006).sin() * 7.0) as i16;
+                    let _ = self.gui.set_carousel_shift(carousel, shift);
+                }
             }
         }
     }
@@ -427,21 +476,35 @@ pub fn start() -> Result<(), JsValue> {
         keydown.forget();
     }
 
-    // Animation loop for screen transitions.
+    // Animation loop for screen transitions and in-widget motion.
     {
         let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
+        let loop_window = window.clone();
+        let holder: &'static RefCell<Option<Closure<dyn FnMut()>>> =
+            Box::leak(Box::new(RefCell::new(None)));
         let tick_app = Rc::clone(&app);
+        let mut last_frame_ms = 0.0f64;
         let frame = Closure::<dyn FnMut()>::wrap(Box::new(move || {
-            tick_app.borrow_mut().tick(33);
+            let now = js_sys::Date::now();
+            let dt = if last_frame_ms == 0.0 {
+                16.0
+            } else {
+                (now - last_frame_ms).clamp(8.0, 80.0)
+            };
+            last_frame_ms = now;
+            tick_app.borrow_mut().tick(dt as u32);
+            if let Some(callback) = holder.borrow().as_ref() {
+                let _ = loop_window.request_animation_frame(callback.as_ref().unchecked_ref());
+            }
         }));
+        *holder.borrow_mut() = Some(frame);
+        let callback = holder.borrow();
+        let callback_ref = callback
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("no loop"))?;
         window
-            .set_interval_with_callback_and_timeout_and_arguments(
-                frame.as_ref().unchecked_ref(),
-                33,
-                &js_sys::Array::new(),
-            )
+            .request_animation_frame(callback_ref.as_ref().unchecked_ref())
             .map_err(js_error)?;
-        frame.forget();
     }
 
     Ok(())
