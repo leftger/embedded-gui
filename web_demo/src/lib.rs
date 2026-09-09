@@ -90,6 +90,9 @@ struct ScreenIds {
     carousel: Option<WidgetId>,
     state_surface: Option<WidgetId>,
     heads_up: Option<WidgetId>,
+    motion_a: Option<WidgetId>,
+    motion_b: Option<WidgetId>,
+    motion_c: Option<WidgetId>,
 }
 
 struct TransitionState {
@@ -145,7 +148,7 @@ impl App {
             pointer_down: false,
             clicks: 0,
         };
-        start_screen_animations(ScreenKind::Controls, &app.ids, &mut app.animator);
+        start_screen_animations(ScreenKind::Controls, &app.ids, &mut app.animator, &app.gui);
         Ok(app)
     }
 
@@ -211,7 +214,7 @@ impl App {
         self.screen = next_screen;
         self.outgoing = Some(old_gui);
         self.animator = WidgetAnimator::new();
-        start_screen_animations(next_screen, &self.ids, &mut self.animator);
+        start_screen_animations(next_screen, &self.ids, &mut self.animator, &self.gui);
         self.transition = Some(TransitionState {
             active: ActiveScreenTransition {
                 from: None,
@@ -331,53 +334,53 @@ fn start_screen_animations(
     kind: ScreenKind,
     ids: &ScreenIds,
     animator: &mut WidgetAnimator<32, 32>,
+    gui: &GuiContext<'static, 256, 128, 64>,
 ) {
-    match kind {
-        ScreenKind::Controls => {
-            if let Some(progress) = ids.progress {
-                let _ = animator.ping_pong_progress(progress, 0.15, 0.95, 1600, Easing::InOutSine);
-            }
-            if let Some(tabs) = ids.tabs {
-                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2400, Easing::Linear)
-                    .with_repeat_mode(RepeatMode::Loop)
-                    .with_repeat_count(None);
-                let _ = animator.bind_property(tabs, AnimatedProperty::TabSelected, animation);
-            }
-        }
-        ScreenKind::Lists => {
-            if let Some(dropdown) = ids.dropdown {
-                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2600, Easing::Linear)
-                    .with_repeat_mode(RepeatMode::Loop)
-                    .with_repeat_count(None);
-                let _ =
-                    animator.bind_property(dropdown, AnimatedProperty::DropdownSelected, animation);
-            }
-            if let Some(roller) = ids.roller {
-                let animation = Animation::new(0.0, (ITEMS.len() - 1) as f32, 2800, Easing::Linear)
-                    .with_repeat_mode(RepeatMode::Loop)
-                    .with_repeat_count(None);
-                let _ = animator.bind_property(roller, AnimatedProperty::RollerSelected, animation);
-            }
-        }
-        ScreenKind::Data => {
-            let animation = Animation::new(2.0, 9.0, 1600, Easing::InOutSine)
-                .with_repeat_mode(RepeatMode::PingPong)
-                .with_repeat_count(None);
-            if let Some(gauge) = ids.gauge {
-                let _ = animator.bind_property(gauge, AnimatedProperty::GaugeValue, animation);
-            }
-            let arc_animation = Animation::new(2.0, 9.0, 1900, Easing::InOutSine)
-                .with_repeat_mode(RepeatMode::PingPong)
-                .with_repeat_count(None);
-            if let Some(arc_gauge) = ids.arc_gauge {
-                let _ =
-                    animator.bind_property(arc_gauge, AnimatedProperty::GaugeValue, arc_animation);
-            }
-        }
-        ScreenKind::Text => {}
-        ScreenKind::Motion => {}
-        ScreenKind::Overlays => {}
+    // Studio-style entrance: primary card rises in, secondary flies in from
+    // the left, tertiary zooms in.
+    if let Some(id) = ids.motion_a
+        && let Some(rect) = gui.absolute_rect(id)
+    {
+        let _ = animator.preset_fade_in_up(id, rect.y + 14, rect.y, 380);
     }
+    if let Some(id) = ids.motion_b
+        && let Some(rect) = gui.absolute_rect(id)
+    {
+        let _ = animator.animate_widget_x(id, rect.x - 18, rect.x, 420, Easing::OutCubic);
+    }
+    if let Some(id) = ids.motion_c
+        && let Some(rect) = gui.absolute_rect(id)
+    {
+        let _ = animator.animate_widget_width(id, 0, rect.w, 360, Easing::OutBack);
+        let _ = animator.animate_widget_height(id, 0, rect.h, 360, Easing::OutBack);
+    }
+
+    // Continuous studio-style idle loops after the entrances settle.
+    if let Some(id) = ids.motion_a
+        && let Some(rect) = gui.absolute_rect(id)
+    {
+        let animation = Animation::new(rect.y as f32, (rect.y - 2) as f32, 1500, Easing::InOutSine)
+            .with_repeat_mode(RepeatMode::PingPong)
+            .with_repeat_count(None);
+        let _ = animator.bind_property_with_policy(
+            id,
+            AnimatedProperty::WidgetY,
+            animation,
+            AnimationConflictPolicy::Queue,
+        );
+    }
+    if let Some(id) = ids.motion_b {
+        let _ = animator.pulse_opacity(id, 175, 255, 1250, Easing::InOutSine);
+    }
+    if let Some(id) = ids.motion_c {
+        let animation = Animation::new(0.0, 5.0, 1400, Easing::InOutSine)
+            .with_repeat_mode(RepeatMode::PingPong)
+            .with_repeat_count(None);
+        let _ = animator.bind_property(id, AnimatedProperty::CornerRadius, animation);
+    }
+
+    // Keep the existing data-driven motion from the direct phase clock too.
+    let _ = kind;
 }
 
 #[wasm_bindgen(start)]
@@ -649,6 +652,9 @@ fn add_controls(
         carousel: None,
         state_surface: None,
         heads_up: None,
+        motion_a: Some(button),
+        motion_b: Some(progress),
+        motion_c: Some(tabs),
     }
 }
 
@@ -664,10 +670,10 @@ fn add_lists(
     )
     .unwrap();
 
-    let _menu = gui
+    let menu = gui
         .add_menu(Rect::new(12, 42, 140, 82), &ITEMS, 0, Style::panel())
         .unwrap();
-    let _list = gui
+    let list = gui
         .add_list(Rect::new(168, 42, 140, 82), &ITEMS, 0, 5, Style::panel())
         .unwrap();
     let dropdown = gui
@@ -694,6 +700,9 @@ fn add_lists(
         carousel: None,
         state_surface: None,
         heads_up: None,
+        motion_a: Some(menu),
+        motion_b: Some(list),
+        motion_c: Some(roller),
     }
 }
 
@@ -709,7 +718,7 @@ fn add_data(
     )
     .unwrap();
 
-    let _chart = gui
+    let chart = gui
         .add_chart(
             Rect::new(12, 42, 296, 44),
             &VALUES,
@@ -718,7 +727,7 @@ fn add_data(
             Style::panel(),
         )
         .unwrap();
-    let _plotter = gui
+    let plotter = gui
         .add_plotter(
             Rect::new(12, 92, 296, 36),
             &VALUES,
@@ -762,6 +771,9 @@ fn add_data(
         carousel: None,
         state_surface: None,
         heads_up: None,
+        motion_a: Some(chart),
+        motion_b: Some(plotter),
+        motion_c: Some(gauge),
     }
 }
 
@@ -777,7 +789,7 @@ fn add_text(
     )
     .unwrap();
 
-    let _textarea = gui
+    let textarea = gui
         .add_textarea(
             Rect::new(12, 38, 296, 42),
             "Edit me",
@@ -785,10 +797,10 @@ fn add_text(
             Style::panel(),
         )
         .unwrap();
-    let _table = gui
+    let table = gui
         .add_table(Rect::new(12, 88, 296, 56), &ROWS, Style::panel())
         .unwrap();
-    let _keyboard = gui
+    let keyboard = gui
         .add_keyboard(Rect::new(12, 152, 296, 50), &KEYS, 6, None, Style::button())
         .unwrap();
 
@@ -809,6 +821,9 @@ fn add_text(
         carousel: None,
         state_surface: None,
         heads_up: None,
+        motion_a: Some(textarea),
+        motion_b: Some(table),
+        motion_c: Some(keyboard),
     }
 }
 
@@ -837,7 +852,7 @@ fn add_motion(
             Style::panel(),
         )
         .unwrap();
-    let _card_deck = gui
+    let card_deck = gui
         .add_card_deck(Rect::new(12, 114, 296, 54), &TITLES, 0, Style::panel())
         .unwrap();
     add_motion_hint(gui);
@@ -859,6 +874,9 @@ fn add_motion(
         carousel: Some(carousel),
         state_surface: None,
         heads_up: None,
+        motion_a: Some(carousel),
+        motion_b: Some(card_deck),
+        motion_c: None,
     }
 }
 
@@ -902,7 +920,7 @@ fn add_overlays(
             Style::panel(),
         )
         .unwrap();
-    let _sheet = gui
+    let sheet = gui
         .add_notification_action_sheet(
             Rect::new(12, 132, 296, 64),
             NotificationLevel::Info,
@@ -932,5 +950,8 @@ fn add_overlays(
         carousel: None,
         state_surface: Some(state_surface),
         heads_up: Some(heads_up),
+        motion_a: Some(state_surface),
+        motion_b: Some(heads_up),
+        motion_c: Some(sheet),
     }
 }
