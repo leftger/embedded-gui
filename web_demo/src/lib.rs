@@ -22,7 +22,7 @@ use web_sys::{HtmlCanvasElement, KeyboardEvent, PointerEvent};
 
 const W: u32 = 320;
 const H: u32 = 240;
-const SCREEN_COUNT: usize = 5;
+const SCREEN_COUNT: usize = 6;
 const TRANSITION_MS: u32 = 420;
 
 static ITEMS: [&str; 5] = ["HOME", "MEDIA", "MAPS", "SETTINGS", "POWER"];
@@ -32,7 +32,6 @@ static KEYS: [char; 12] = ['1', '2', '3', '4', 'A', 'B', 'C', 'D', 'E', 'F', 'G'
 static VALUES: [f32; 8] = [1.0, 2.0, 4.0, 3.0, 5.0, 8.0, 6.0, 7.0];
 static TITLES: [&str; 3] = ["Card 1", "Card 2", "Card 3"];
 static ACTIONS: [&str; 2] = ["OK", "Cancel"];
-static SUGGESTIONS: [&str; 2] = ["alpha", "beta"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ScreenKind {
@@ -41,6 +40,7 @@ enum ScreenKind {
     Data,
     Text,
     Motion,
+    Overlays,
 }
 
 impl ScreenKind {
@@ -50,6 +50,7 @@ impl ScreenKind {
         ScreenKind::Data,
         ScreenKind::Text,
         ScreenKind::Motion,
+        ScreenKind::Overlays,
     ];
 
     fn from_index(index: usize) -> Self {
@@ -66,7 +67,8 @@ impl ScreenKind {
             ScreenKind::Lists => "LISTS & MENUS",
             ScreenKind::Data => "DATA & GAUGES",
             ScreenKind::Text => "TEXT & INPUT",
-            ScreenKind::Motion => "MOTION & OVERLAYS",
+            ScreenKind::Motion => "MOTION",
+            ScreenKind::Overlays => "OVERLAYS & FEEDBACK",
         }
     }
 }
@@ -79,7 +81,6 @@ struct ScreenIds {
     slider: Option<WidgetId>,
     clicks_label: Option<WidgetId>,
     slider_label: Option<WidgetId>,
-    spinner: Option<WidgetId>,
     progress: Option<WidgetId>,
     tabs: Option<WidgetId>,
     dropdown: Option<WidgetId>,
@@ -288,22 +289,19 @@ impl App {
                     let _ = self.gui.set_gauge_value(arc_gauge, value);
                 }
             }
-            ScreenKind::Text => {
-                if let Some(spinner) = self.ids.spinner {
-                    let value = (phase * 0.0015).fract();
-                    let _ = self.gui.set_spinner_phase(spinner, value);
+            ScreenKind::Text => {}
+            ScreenKind::Motion => {
+                if let Some(carousel) = self.ids.carousel {
+                    let shift = ((phase * 0.006).sin() * 7.0) as i16;
+                    let _ = self.gui.set_carousel_shift(carousel, shift);
                 }
             }
-            ScreenKind::Motion => {
+            ScreenKind::Overlays => {
                 if let Some(state) = self.ids.state_surface {
                     let _ = self.gui.tick_state_surface(state, dt_ms, 1.0);
                 }
                 if let Some(heads_up) = self.ids.heads_up {
                     let _ = self.gui.tick_heads_up(heads_up, dt_ms);
-                }
-                if let Some(carousel) = self.ids.carousel {
-                    let shift = ((phase * 0.006).sin() * 7.0) as i16;
-                    let _ = self.gui.set_carousel_shift(carousel, shift);
                 }
             }
         }
@@ -376,15 +374,9 @@ fn start_screen_animations(
                     animator.bind_property(arc_gauge, AnimatedProperty::GaugeValue, arc_animation);
             }
         }
-        ScreenKind::Text => {
-            if let Some(spinner) = ids.spinner {
-                let animation = Animation::new(0.0, 6.0, 1400, Easing::Linear)
-                    .with_repeat_mode(RepeatMode::Loop)
-                    .with_repeat_count(None);
-                let _ = animator.bind_property(spinner, AnimatedProperty::SpinnerPhase, animation);
-            }
-        }
+        ScreenKind::Text => {}
         ScreenKind::Motion => {}
+        ScreenKind::Overlays => {}
     }
 }
 
@@ -558,6 +550,7 @@ fn build_screen(kind: ScreenKind) -> (GuiContext<'static, 256, 128, 64>, ScreenI
         ScreenKind::Data => add_data(&mut gui, prev, next),
         ScreenKind::Text => add_text(&mut gui, prev, next),
         ScreenKind::Motion => add_motion(&mut gui, prev, next),
+        ScreenKind::Overlays => add_overlays(&mut gui, prev, next),
     };
     (gui, ids)
 }
@@ -647,7 +640,6 @@ fn add_controls(
         slider: Some(slider),
         clicks_label: Some(clicks_label),
         slider_label: Some(slider_label),
-        spinner: None,
         progress: Some(progress),
         tabs: Some(tabs),
         dropdown: None,
@@ -693,7 +685,6 @@ fn add_lists(
         slider: None,
         clicks_label: None,
         slider_label: None,
-        spinner: None,
         progress: None,
         tabs: None,
         dropdown: Some(dropdown),
@@ -762,7 +753,6 @@ fn add_data(
         slider: None,
         clicks_label: None,
         slider_label: None,
-        spinner: None,
         progress: None,
         tabs: None,
         dropdown: None,
@@ -782,33 +772,24 @@ fn add_text(
 ) -> ScreenIds {
     gui.add_label(
         Rect::new(12, 28, 296, 10),
-        "TEXTAREA / KEYBOARD / TABLE",
+        "TEXTAREA / TABLE / KEYBOARD",
         Style::label(),
     )
     .unwrap();
 
     let _textarea = gui
         .add_textarea(
-            Rect::new(12, 42, 140, 40),
+            Rect::new(12, 38, 296, 42),
             "Edit me",
             "placeholder",
             Style::panel(),
         )
         .unwrap();
-    let _autocomplete = gui
-        .add_autocomplete_widget(Rect::new(168, 42, 140, 40), &SUGGESTIONS, Style::panel())
-        .unwrap();
     let _table = gui
-        .add_table(Rect::new(12, 90, 140, 52), &ROWS, Style::panel())
+        .add_table(Rect::new(12, 88, 296, 56), &ROWS, Style::panel())
         .unwrap();
     let _keyboard = gui
-        .add_keyboard(Rect::new(168, 90, 140, 66), &KEYS, 5, None, Style::panel())
-        .unwrap();
-    let _spinbox = gui
-        .add_spinbox(Rect::new(12, 152, 140, 22), 0, 99, 42, Style::panel())
-        .unwrap();
-    let spinner = gui
-        .add_spinner(Rect::new(168, 164, 140, 24), 0.0, Style::panel())
+        .add_keyboard(Rect::new(12, 152, 296, 50), &KEYS, 6, None, Style::button())
         .unwrap();
 
     ScreenIds {
@@ -819,7 +800,6 @@ fn add_text(
         slider: None,
         clicks_label: None,
         slider_label: None,
-        spinner: Some(spinner),
         progress: None,
         tabs: None,
         dropdown: None,
@@ -839,36 +819,83 @@ fn add_motion(
 ) -> ScreenIds {
     gui.add_label(
         Rect::new(12, 28, 296, 10),
-        "CAROUSEL / CARD DECK / OVERLAYS",
+        "CAROUSEL / CARD DECK",
         Style::label(),
     )
     .unwrap();
 
     let carousel = gui
         .add_carousel(
-            Rect::new(12, 42, 296, 60),
+            Rect::new(12, 38, 296, 66),
             &CAROUSEL_ITEMS,
             2,
-            CarouselSpec::new(12, 5),
+            CarouselSpec {
+                fade_edges: false,
+                indicator: true,
+                ..CarouselSpec::new(12, 5)
+            },
             Style::panel(),
         )
         .unwrap();
     let _card_deck = gui
-        .add_card_deck(Rect::new(12, 108, 296, 36), &TITLES, 0, Style::panel())
+        .add_card_deck(Rect::new(12, 114, 296, 54), &TITLES, 0, Style::panel())
         .unwrap();
+    add_motion_hint(gui);
+
+    ScreenIds {
+        prev,
+        next,
+        button: None,
+        toggle: None,
+        slider: None,
+        clicks_label: None,
+        slider_label: None,
+        progress: None,
+        tabs: None,
+        dropdown: None,
+        roller: None,
+        gauge: None,
+        arc_gauge: None,
+        carousel: Some(carousel),
+        state_surface: None,
+        heads_up: None,
+    }
+}
+
+fn add_motion_hint(gui: &mut GuiContext<'static, 256, 128, 64>) {
+    gui.add_label(
+        Rect::new(12, 182, 296, 10),
+        "CAROUSEL DRIFTS WHILE THE DECK CYCLES",
+        Style::label(),
+    )
+    .unwrap();
+}
+
+fn add_overlays(
+    gui: &mut GuiContext<'static, 256, 128, 64>,
+    prev: WidgetId,
+    next: WidgetId,
+) -> ScreenIds {
+    gui.add_label(
+        Rect::new(12, 28, 296, 10),
+        "STATE / NOTIFICATION / HEADS-UP",
+        Style::label(),
+    )
+    .unwrap();
+
     let state_surface = gui
         .add_state_surface(
-            Rect::new(12, 152, 140, 50),
-            SurfaceState::Loading,
-            "STATE",
-            "Loading...",
-            None,
+            Rect::new(12, 38, 296, 52),
+            SurfaceState::Error,
+            "SYNC",
+            "Could not load",
+            Some("Retry"),
             Style::panel(),
         )
         .unwrap();
     let heads_up = gui
         .add_heads_up_banner(
-            Rect::new(168, 152, 140, 20),
+            Rect::new(12, 98, 296, 26),
             NotificationLevel::Warning,
             "HEADS UP",
             60_000,
@@ -877,13 +904,13 @@ fn add_motion(
         .unwrap();
     let _sheet = gui
         .add_notification_action_sheet(
-            Rect::new(168, 178, 140, 24),
+            Rect::new(12, 132, 296, 64),
             NotificationLevel::Info,
-            "NOTIFY",
+            "NOTIFICATION",
             "Body",
             &ACTIONS,
             0,
-            false,
+            true,
             Style::panel(),
         )
         .unwrap();
@@ -896,14 +923,13 @@ fn add_motion(
         slider: None,
         clicks_label: None,
         slider_label: None,
-        spinner: None,
         progress: None,
         tabs: None,
         dropdown: None,
         roller: None,
         gauge: None,
         arc_gauge: None,
-        carousel: Some(carousel),
+        carousel: None,
         state_surface: Some(state_surface),
         heads_up: Some(heads_up),
     }
