@@ -1,0 +1,44 @@
+name: Deploy Web Demo to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & deploy interactive web demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Build WebAssembly demo
+        working-directory: web_demo
+        run: wasm-pack build --target web --release
+
+      - name: Stage static site
+        run: |
+          mkdir -p .pages
+          cp web_demo/index.html .pages/index.html
+          cp -r web_demo/pkg .pages/pkg
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .pages
+          branch: gh-pages
+          clean: true

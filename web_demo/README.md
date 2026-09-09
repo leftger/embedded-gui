@@ -4,6 +4,8 @@ A browser demo that renders an `embedded-gui` screen into an HTML canvas with
 the same retained widget tree, RGB565 renderer, and input contract used by
 firmware targets.
 
+**Live demo:** <https://leftger.github.io/embedded-gui/>
+
 Community context: LVGL users noted that a great way to iterate on an
 embedded UI is to run the same UI in a browser (WASM/emscripten) rather than
 deploying to the board on every change. This crate is the `embedded-gui`
