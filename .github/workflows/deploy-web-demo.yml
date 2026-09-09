@@ -35,6 +35,9 @@ jobs:
           mkdir -p .pages
           cp web_demo/index.html .pages/index.html
           cp -r web_demo/pkg .pages/pkg
+          # wasm-pack emits a .gitignore inside pkg/; remove it so the deploy
+          # action commits the actual .wasm/.js files to the gh-pages branch.
+          rm -f .pages/.gitignore .pages/pkg/.gitignore
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
