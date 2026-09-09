@@ -135,14 +135,14 @@ function __wbg_get_imports() {
             const ret = new Error();
             return ret;
         },
-        __wbg_new_ffa92086ea89f79c: function() {
-            const ret = new Array();
-            return ret;
-        },
         __wbg_new_with_u8_clamped_array_f1c882bcbd9b7625: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = new ImageData(getClampedArrayU8FromWasm0(arg0, arg1), arg2 >>> 0);
             return ret;
         }, arguments); },
+        __wbg_now_d1fb6650485d7f3e: function() {
+            const ret = Date.now();
+            return ret;
+        },
         __wbg_preventDefault_4235a4ccf8540533: function(arg0) {
             arg0.preventDefault();
         },
@@ -153,8 +153,8 @@ function __wbg_get_imports() {
             const ret = arg0.querySelector(getStringFromWasm0(arg1, arg2));
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         }, arguments); },
-        __wbg_setInterval_0174444fb6143cff: function() { return handleError(function (arg0, arg1, arg2, arg3) {
-            const ret = arg0.setInterval(arg1, arg2, ...(arg3));
+        __wbg_requestAnimationFrame_4988887658fcee2e: function() { return handleError(function (arg0, arg1) {
+            const ret = arg0.requestAnimationFrame(arg1);
             return ret;
         }, arguments); },
         __wbg_set_height_698fb3b255bc1348: function(arg0, arg1) {

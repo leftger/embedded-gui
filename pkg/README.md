@@ -59,7 +59,8 @@ wipe, circular reveal, fade, and zoom**.
 
 While a screen is visible, its in-widget motion runs continuously: progress
 bars breathe, gauges sweep, tabs/rollers/dropdowns auto-cycle, carousels drift,
-and the state-surface/heads-up widgets animate on their own timelines.
+and the state-surface/heads-up widgets animate on their own timelines. If no
+input is received for a few seconds the demo auto-advances to the next screen.
 
 ## Interactive input
 
