@@ -789,26 +789,26 @@ fn add_text(
 
     let _textarea = gui
         .add_textarea(
-            Rect::new(12, 42, 140, 48),
+            Rect::new(12, 42, 140, 40),
             "Edit me",
             "placeholder",
             Style::panel(),
         )
         .unwrap();
-    let _keyboard = gui
-        .add_keyboard(Rect::new(168, 42, 140, 72), &KEYS, 5, None, Style::panel())
+    let _autocomplete = gui
+        .add_autocomplete_widget(Rect::new(168, 42, 140, 40), &SUGGESTIONS, Style::panel())
         .unwrap();
     let _table = gui
-        .add_table(Rect::new(12, 100, 160, 56), &ROWS, Style::panel())
+        .add_table(Rect::new(12, 90, 140, 52), &ROWS, Style::panel())
         .unwrap();
-    let _autocomplete = gui
-        .add_autocomplete_widget(Rect::new(184, 100, 124, 48), &SUGGESTIONS, Style::panel())
+    let _keyboard = gui
+        .add_keyboard(Rect::new(168, 90, 140, 66), &KEYS, 5, None, Style::panel())
         .unwrap();
     let _spinbox = gui
-        .add_spinbox(Rect::new(12, 164, 140, 22), 0, 99, 42, Style::panel())
+        .add_spinbox(Rect::new(12, 152, 140, 22), 0, 99, 42, Style::panel())
         .unwrap();
     let spinner = gui
-        .add_spinner(Rect::new(184, 164, 124, 22), 0.0, Style::panel())
+        .add_spinner(Rect::new(168, 164, 140, 24), 0.0, Style::panel())
         .unwrap();
 
     ScreenIds {
@@ -846,7 +846,7 @@ fn add_motion(
 
     let carousel = gui
         .add_carousel(
-            Rect::new(12, 42, 296, 62),
+            Rect::new(12, 42, 296, 60),
             &CAROUSEL_ITEMS,
             2,
             CarouselSpec::new(12, 5),
@@ -854,11 +854,11 @@ fn add_motion(
         )
         .unwrap();
     let _card_deck = gui
-        .add_card_deck(Rect::new(12, 112, 296, 38), &TITLES, 0, Style::panel())
+        .add_card_deck(Rect::new(12, 108, 296, 36), &TITLES, 0, Style::panel())
         .unwrap();
     let state_surface = gui
         .add_state_surface(
-            Rect::new(12, 156, 160, 48),
+            Rect::new(12, 152, 140, 50),
             SurfaceState::Loading,
             "STATE",
             "Loading...",
@@ -868,7 +868,7 @@ fn add_motion(
         .unwrap();
     let heads_up = gui
         .add_heads_up_banner(
-            Rect::new(184, 158, 124, 20),
+            Rect::new(168, 152, 140, 20),
             NotificationLevel::Warning,
             "HEADS UP",
             60_000,
@@ -877,7 +877,7 @@ fn add_motion(
         .unwrap();
     let _sheet = gui
         .add_notification_action_sheet(
-            Rect::new(184, 182, 124, 24),
+            Rect::new(168, 178, 140, 24),
             NotificationLevel::Info,
             "NOTIFY",
             "Body",
