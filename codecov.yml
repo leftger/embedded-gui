@@ -1,17 +1,12 @@
+# Score only the core embedded-gui crate. Sibling crates (live, studio, …)
+# and non-library trees are excluded from Codecov.
 ignore:
-  - "embedded-gui-studio/**"
-  - "crates/embedded-gui-studio/**"
-  - "**/embedded-gui-studio/**"
+  - "crates/embedded-gui-*/**"
   - "size_harness/**"
-  - "**/size_harness/**"
   - "examples/**"
-  - "**/examples/**"
   - "assets/**"
-  - "**/assets/**"
   - "docs/**"
-  - "**/docs/**"
   - "figma-plugin/**"
-  - "**/figma-plugin/**"
 
 coverage:
   status:
@@ -19,7 +14,11 @@ coverage:
       default:
         target: auto
         threshold: 1%
+        paths:
+          - crates/embedded-gui
     patch:
       default:
         target: 60%
         threshold: 1%
+        paths:
+          - crates/embedded-gui
