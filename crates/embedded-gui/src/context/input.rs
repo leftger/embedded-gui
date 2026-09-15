@@ -324,13 +324,19 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         if let Some(mut inertia) = self.inertia_scroll {
             if inertia.velocity.abs() < self.scroll_physics.velocity_threshold {
                 self.inertia_scroll = None;
+                self.maybe_start_scroll_spring_back(inertia.id);
             } else {
                 let current = self.scroll_offset(inertia.id).unwrap_or(0);
                 let delta = (inertia.velocity * (dt_ms as f32 / 16.0)).round() as i32;
                 if delta != 0 {
-                    let next = current.saturating_sub(delta);
+                    let next = if self.scroll_physics.rubber_band {
+                        self.scroll_by_rubber_band(inertia.id, -delta)?
+                    } else {
+                        let target = current.saturating_sub(delta);
+                        self.set_scroll_offset(inertia.id, target)?;
+                        self.scroll_offset(inertia.id).unwrap_or(current)
+                    };
                     if next != current {
-                        self.set_scroll_offset(inertia.id, next)?;
                         self.push_event(UiEvent::Scroll {
                             id: inertia.id,
                             delta: next - current,
@@ -343,6 +349,27 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     .powf((dt_ms as f32 / 16.0).max(1.0));
                 self.inertia_scroll = Some(inertia);
             }
+        }
+        #[cfg(feature = "rich-widgets")]
+        if let Some(mut back) = self.scroll_spring_back {
+            let current = self
+                .scroll_offset(back.id)
+                .unwrap_or(back.spring.value as i32);
+            let value = back.spring.tick(dt_ms);
+            let done = back.spring.is_done();
+            let next = if done {
+                back.spring.target as i32
+            } else {
+                value.round() as i32
+            };
+            if next != current {
+                self.set_scroll_offset_raw(back.id, next)?;
+                self.push_event(UiEvent::Scroll {
+                    id: back.id,
+                    delta: next - current,
+                })?;
+            }
+            self.scroll_spring_back = if done { None } else { Some(back) };
         }
         #[cfg(feature = "rich-widgets")]
         self.tick_textarea_cursor_blink(dt_ms)?;
@@ -1272,6 +1299,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                 scroll_velocity: 0.0,
             });
             self.inertia_scroll = None;
+            #[cfg(feature = "rich-widgets")]
+            {
+                self.scroll_spring_back = None;
+            }
         }
         Ok(())
     }
@@ -1280,7 +1311,10 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let mut released_id = None;
         if let Some(pressed) = self.pressed {
             if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
-                if pressed.scroll_velocity.abs() > self.scroll_physics.velocity_threshold {
+                let started_spring_back = self.maybe_start_scroll_spring_back(scroll_id);
+                if !started_spring_back
+                    && pressed.scroll_velocity.abs() > self.scroll_physics.velocity_threshold
+                {
                     self.inertia_scroll = Some(InertiaScroll {
                         id: scroll_id,
                         velocity: pressed.scroll_velocity,
@@ -1343,9 +1377,14 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         #[cfg(feature = "rich-widgets")]
         if let Some(scroll_id) = self.scrollable_ancestor(pressed.id) {
             let current = self.scroll_offset(scroll_id).unwrap_or(0);
-            let next = current.saturating_sub(dy);
+            let next = if self.scroll_physics.rubber_band {
+                self.scroll_by_rubber_band(scroll_id, -dy)?
+            } else {
+                let target = current.saturating_sub(dy);
+                self.set_scroll_offset(scroll_id, target)?;
+                self.scroll_offset(scroll_id).unwrap_or(current)
+            };
             if next != current {
-                self.set_scroll_offset(scroll_id, next)?;
                 self.push_event(UiEvent::Scroll {
                     id: scroll_id,
                     delta: next - current,
@@ -1485,6 +1524,47 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             depth += 1;
         }
         None
+    }
+
+    /// If `id`'s `ScrollView` is overscrolled and `scroll_physics.rubber_band`
+    /// is enabled, starts a spring-back animation to the nearest boundary
+    /// (see `crate::motion::SpringAnimator::rubber_band_snap_back`) and
+    /// returns `true`. Otherwise leaves any existing scroll state alone and
+    /// returns `false`.
+    #[cfg(feature = "rich-widgets")]
+    pub(crate) fn maybe_start_scroll_spring_back(&mut self, id: WidgetId) -> bool {
+        if !self.scroll_physics.rubber_band {
+            return false;
+        }
+        let Some(node) = self.node(id) else {
+            return false;
+        };
+        let WidgetKind::ScrollView {
+            offset_y,
+            content_h,
+        } = node.kind
+        else {
+            return false;
+        };
+        let state = ScrollState::new(offset_y, content_h);
+        if !state.is_overscrolled() {
+            return false;
+        }
+        self.scroll_spring_back = Some(ScrollSpringBack {
+            id,
+            spring: crate::motion::SpringAnimator::rubber_band_snap_back(
+                offset_y as f32,
+                state.nearest_bound() as f32,
+            ),
+        });
+        true
+    }
+
+    /// Stub for the `rich-widgets`-off build: ScrollView doesn't exist, so
+    /// nothing is ever overscrolled.
+    #[cfg(not(feature = "rich-widgets"))]
+    pub(crate) fn maybe_start_scroll_spring_back(&mut self, _id: WidgetId) -> bool {
+        false
     }
 
     pub(crate) fn mark_focus_pair(

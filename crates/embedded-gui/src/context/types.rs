@@ -43,11 +43,26 @@ pub(crate) struct InertiaScroll {
     pub(crate) velocity: f32,
 }
 
+/// An in-progress rubber-band snap-back: `id`'s `ScrollView` offset is
+/// overscrolled and animating back to `crate::state::ScrollState::nearest_bound`
+/// via `spring` (see `crate::motion::SpringAnimator::rubber_band_snap_back`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ScrollSpringBack {
+    pub(crate) id: WidgetId,
+    pub(crate) spring: crate::motion::SpringAnimator,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollPhysics {
     pub velocity_threshold: f32,
     pub velocity_decay: f32,
     pub drag_velocity_blend: f32,
+    /// When `true`, dragging/flinging a `ScrollView` past `[0, content_h]`
+    /// rubber-bands with quadratic resistance instead of hard-clamping, and
+    /// snaps back to the boundary with a spring on release — after Flutter's
+    /// `BouncingScrollPhysics`. Defaults to `false` (today's hard-clamp
+    /// behavior, matching `ClampingScrollPhysics`).
+    pub rubber_band: bool,
 }
 
 impl Default for ScrollPhysics {
@@ -56,6 +71,7 @@ impl Default for ScrollPhysics {
             velocity_threshold: 0.05,
             velocity_decay: 0.86,
             drag_velocity_blend: 0.4,
+            rubber_band: false,
         }
     }
 }
@@ -153,6 +169,7 @@ pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: 
     pub(crate) last_pointer_id: Option<WidgetId>,
     pub(crate) pressed: Option<PressTracker>,
     pub(crate) inertia_scroll: Option<InertiaScroll>,
+    pub(crate) scroll_spring_back: Option<ScrollSpringBack>,
     pub(crate) scroll_physics: ScrollPhysics,
     pub(crate) state_transition_ms: u32,
     pub(crate) state_transitions: Vec<StateTransition, NODES>,

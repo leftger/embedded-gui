@@ -925,6 +925,37 @@ impl SpringAnimator {
         (self.value - self.target).abs() <= distance_tolerance
             && self.velocity.abs() <= velocity_tolerance
     }
+
+    /// The spring iOS/Flutter's `BouncingScrollPhysics` uses to snap an
+    /// overscrolled, stationary scroll view back to its boundary: an
+    /// intentionally overdamped spring (roots `r1 = -lambda`,
+    /// `r2 = -100000 * lambda`, `lambda = ln(2) / 0.07`) tuned so the
+    /// far-negative root decays away almost instantly, collapsing the
+    /// visible motion to a clean exponential with a ~0.07s half-life
+    /// instead of a bouncy spring feel. See
+    /// `crate::state::ScrollState::scroll_by_rubber_band`.
+    pub fn rubber_band_snap_back(value: f32, target: f32) -> Self {
+        const HALF_LIFE_S: f32 = 0.07;
+        let lambda = core::f32::consts::LN_2 / HALF_LIFE_S;
+        Self {
+            value,
+            velocity: 0.0,
+            target,
+            stiffness: 1.0e5 * lambda * lambda,
+            damping: (1.0e5 + 1.0) * lambda,
+        }
+    }
+}
+
+/// Quadratic rubber-band friction factor (iOS/Flutter `BouncingScrollPhysics`,
+/// `ScrollDecelerationRate.normal`): as `overscroll_fraction` (in `0.0..=1.0`,
+/// how far past the edge relative to the viewport) grows, this shrinks
+/// toward `0.0`, so further drag delta is scaled down quadratically instead
+/// of being hard-clamped — the first pixels of overscroll move almost with
+/// the finger, and it gets progressively harder to push further.
+pub fn rubber_band_friction_factor(overscroll_fraction: f32) -> f32 {
+    let f = overscroll_fraction.clamp(0.0, 1.0);
+    (1.0 - f) * (1.0 - f) * 0.52
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1266,6 +1297,44 @@ mod tests {
             }
             assert!(spring.is_done_with_tolerance(1e-2, 1e-2));
         }
+    }
+
+    #[test]
+    fn rubber_band_friction_factor_shrinks_toward_zero_as_overscroll_grows() {
+        let none = rubber_band_friction_factor(0.0);
+        let some = rubber_band_friction_factor(0.5);
+        let full = rubber_band_friction_factor(1.0);
+        assert!((none - 0.52).abs() < 1e-6);
+        assert!(some > 0.0 && some < none);
+        assert!(full.abs() < 1e-6);
+        // Out-of-range fractions are clamped, not negative/blown-up.
+        assert_eq!(rubber_band_friction_factor(-1.0), none);
+        assert_eq!(rubber_band_friction_factor(2.0), full);
+    }
+
+    #[test]
+    fn rubber_band_snap_back_is_overdamped_and_settles_without_overshoot() {
+        let mut spring = SpringAnimator::rubber_band_snap_back(-20.0, 0.0);
+        // Deliberately overdamped: damping^2 must dwarf 4*stiffness.
+        assert!(spring.damping * spring.damping > 4.0 * spring.stiffness);
+
+        let mut last = spring.value;
+        for _ in 0..200 {
+            let v = spring.tick(16);
+            assert!(v.is_finite());
+            // Monotonic approach to the target: an overdamped/critical
+            // spring never overshoots or oscillates past it.
+            assert!(
+                v >= last && v <= 0.0,
+                "overshot or reversed: {v} after {last}"
+            );
+            last = v;
+            if spring.is_done() {
+                break;
+            }
+        }
+        assert!(spring.is_done(), "must settle at the boundary");
+        assert!((spring.value - 0.0).abs() <= SPRING_TOLERANCE_DISTANCE);
     }
 
     #[test]

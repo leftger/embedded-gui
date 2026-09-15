@@ -43,6 +43,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             last_pointer_id: None,
             pressed: None,
             inertia_scroll: None,
+            scroll_spring_back: None,
             scroll_physics: ScrollPhysics::default(),
             state_transition_ms: 0,
             state_transitions: Vec::new(),
@@ -79,6 +80,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.focus = None;
         self.pressed = None;
         self.inertia_scroll = None;
+        self.scroll_spring_back = None;
         self.last_select_id = None;
         self.select_elapsed_ms = 0;
         self.last_pointer_id = None;
@@ -259,6 +261,12 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.scroll_physics.velocity_threshold = velocity_threshold.max(0.001);
         self.scroll_physics.velocity_decay = velocity_decay.clamp(0.01, 0.999);
         self.scroll_physics.drag_velocity_blend = drag_velocity_blend.clamp(0.01, 1.0);
+    }
+
+    /// Enables/disables iOS/Flutter-style rubber-band overscroll (see
+    /// [`ScrollPhysics::rubber_band`]). Defaults to `false`.
+    pub fn set_scroll_rubber_band(&mut self, enabled: bool) {
+        self.scroll_physics.rubber_band = enabled;
     }
 
     pub fn set_state_transition_duration_ms(&mut self, duration_ms: u32) {

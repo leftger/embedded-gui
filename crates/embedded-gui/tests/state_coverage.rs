@@ -50,6 +50,53 @@ fn list_tabs_scroll_slider_and_feed_state() {
 }
 
 #[test]
+fn scroll_state_rubber_band_resists_overscroll_and_eases_back_at_full_speed() {
+    let mut scroll = ScrollState::new(0, 100);
+    assert!(!scroll.is_overscrolled());
+
+    // Dragging past the top edge: allowed to go negative, but resisted.
+    assert!(scroll.scroll_by_rubber_band(-20, 50));
+    assert!(scroll.offset_y < 0, "must move past the edge");
+    assert!(
+        scroll.offset_y > -20,
+        "quadratic resistance must shrink the raw -20 delta, got {}",
+        scroll.offset_y
+    );
+    assert!(scroll.is_overscrolled());
+    assert_eq!(scroll.nearest_bound(), 0);
+
+    // Pushing further out is resisted harder as overscroll grows.
+    let after_first = scroll.offset_y;
+    scroll.scroll_by_rubber_band(-20, 50);
+    let second_delta = scroll.offset_y - after_first;
+    assert!(
+        second_delta.abs() < 20,
+        "further overscroll must move less than the raw delta, got {second_delta}"
+    );
+
+    // Easing back toward the content (reducing overscroll) is full speed.
+    let before_ease = scroll.offset_y;
+    scroll.scroll_by_rubber_band(5, 50);
+    assert_eq!(scroll.offset_y, before_ease + 5);
+}
+
+#[test]
+fn scroll_state_rubber_band_matches_plain_scroll_when_in_range() {
+    let mut a = ScrollState::new(10, 100);
+    let mut b = ScrollState::new(10, 100);
+    assert_eq!(a.scroll_by(5), b.scroll_by_rubber_band(5, 50));
+    assert_eq!(a.offset_y, b.offset_y);
+}
+
+#[test]
+fn scroll_state_nearest_bound_at_bottom_edge() {
+    let mut scroll = ScrollState::new(100, 100);
+    scroll.scroll_by_rubber_band(30, 50);
+    assert!(scroll.offset_y > 100);
+    assert_eq!(scroll.nearest_bound(), 100);
+}
+
+#[test]
 fn signal_callback_and_state_machine() {
     let mut signal = Signal::<u32, 4>::new(0);
     assert_eq!(signal.get(), 0);

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::math::F32Ext as _;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ListState {
     pub selected: usize,
@@ -117,6 +120,73 @@ impl ScrollState {
 
     pub fn scroll_by(&mut self, delta_y: i32) -> bool {
         self.set_offset(self.offset_y.saturating_add(delta_y))
+    }
+
+    /// Whether the current offset is past either edge of `[0, content_h]` —
+    /// a candidate for [`SpringAnimator::rubber_band_snap_back`] once the
+    /// drag/fling driving it ends.
+    pub const fn is_overscrolled(&self) -> bool {
+        self.offset_y < 0 || self.offset_y > self.content_h as i32
+    }
+
+    /// The nearest in-range boundary to snap back to (`self.offset_y` itself
+    /// if already in range).
+    pub const fn nearest_bound(&self) -> i32 {
+        if self.offset_y < 0 {
+            0
+        } else if self.offset_y > self.content_h as i32 {
+            self.content_h as i32
+        } else {
+            self.offset_y
+        }
+    }
+
+    /// Applies `delta_y` with iOS/Flutter-style rubber-band resistance
+    /// (`crate::motion::rubber_band_friction_factor`) once outside
+    /// `[0, content_h]`, instead of [`Self::set_offset`]'s hard clamp.
+    ///
+    /// Motion that pushes further out of range is scaled down quadratically
+    /// as the existing overscroll grows; motion that eases back toward the
+    /// content (or stays fully in range) is applied at full speed. Returns
+    /// whether the offset changed. `viewport_h` is the scroll view's own
+    /// visible height — the distance over which resistance ramps up, same
+    /// as Flutter's `viewportDimension`.
+    pub fn scroll_by_rubber_band(&mut self, delta_y: i32, viewport_h: u32) -> bool {
+        if delta_y == 0 {
+            return false;
+        }
+        let max_offset = self.content_h as i32;
+        let tentative = self.offset_y.saturating_add(delta_y);
+        let next = if (0..=max_offset).contains(&tentative) {
+            tentative
+        } else {
+            let extent_outside = if tentative < 0 {
+                -tentative
+            } else {
+                tentative - max_offset
+            };
+            let already_outside = if self.offset_y < 0 {
+                -self.offset_y
+            } else if self.offset_y > max_offset {
+                self.offset_y - max_offset
+            } else {
+                0
+            };
+            if extent_outside <= already_outside {
+                // Easing back toward the content: full speed, matching
+                // native rubber-band feel (resistance only opposes further
+                // stretch, not the release of it).
+                tentative
+            } else {
+                let fraction = extent_outside as f32 / viewport_h.max(1) as f32;
+                let gamma = crate::motion::rubber_band_friction_factor(fraction);
+                self.offset_y
+                    .saturating_add((delta_y as f32 * gamma).round() as i32)
+            }
+        };
+        let changed = next != self.offset_y;
+        self.offset_y = next;
+        changed
     }
 }
 

@@ -691,6 +691,58 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         }
     }
 
+    /// Writes `offset_y` directly with no clamping at all, unlike
+    /// [`Self::set_scroll_offset`]. Only meant for driving an in-progress
+    /// rubber-band spring-back tick, where intermediate values are expected
+    /// to be outside `[0, content_h]` (that's the overscroll being animated
+    /// away) and the spring is guaranteed to converge to a valid boundary.
+    #[cfg(feature = "rich-widgets")]
+    pub(crate) fn set_scroll_offset_raw(
+        &mut self,
+        id: WidgetId,
+        offset_y: i32,
+    ) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::ScrollView {
+                offset_y: ref mut v,
+                ..
+            } => {
+                *v = offset_y;
+                self.dirty.add(rect)?;
+                Ok(())
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
+    /// Like [`Self::set_scroll_offset`], but applies `delta_y` with
+    /// iOS/Flutter-style rubber-band resistance once outside
+    /// `[0, content_h]` instead of hard-clamping — see
+    /// [`crate::state::ScrollState::scroll_by_rubber_band`]. Returns the
+    /// resulting offset (which may be outside `[0, content_h]`).
+    #[cfg(feature = "rich-widgets")]
+    pub fn scroll_by_rubber_band(&mut self, id: WidgetId, delta_y: i32) -> Result<i32, GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        match node.kind {
+            WidgetKind::ScrollView {
+                offset_y: ref mut v,
+                content_h,
+            } => {
+                let mut state = ScrollState::new(*v, content_h);
+                let changed = state.scroll_by_rubber_band(delta_y, rect.h);
+                *v = state.offset_y;
+                if changed {
+                    self.dirty.add(rect)?;
+                }
+                Ok(state.offset_y)
+            }
+            _ => Err(GuiError::NotFound),
+        }
+    }
+
     #[cfg(feature = "rich-widgets")]
     pub fn scroll_offset(&self, id: WidgetId) -> Option<i32> {
         match self.node(id)?.kind {
