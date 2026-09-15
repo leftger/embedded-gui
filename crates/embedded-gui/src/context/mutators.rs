@@ -1562,7 +1562,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.opacity = opacity;
         node.style.pressed.opacity = opacity;
         node.style.disabled.opacity = opacity;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     pub fn set_widget_corner_radius(&mut self, id: WidgetId, radius: u8) -> Result<(), GuiError> {
@@ -1571,7 +1571,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.corner_radius = radius;
         node.style.pressed.corner_radius = radius;
         node.style.disabled.corner_radius = radius;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     pub fn set_widget_accent(&mut self, id: WidgetId, accent: Rgb565) -> Result<(), GuiError> {
@@ -1580,7 +1580,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.accent = accent;
         node.style.pressed.accent = accent;
         node.style.disabled.accent = accent;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     /// Overrides a widget's ink color, e.g. a `Label`/`Button`'s glyph color
@@ -1594,7 +1594,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.text = color;
         node.style.pressed.text = color;
         node.style.disabled.text = color;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     /// Overrides a widget's `foreground` color, e.g. a `ProgressBar`/`Meter`'s
@@ -1608,7 +1608,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.foreground = color;
         node.style.pressed.foreground = color;
         node.style.disabled.foreground = color;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     /// Overrides a widget's `background` fill (e.g. a `ProgressBar`'s track
@@ -1624,7 +1624,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         node.style.focused.background = background;
         node.style.pressed.background = background;
         node.style.disabled.background = background;
-        self.mark_subtree_dirty(id)
+        self.mark_widget_dirty(id)
     }
 
     pub fn set_widget_parent(
@@ -1873,6 +1873,27 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         for child in child_ids {
             self.mark_subtree_dirty(child)?;
         }
+        Ok(())
+    }
+
+    /// Marks only `id`'s own rect dirty, without recursing into descendants.
+    ///
+    /// `mark_subtree_dirty` walks every descendant unconditionally, which is
+    /// correct when a mutation changes geometry (`set_widget_rect`) or an
+    /// inherited/effective state that descendants read from ancestors at
+    /// render time (e.g. `WidgetFlags::DISABLED`/`HIDDEN`, consulted by
+    /// `effective_enabled`/`effective_visible`). For mutations confined to a
+    /// single node's own `style` fields (opacity, corner radius, accent, text
+    /// color, foreground, background), descendants neither move nor change
+    /// appearance, so recursing only burns CPU walking the tree and consumes
+    /// slots in the fixed-capacity `DirtyTracker` for rects that are already
+    /// contained within `id`'s own rect. This mirrors Flutter's relayout/
+    /// repaint-boundary optimization (`RenderObject.markNeedsLayout`), which
+    /// stops invalidation at the smallest node whose own bounds actually
+    /// changed instead of always re-marking the whole subtree.
+    pub fn mark_widget_dirty(&mut self, id: WidgetId) -> Result<(), GuiError> {
+        let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        self.dirty.add(rect)?;
         Ok(())
     }
 

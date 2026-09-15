@@ -437,6 +437,192 @@ impl ClickRecognizer {
     }
 }
 
+/// Disambiguates competing gesture recognizers sharing one pointer stream
+/// (e.g. tap vs. long-press vs. drag on the same widget), after Flutter's
+/// `GestureArenaManager` (`packages/flutter/lib/src/gestures/arena.dart`).
+///
+/// Unlike Flutter's version, members aren't trait objects notified via
+/// callbacks (`acceptGesture`/`rejectGesture`) — recognizers are plain `u8`
+/// ids supplied by the caller, and the arena only tracks the eventual
+/// winner. Callers poll [`GestureArena::winner`] (or [`GestureArena::accepted`]/
+/// [`GestureArena::rejected`] for a specific id) instead of receiving a
+/// callback, matching this crate's poll-based (`update(dt_ms)`) recognizer
+/// style and avoiding the need for `dyn` dispatch or heap allocation.
+///
+/// Resolution rules (identical to Flutter's arena):
+/// - While open, a member may self-declare victory via [`accept`](Self::accept);
+///   that becomes the "eager winner" but doesn't resolve the arena yet.
+/// - [`close`](Self::close) stops new members from joining and resolves
+///   immediately if only one member remains, or if there's an eager winner.
+/// - [`sweep`](Self::sweep) (called once the pointer is released) picks the
+///   first remaining member as a default winner, unless the arena is
+///   [`hold`](Self::hold)-ing (e.g. a long-press recognizer still deciding),
+///   in which case the sweep is deferred until [`release`](Self::release).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GestureArena<const N: usize> {
+    members: heapless::Vec<u8, N>,
+    is_open: bool,
+    is_held: bool,
+    has_pending_sweep: bool,
+    eager_winner: Option<u8>,
+    winner: Option<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GestureArenaError {
+    /// The arena is already full (`N` members already joined).
+    Full,
+    /// [`GestureArena::add`] was called after [`GestureArena::close`].
+    Closed,
+}
+
+impl<const N: usize> Default for GestureArena<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> GestureArena<N> {
+    pub const fn new() -> Self {
+        Self {
+            members: heapless::Vec::new(),
+            is_open: true,
+            is_held: false,
+            has_pending_sweep: false,
+            eager_winner: None,
+            winner: None,
+        }
+    }
+
+    /// Registers a recognizer while the arena is still open.
+    pub fn add(&mut self, id: u8) -> Result<(), GestureArenaError> {
+        if !self.is_open {
+            return Err(GestureArenaError::Closed);
+        }
+        self.members.push(id).map_err(|_| GestureArenaError::Full)
+    }
+
+    /// Stops accepting new members and resolves immediately if possible
+    /// (single member, or an eager winner already self-declared).
+    pub fn close(&mut self) {
+        if !self.is_open {
+            return;
+        }
+        self.is_open = false;
+        self.try_resolve();
+    }
+
+    /// A member claims victory. While the arena is still open this only
+    /// records `id` as the eager winner (resolution happens at [`close`](Self::close));
+    /// once closed, it resolves the arena in `id`'s favor immediately.
+    pub fn accept(&mut self, id: u8) {
+        if self.winner.is_some() {
+            return;
+        }
+        if self.is_open {
+            if self.eager_winner.is_none() {
+                self.eager_winner = Some(id);
+            }
+        } else {
+            self.resolve_in_favor_of(id);
+        }
+    }
+
+    /// A member concedes defeat and leaves the arena.
+    pub fn reject(&mut self, id: u8) {
+        if self.winner.is_some() {
+            return;
+        }
+        if self.eager_winner == Some(id) {
+            self.eager_winner = None;
+        }
+        if let Some(pos) = self.members.iter().position(|&m| m == id) {
+            self.members.remove(pos);
+        }
+        if !self.is_open {
+            self.try_resolve();
+        }
+    }
+
+    /// Forces resolution in favor of the first remaining member, unless the
+    /// arena is held (see [`hold`](Self::hold)). Returns the winner, if any.
+    pub fn sweep(&mut self) -> Option<u8> {
+        if self.winner.is_some() {
+            return self.winner;
+        }
+        if self.is_held {
+            self.has_pending_sweep = true;
+            return None;
+        }
+        if let Some(&first) = self.members.first() {
+            self.resolve_in_favor_of(first);
+        }
+        self.winner
+    }
+
+    /// Defers [`sweep`](Self::sweep) until [`release`](Self::release) is
+    /// called, for a recognizer (e.g. long-press) that needs more time than
+    /// a single pointer-up to decide.
+    pub fn hold(&mut self) {
+        self.is_held = true;
+    }
+
+    /// Releases a [`hold`](Self::hold); if a sweep was attempted while held,
+    /// it runs now. Returns the winner, if the release triggered one.
+    pub fn release(&mut self) -> Option<u8> {
+        self.is_held = false;
+        if self.has_pending_sweep {
+            self.has_pending_sweep = false;
+            return self.sweep();
+        }
+        None
+    }
+
+    /// The resolved winner, if the arena has settled.
+    pub const fn winner(&self) -> Option<u8> {
+        self.winner
+    }
+
+    /// Whether `id` won the arena.
+    pub fn accepted(&self, id: u8) -> bool {
+        self.winner == Some(id)
+    }
+
+    /// Whether `id` lost the arena (only meaningful once resolved).
+    pub fn rejected(&self, id: u8) -> bool {
+        self.winner.is_some() && self.winner != Some(id)
+    }
+
+    /// Whether the arena has resolved to a winner.
+    pub const fn is_resolved(&self) -> bool {
+        self.winner.is_some()
+    }
+
+    /// Clears all state so the arena can be reused for the next pointer.
+    pub fn reset(&mut self) {
+        self.members.clear();
+        self.is_open = true;
+        self.is_held = false;
+        self.has_pending_sweep = false;
+        self.eager_winner = None;
+        self.winner = None;
+    }
+
+    fn try_resolve(&mut self) {
+        if self.members.len() == 1 {
+            let only = self.members[0];
+            self.resolve_in_favor_of(only);
+        } else if let Some(w) = self.eager_winner {
+            self.resolve_in_favor_of(w);
+        }
+    }
+
+    fn resolve_in_favor_of(&mut self, id: u8) {
+        self.winner = Some(id);
+        self.members.clear();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -572,5 +758,101 @@ mod tests {
         recognizer.on_press();
         recognizer.reset();
         assert_eq!(recognizer.on_release(), None);
+    }
+
+    #[test]
+    fn gesture_arena_default_sweep_picks_first_member() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        arena.add(2).unwrap();
+        assert!(!arena.is_resolved());
+
+        arena.close();
+        assert!(!arena.is_resolved(), "still 3 members, no eager winner");
+
+        assert_eq!(arena.sweep(), Some(0));
+        assert!(arena.accepted(0));
+        assert!(arena.rejected(1));
+        assert!(arena.rejected(2));
+    }
+
+    #[test]
+    fn gesture_arena_reduces_to_sole_member_on_close() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(7).unwrap();
+        arena.close();
+        assert_eq!(arena.winner(), Some(7));
+    }
+
+    #[test]
+    fn gesture_arena_eager_winner_resolves_on_close() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        arena.accept(1); // self-declares while still open: eager winner only
+        assert!(!arena.is_resolved());
+        arena.close();
+        assert_eq!(arena.winner(), Some(1));
+        assert!(arena.rejected(0));
+    }
+
+    #[test]
+    fn gesture_arena_reject_can_collapse_to_default_winner() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        arena.close();
+        arena.reject(0);
+        // Rejecting down to a single remaining member resolves immediately.
+        assert_eq!(arena.winner(), Some(1));
+    }
+
+    #[test]
+    fn gesture_arena_hold_defers_sweep_until_release() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        arena.close();
+        arena.hold();
+        assert_eq!(arena.sweep(), None, "sweep deferred while held");
+        assert!(!arena.is_resolved());
+        assert_eq!(arena.release(), Some(0), "pending sweep runs on release");
+    }
+
+    #[test]
+    fn gesture_arena_accept_after_close_wins_immediately() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        arena.close();
+        arena.accept(1);
+        assert_eq!(arena.winner(), Some(1));
+        assert!(arena.rejected(0));
+    }
+
+    #[test]
+    fn gesture_arena_capacity_and_closed_errors() {
+        let mut arena = GestureArena::<2>::new();
+        arena.add(0).unwrap();
+        arena.add(1).unwrap();
+        assert_eq!(arena.add(2), Err(GestureArenaError::Full));
+
+        let mut arena2 = GestureArena::<2>::new();
+        arena2.close();
+        assert_eq!(arena2.add(0), Err(GestureArenaError::Closed));
+    }
+
+    #[test]
+    fn gesture_arena_reset_allows_reuse() {
+        let mut arena = GestureArena::<4>::new();
+        arena.add(0).unwrap();
+        arena.close();
+        assert_eq!(arena.winner(), Some(0));
+        arena.reset();
+        assert!(!arena.is_resolved());
+        arena.add(5).unwrap();
+        arena.close();
+        assert_eq!(arena.winner(), Some(5));
     }
 }

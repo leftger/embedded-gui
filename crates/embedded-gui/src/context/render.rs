@@ -2,6 +2,7 @@ use crate::{
     geometry::Rect,
     render::RenderCtx,
     style::{VisualState, lerp_style},
+    widget::WidgetId,
 };
 use embedded_graphics_core::pixelcolor::Rgb565;
 
@@ -189,6 +190,167 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             }
         }
         Ok(())
+    }
+
+    /// Renders only the dirty regions, using occlusion-aware damage tracking
+    /// (after <https://bensimms.moe/reverse-engineering-scooter/>, footnote
+    /// 7) instead of a flat dirty-rect list: a widget subtree that neither
+    /// intersects the accumulated dirty regions nor anything already
+    /// guaranteed to be freshly repainted is skipped entirely without being
+    /// visited, and a container whose children fully, opaquely cover its
+    /// dirty area is skipped from repainting its own background — see
+    /// [`crate::damage::DamageTree`] for the exact rules.
+    ///
+    /// Falls back to [`Self::render_dirty`] (always correct, no occlusion
+    /// pruning) if the internal quadtree's fixed capacity is exhausted by a
+    /// pathological number of simultaneously-disjoint dirty regions in a
+    /// single frame, rather than risk silently dropping one.
+    pub fn render_dirty_occlusion<D>(&mut self, target: &mut D) -> Result<(), D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        const DEPTH: u8 = 3;
+        const Q_NODES: usize = crate::quadtree::node_count_for_depth(DEPTH);
+        const PER_NODE: usize = 4;
+
+        let slice = self.dirty.as_slice();
+        if slice.is_empty() {
+            return Ok(());
+        }
+
+        let mut damage: crate::damage::DamageTree<Q_NODES, PER_NODE> =
+            crate::damage::DamageTree::new(self.viewport, DEPTH);
+        for &rect in slice {
+            if damage.mark_dirty(rect).is_err() {
+                return self.render_dirty(target);
+            }
+        }
+
+        let mut ctx = RenderCtx::new(target, self.viewport);
+        ctx.set_quality(self.render_quality);
+
+        let root_ids: heapless::Vec<WidgetId, NODES> = self
+            .widgets
+            .iter()
+            .filter(|node| node.parent.is_none())
+            .map(|node| node.id)
+            .collect();
+        for root in root_ids {
+            self.walk_occlusion(&mut ctx, &mut damage, root)?;
+        }
+        Ok(())
+    }
+
+    /// Post-order occlusion walk for one widget subtree: recurses into
+    /// children first, then repaints `id` itself only if damage remains
+    /// after accounting for whatever its children just covered. Returns
+    /// whether anything in this subtree was repainted (currently unused by
+    /// the caller, but useful for instrumentation/testing).
+    fn walk_occlusion<D>(
+        &self,
+        ctx: &mut RenderCtx<'_, D, crate::render::Dither>,
+        damage: &mut crate::damage::DamageTree<{ crate::quadtree::node_count_for_depth(3) }, 4>,
+        id: WidgetId,
+    ) -> Result<bool, D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        let Some(bounds) = self.absolute_rect(id) else {
+            return Ok(false);
+        };
+        if bounds.is_empty() || !damage.overlaps_before(bounds) {
+            return Ok(false);
+        }
+
+        let child_ids: heapless::Vec<WidgetId, NODES> = self
+            .widgets
+            .iter()
+            .filter(|node| node.parent == Some(id))
+            .map(|node| node.id)
+            .collect();
+        let mut child_painted = false;
+        for child in child_ids {
+            child_painted |= self.walk_occlusion(ctx, damage, child)?;
+        }
+
+        if !damage.overlaps_after(bounds) {
+            return Ok(child_painted);
+        }
+
+        if let Some(is_opaque) = self.paint_single_node(ctx, id, bounds)? {
+            if is_opaque {
+                let _ = damage.mark_overdrawn(bounds);
+            }
+            return Ok(true);
+        }
+        Ok(child_painted)
+    }
+
+    /// Paints one node in isolation (visibility/clip-checked, style-resolved
+    /// exactly like [`Self::render_into`]'s per-node body), returning
+    /// `Some(is_opaque_cover)` if it was actually painted — `is_opaque_cover`
+    /// is true when the resolved style fully, opaquely fills `bounds` (solid
+    /// background, full opacity, square corners), the precondition for
+    /// marking it overdrawn.
+    fn paint_single_node<D>(
+        &self,
+        ctx: &mut RenderCtx<'_, D, crate::render::Dither>,
+        id: WidgetId,
+        bounds: Rect,
+    ) -> Result<Option<bool>, D::Error>
+    where
+        D: embedded_graphics_core::draw_target::DrawTarget<Color = Rgb565>,
+    {
+        if !self.effective_visible(id) {
+            return Ok(None);
+        }
+        let Some(node) = self.node(id) else {
+            return Ok(None);
+        };
+
+        let base_clip = self.inherited_clip(id).unwrap_or(self.viewport);
+        if bounds.intersection(base_clip).is_empty() {
+            return Ok(None);
+        }
+        let old_clip = ctx.clip();
+        ctx.set_clip(old_clip.intersection(base_clip));
+
+        let state = if self.pressed.is_some_and(|pressed| pressed.id == id) {
+            VisualState::Pressed
+        } else if Some(id) == self.focus {
+            VisualState::Focused
+        } else if !self.effective_enabled(id) {
+            VisualState::Disabled
+        } else {
+            VisualState::Normal
+        };
+
+        let mut render_node = *node;
+        let class_style = node.style_class.and_then(|class| {
+            self.class_styles
+                .iter()
+                .find(|(class_id, _)| *class_id == class)
+                .map(|(_, style)| *style)
+        });
+        let resolve_state_style = |vs: VisualState| {
+            class_style
+                .map(|style| style.resolve(vs))
+                .unwrap_or_else(|| render_node.style.resolve(vs))
+        };
+        let active_style = if let Some((from, to, t)) = self.state_transition_progress(id) {
+            lerp_style(resolve_state_style(from), resolve_state_style(to), t)
+        } else {
+            resolve_state_style(state)
+        };
+        render_node.style = render_node.style.with_state_override(state, active_style);
+
+        render_node.render_at(ctx, bounds, state)?;
+        ctx.set_clip(old_clip);
+
+        let is_opaque_cover = active_style.background.is_some()
+            && active_style.opacity == 255
+            && active_style.corner_radius == 0;
+        Ok(Some(is_opaque_cover))
     }
 
     pub fn render_with_offset<D>(

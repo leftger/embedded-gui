@@ -8,6 +8,7 @@ pub mod block;
 pub mod colors;
 pub mod completion;
 pub mod context;
+pub mod damage;
 pub mod display_backend;
 #[cfg(feature = "embassy")]
 pub mod embassy;
@@ -33,6 +34,7 @@ pub mod palette;
 pub mod pdc;
 pub mod power;
 pub mod profiler;
+pub mod quadtree;
 pub mod quantize;
 pub mod spline;
 pub use motion as animation;
@@ -73,7 +75,8 @@ pub use adapter::{ColorConvertedDrawTarget, DrawTargetColorExt};
 pub use animation::{
     Animation, AnimationError, AnimationHandlers, AnimationId, AnimationManager,
     AnimationManagerCallbacks, AnimationState, Easing, InertiaAnimator, PathAnimator, PathPoint,
-    RepeatMode, SpringAnimator, Timer, Tween, apply_easing,
+    RepeatMode, SPRING_TOLERANCE_DISTANCE, SPRING_TOLERANCE_VELOCITY, SpringAnimator, Timer, Tween,
+    apply_easing,
 };
 pub use animation_timeline::{
     AnimationGroup, AnimationSequence, ComposedAnimation, ComposedAnimationCallbacks,

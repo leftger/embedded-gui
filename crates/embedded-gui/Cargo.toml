@@ -102,6 +102,11 @@ path = "examples/basics/draw_task_band_buffer_showcase.rs"
 required-features = ["std"]
 
 [[example]]
+name = "framebuffer_free_showcase"
+path = "examples/basics/framebuffer_free_showcase.rs"
+required-features = ["std"]
+
+[[example]]
 name = "vector_pdc_round_screen_showcase"
 path = "examples/basics/vector_pdc_round_screen_showcase.rs"
 required-features = ["std"]

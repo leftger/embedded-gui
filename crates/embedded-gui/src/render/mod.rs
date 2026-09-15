@@ -972,14 +972,25 @@ where
         let line_h = font.line_height();
         let max_chars = (rect.w / advance).max(1) as usize;
         let char_count = text.chars().count();
-        let line_count = count_lines(text, max_chars, style.wrap).max(1);
         let line_step = line_h + style.line_spacing as u32;
-        let total_h = line_count as u32 * line_h
-            + line_count.saturating_sub(1) as u32 * style.line_spacing as u32;
+        // `count_lines` re-walks the same wrap boundaries that the draw loop
+        // below computes again via `line_len_at`, so it's only worth paying
+        // for when the resulting total block height is actually read (to
+        // center/bottom-align the block); `Top` starts at `rect.y` and never
+        // needs it, and it's the common case for labels/buttons redrawn
+        // every frame.
         let mut y = match style.vertical_align {
             VerticalAlign::Top => rect.y,
-            VerticalAlign::Middle => rect.y + rect.h.saturating_sub(total_h) as i32 / 2,
-            VerticalAlign::Bottom => rect.y + rect.h.saturating_sub(total_h) as i32,
+            VerticalAlign::Middle | VerticalAlign::Bottom => {
+                let line_count = count_lines(text, max_chars, style.wrap).max(1);
+                let total_h = line_count as u32 * line_h
+                    + line_count.saturating_sub(1) as u32 * style.line_spacing as u32;
+                if matches!(style.vertical_align, VerticalAlign::Middle) {
+                    rect.y + rect.h.saturating_sub(total_h) as i32 / 2
+                } else {
+                    rect.y + rect.h.saturating_sub(total_h) as i32
+                }
+            }
         };
 
         let mut start = 0;

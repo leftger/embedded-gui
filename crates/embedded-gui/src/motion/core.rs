@@ -793,6 +793,19 @@ impl<const N: usize> AnimationManager<N> {
     }
 }
 
+/// Default position/velocity settling thresholds for [`SpringAnimator::is_done`],
+/// matching Flutter's `Tolerance.defaultTolerance` (±0.001 on both axes).
+pub const SPRING_TOLERANCE_DISTANCE: f32 = 1e-3;
+pub const SPRING_TOLERANCE_VELOCITY: f32 = 1e-3;
+
+/// `e^x`, expressed via the crate's shared `powf` (backed by `std`, `libm`, or
+/// `micromath` depending on target) so the spring solver needs no extra math
+/// backend surface.
+#[inline]
+fn exp(x: f32) -> f32 {
+    core::f32::consts::E.powf(x)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpringAnimator {
     pub value: f32,
@@ -813,12 +826,104 @@ impl SpringAnimator {
         }
     }
 
+    /// Builds a spring from a perceptual `duration` and a `bounce` amount,
+    /// mirroring Flutter's `SpringDescription.withDurationAndBounce`. `bounce`
+    /// of `0.0` is critically damped (no oscillation), `(0.0, 1.0]` oscillates
+    /// (`1.0` never settles), and negative values are overdamped (sluggish).
+    /// This is a friendlier authoring surface than raw `stiffness`/`damping`
+    /// for KDL markup or hand-tuned motion presets.
+    pub fn with_duration_and_bounce(
+        value: f32,
+        target: f32,
+        duration_ms: u32,
+        bounce: f32,
+    ) -> Self {
+        let duration_s = (duration_ms.max(1) as f32) / 1000.0;
+        const TAU_SQUARED: f32 = 4.0 * core::f32::consts::PI * core::f32::consts::PI;
+        let stiffness = TAU_SQUARED / (duration_s * duration_s);
+        let damping_ratio = if bounce > 0.0 {
+            1.0 - bounce
+        } else {
+            1.0 / (bounce + 1.0)
+        };
+        let damping = damping_ratio * 2.0 * stiffness.sqrt();
+        Self {
+            value,
+            velocity: 0.0,
+            target,
+            stiffness,
+            damping,
+        }
+    }
+
+    /// Advances the spring by `dt_ms` using the closed-form solution of the
+    /// damped harmonic oscillator (critically/over/under-damped branches,
+    /// after Flutter's `SpringSimulation`), rather than integrating the
+    /// force numerically step by step. Since `value(t)`/`velocity(t)` are
+    /// evaluated analytically from the state at the start of this tick, the
+    /// result has no integration drift and stays stable for any `dt_ms`
+    /// (including large or irregular frame gaps).
     pub fn tick(&mut self, dt_ms: u32) -> f32 {
-        let dt = (dt_ms as f32 / 1000.0).max(0.001);
-        let force = self.stiffness * (self.target - self.value) - self.damping * self.velocity;
-        self.velocity += force * dt;
-        self.value += self.velocity * dt;
+        let dt = dt_ms as f32 / 1000.0;
+        if dt <= 0.0 {
+            return self.value;
+        }
+
+        let d0 = self.value - self.target;
+        let v0 = self.velocity;
+        let k = self.stiffness;
+        let c = self.damping;
+        let disc = c * c - 4.0 * k;
+
+        let (d1, v1) = if disc > 0.0 {
+            // Overdamped: two real exponential roots.
+            let sq = disc.sqrt();
+            let r1 = (-c - sq) * 0.5;
+            let r2 = (-c + sq) * 0.5;
+            let c2 = (v0 - r1 * d0) / (r2 - r1);
+            let c1 = d0 - c2;
+            let e1 = exp(r1 * dt);
+            let e2 = exp(r2 * dt);
+            (c1 * e1 + c2 * e2, c1 * r1 * e1 + c2 * r2 * e2)
+        } else if disc < 0.0 {
+            // Underdamped: decaying oscillation.
+            let w = (-disc).sqrt() * 0.5;
+            let r = -c * 0.5;
+            let c1 = d0;
+            let c2 = (v0 - r * d0) / w;
+            let e = exp(r * dt);
+            let (sin_wt, cos_wt) = ((w * dt).sin(), (w * dt).cos());
+            let x = e * (c1 * cos_wt + c2 * sin_wt);
+            let dx = e * ((r * c1 + w * c2) * cos_wt + (r * c2 - w * c1) * sin_wt);
+            (x, dx)
+        } else {
+            // Critically damped: fastest non-oscillating return.
+            let r = -c * 0.5;
+            let c1 = d0;
+            let c2 = v0 - r * d0;
+            let e = exp(r * dt);
+            ((c1 + c2 * dt) * e, r * (c1 + c2 * dt) * e + c2 * e)
+        };
+
+        self.value = self.target + d1;
+        self.velocity = v1;
         self.value
+    }
+
+    /// Whether the spring has settled within the default tolerance
+    /// ([`SPRING_TOLERANCE_DISTANCE`]/[`SPRING_TOLERANCE_VELOCITY`]) — both the
+    /// remaining distance to `target` and the current `velocity` must be
+    /// negligible, so a fast-moving spring that happens to cross `target`
+    /// isn't mistaken for "done".
+    pub fn is_done(&self) -> bool {
+        self.is_done_with_tolerance(SPRING_TOLERANCE_DISTANCE, SPRING_TOLERANCE_VELOCITY)
+    }
+
+    /// Like [`Self::is_done`], with caller-supplied tolerances (e.g. looser
+    /// bounds for a coarse-pixel display where sub-pixel settling is moot).
+    pub fn is_done_with_tolerance(&self, distance_tolerance: f32, velocity_tolerance: f32) -> bool {
+        (self.value - self.target).abs() <= distance_tolerance
+            && self.velocity.abs() <= velocity_tolerance
     }
 }
 
@@ -1127,5 +1232,49 @@ mod tests {
         assert!(path.value().is_some());
         path.reset();
         assert_eq!(path.timer.elapsed_ms, 0);
+    }
+
+    #[test]
+    fn spring_settles_and_reports_is_done_underdamped() {
+        // Default stiffness/damping (120/16) is underdamped: disc < 0.
+        let mut spring = SpringAnimator::new(0.0, 10.0);
+        assert!(!spring.is_done());
+        for _ in 0..600 {
+            spring.tick(16);
+            if spring.is_done() {
+                break;
+            }
+        }
+        assert!(spring.is_done());
+        assert!((spring.value - 10.0).abs() <= SPRING_TOLERANCE_DISTANCE);
+        assert!(spring.velocity.abs() <= SPRING_TOLERANCE_VELOCITY);
+    }
+
+    #[test]
+    fn spring_with_duration_and_bounce_covers_all_branches() {
+        // bounce = 0 -> critically damped (disc ~= 0).
+        let mut critical = SpringAnimator::with_duration_and_bounce(0.0, 1.0, 300, 0.0);
+        // bounce > 0 -> underdamped (oscillates before settling).
+        let mut bouncy = SpringAnimator::with_duration_and_bounce(0.0, 1.0, 300, 0.5);
+        // bounce < 0 -> overdamped (sluggish, no oscillation).
+        let mut sluggish = SpringAnimator::with_duration_and_bounce(0.0, 1.0, 300, -0.5);
+
+        for spring in [&mut critical, &mut bouncy, &mut sluggish] {
+            for _ in 0..200 {
+                let v = spring.tick(16);
+                assert!(v.is_finite());
+            }
+            assert!(spring.is_done_with_tolerance(1e-2, 1e-2));
+        }
+    }
+
+    #[test]
+    fn spring_tick_is_stable_for_large_dt() {
+        let mut spring = SpringAnimator::new(0.0, 10.0);
+        // A single large step (e.g. after a stall) must not diverge, unlike
+        // semi-implicit Euler integration at the same stiffness/damping.
+        let v = spring.tick(2000);
+        assert!(v.is_finite());
+        assert!(spring.velocity.is_finite());
     }
 }

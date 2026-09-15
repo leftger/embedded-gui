@@ -37,6 +37,16 @@ impl Rect {
         !self.intersection(other).is_empty()
     }
 
+    /// Whether `other` lies entirely within `self` (an empty `other` is
+    /// trivially contained by any non-degenerate `self`).
+    pub fn contains_rect(self, other: Self) -> bool {
+        other.is_empty()
+            || (other.x >= self.x
+                && other.y >= self.y
+                && other.right() <= self.right()
+                && other.bottom() <= self.bottom())
+    }
+
     pub fn intersection(self, other: Self) -> Self {
         let x0 = self.x.max(other.x);
         let y0 = self.y.max(other.y);
