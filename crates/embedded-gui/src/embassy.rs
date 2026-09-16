@@ -78,6 +78,8 @@ where
     }
 }
 
+impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> Unpin for EmbassyWaitTransferFuture<FB> {}
+
 impl<FB> core::future::Future for EmbassyWaitTransferFuture<FB>
 where
     FB: DMACapableFrameBufferBackend<Color = Rgb565>,
@@ -88,7 +90,7 @@ where
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
     ) -> core::task::Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
+        let this = self.get_mut();
         let xfer = this
             .xfer
             .as_mut()

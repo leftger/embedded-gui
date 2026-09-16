@@ -66,20 +66,17 @@ fn test_reactive_signals_and_callbacks() {
     assert!(!signal.is_dirty());
 
     // Callbacks
-    static mut CALLBACK_CALLED: bool = false;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static CALLBACK_CALLED: AtomicBool = AtomicBool::new(false);
     let slot = CallbackSlot::<u32>::new(|val| {
         if val == 999 {
-            unsafe {
-                CALLBACK_CALLED = true;
-            }
+            CALLBACK_CALLED.store(true, Ordering::SeqCst);
         }
     });
 
     assert!(slot.is_bound());
     slot.emit(999);
-    unsafe {
-        assert!(CALLBACK_CALLED);
-    }
+    assert!(CALLBACK_CALLED.load(Ordering::SeqCst));
 }
 
 #[test]

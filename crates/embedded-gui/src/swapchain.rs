@@ -560,6 +560,8 @@ mod tests {
         }
     }
 
+    impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> Unpin for TrackingTransfer<FB> {}
+
     impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> core::future::Future
         for TrackingTransfer<FB>
     {
@@ -568,12 +570,7 @@ mod tests {
             self: core::pin::Pin<&mut Self>,
             _cx: &mut core::task::Context<'_>,
         ) -> core::task::Poll<Self::Output> {
-            core::task::Poll::Ready(
-                unsafe { self.get_unchecked_mut() }
-                    .framebuffer
-                    .take()
-                    .unwrap(),
-            )
+            core::task::Poll::Ready(self.get_mut().framebuffer.take().unwrap())
         }
     }
 

@@ -155,6 +155,8 @@ where
     }
 }
 
+impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> Unpin for CompletedTransfer<FB> {}
+
 impl<FB> core::future::Future for CompletedTransfer<FB>
 where
     FB: DMACapableFrameBufferBackend<Color = Rgb565>,
@@ -165,7 +167,8 @@ where
         self: core::pin::Pin<&mut Self>,
         _cx: &mut core::task::Context<'_>,
     ) -> core::task::Poll<Self::Output> {
-        let buf = unsafe { self.get_unchecked_mut() }
+        let buf = self
+            .get_mut()
             .framebuffer
             .take()
             .expect("CompletedTransfer polled after completion");
@@ -250,18 +253,15 @@ mod tests {
         }
     }
 
+    impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> Unpin for RegionTransfer<FB> {}
+
     impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> core::future::Future for RegionTransfer<FB> {
         type Output = FrameBuf<Rgb565, FB>;
         fn poll(
             self: core::pin::Pin<&mut Self>,
             _cx: &mut core::task::Context<'_>,
         ) -> core::task::Poll<Self::Output> {
-            core::task::Poll::Ready(
-                unsafe { self.get_unchecked_mut() }
-                    .framebuffer
-                    .take()
-                    .unwrap(),
-            )
+            core::task::Poll::Ready(self.get_mut().framebuffer.take().unwrap())
         }
     }
 

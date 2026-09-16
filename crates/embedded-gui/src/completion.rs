@@ -148,6 +148,8 @@ where
     }
 }
 
+impl<FB: DMACapableFrameBufferBackend<Color = Rgb565>> Unpin for WaitTransferFuture<FB> {}
+
 impl<FB> Future for WaitTransferFuture<FB>
 where
     FB: DMACapableFrameBufferBackend<Color = Rgb565>,
@@ -155,7 +157,7 @@ where
     type Output = FrameBuf<Rgb565, FB>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
+        let this = self.get_mut();
         let inner = this
             .inner
             .as_mut()

@@ -144,7 +144,21 @@ pub(crate) struct StateTransition {
     pub(crate) elapsed_ms: u32,
 }
 
-pub struct GuiContext<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize> {
+/// A compact GUI context budget suitable for resource-constrained microcontrollers (e.g. Cortex-M0+).
+pub type SmallGuiContext<'a> = GuiContext<'a, 16, 8, 8>;
+
+/// A standard balanced GUI context budget suitable for mainstream microcontrollers (e.g. Cortex-M4, ESP32).
+pub type StandardGuiContext<'a> = GuiContext<'a, 64, 32, 16>;
+
+/// An expanded GUI context budget suitable for complex multi-screen dashboards and desktop simulation.
+pub type LargeGuiContext<'a> = GuiContext<'a, 128, 64, 32>;
+
+pub struct GuiContext<
+    'a,
+    const NODES: usize = 64,
+    const EVENTS: usize = 32,
+    const DIRTY: usize = 16,
+> {
     pub(crate) viewport: Rect,
     pub(crate) widgets: Vec<WidgetNode<'a>, NODES>,
     pub(crate) subscriptions: Vec<(WidgetId, UiEventFilter), NODES>,
