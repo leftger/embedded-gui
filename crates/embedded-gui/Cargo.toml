@@ -71,6 +71,7 @@ nalgebra = { workspace = true, features = ["std"] }
 name = "gui_benchmarks"
 harness = false
 
+# ── Integrations ─────────────────────────────────────────────────────────────
 [[example]]
 name = "interop_showcase"
 path = "examples/integrations/interop_showcase.rs"
@@ -87,18 +88,49 @@ path = "examples/integrations/embassy_gui_frame.rs"
 required-features = ["embassy", "std"]
 
 [[example]]
-name = "custom_font_showcase"
-path = "examples/basics/custom_font_showcase.rs"
-required-features = ["std"]
-
-[[example]]
 name = "embedded_3dgfx_overlay"
 path = "examples/integrations/embedded_3dgfx_overlay.rs"
 required-features = ["embedded-3dgfx", "std"]
 
 [[example]]
+name = "generate_readme_screenshots"
+path = "examples/integrations/generate_readme_screenshots.rs"
+required-features = ["std", "macros"]
+
+# ── Basics ───────────────────────────────────────────────────────────────────
+[[example]]
+name = "custom_font_showcase"
+path = "examples/basics/custom_font_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "dashboard_app"
+path = "examples/basics/dashboard_app.rs"
+required-features = ["std"]
+
+[[example]]
+name = "complex_layout_showcase"
+path = "examples/basics/complex_layout_showcase.rs"
+required-features = ["std"]
+
+[[example]]
 name = "draw_task_band_buffer_showcase"
 path = "examples/basics/draw_task_band_buffer_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "event_dispatch_showcase"
+path = "examples/basics/event_dispatch_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "font_text_model_showcase"
+path = "examples/basics/font_text_model_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "form_flow_showcase"
+path = "examples/basics/form_flow_showcase.rs"
 required-features = ["std"]
 
 [[example]]
@@ -107,48 +139,18 @@ path = "examples/basics/framebuffer_free_showcase.rs"
 required-features = ["std"]
 
 [[example]]
-name = "vector_pdc_round_screen_showcase"
-path = "examples/basics/vector_pdc_round_screen_showcase.rs"
-required-features = ["std"]
-
-[[example]]
-name = "relative_anchors_and_flex_justify_showcase"
-path = "examples/basics/relative_anchors_and_flex_justify_showcase.rs"
-required-features = ["std"]
-
-[[example]]
-name = "wearable_os_subsystems_showcase"
-path = "examples/basics/wearable_os_subsystems_showcase.rs"
-required-features = ["std"]
-
-[[example]]
-name = "advanced_cinematic_motion_showcase"
-path = "examples/basics/advanced_cinematic_motion_showcase.rs"
-required-features = ["std"]
-
-[[example]]
-name = "wearable_dialogs_pickers_status_showcase"
-path = "examples/basics/wearable_dialogs_pickers_status_showcase.rs"
-required-features = ["std"]
-
-[[example]]
 name = "graphics_pipeline_showcase"
 path = "examples/basics/graphics_pipeline_showcase.rs"
 required-features = ["std"]
 
 [[example]]
-name = "rich_controls_grid_showcase"
-path = "examples/basics/rich_controls_grid_showcase.rs"
+name = "input_gesture_drag_repeat_showcase"
+path = "examples/basics/input_gesture_drag_repeat_showcase.rs"
 required-features = ["std"]
 
 [[example]]
-name = "smart_home_dashboard"
-path = "examples/basics/smart_home_dashboard.rs"
-required-features = ["std"]
-
-[[example]]
-name = "cinematic_transitions_showcase"
-path = "examples/basics/cinematic_transitions_showcase.rs"
+name = "interaction_semantics_showcase"
+path = "examples/basics/interaction_semantics_showcase.rs"
 required-features = ["std"]
 
 [[example]]
@@ -157,6 +159,139 @@ path = "examples/basics/kdl_advanced_widgets_showcase.rs"
 required-features = ["std", "macros", "embedded-3dgfx"]
 
 [[example]]
-name = "generate_readme_screenshots"
-path = "examples/integrations/generate_readme_screenshots.rs"
-required-features = ["std", "macros"]
+name = "long_press_input_showcase"
+path = "examples/basics/long_press_input_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "menu_contract_showcase"
+path = "examples/basics/menu_contract_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "raw_key_input_showcase"
+path = "examples/basics/raw_key_input_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "relative_anchors_and_flex_justify_showcase"
+path = "examples/basics/relative_anchors_and_flex_justify_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "rich_controls_grid_showcase"
+path = "examples/basics/rich_controls_grid_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "simulator_menu"
+path = "examples/basics/simulator_menu.rs"
+required-features = ["std"]
+
+[[example]]
+name = "smart_home_dashboard"
+path = "examples/basics/smart_home_dashboard.rs"
+required-features = ["std"]
+
+[[example]]
+name = "text_layout_showcase"
+path = "examples/basics/text_layout_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "vector_pdc_round_screen_showcase"
+path = "examples/basics/vector_pdc_round_screen_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "wearable_dialogs_pickers_status_showcase"
+path = "examples/basics/wearable_dialogs_pickers_status_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "wearable_os_subsystems_showcase"
+path = "examples/basics/wearable_os_subsystems_showcase.rs"
+required-features = ["std"]
+
+# ── Motion ───────────────────────────────────────────────────────────────────
+[[example]]
+name = "advanced_cinematic_motion_showcase"
+path = "examples/basics/advanced_cinematic_motion_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "animation_dirty_showcase"
+path = "examples/motion/animation_dirty_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "animation_kitchen_sink_showcase"
+path = "examples/motion/animation_kitchen_sink_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "animation_motion_showcase"
+path = "examples/motion/animation_motion_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "capture_cinematic_showcase"
+path = "examples/motion/capture_cinematic_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "cinematic_peek_glance_carddeck_showcase"
+path = "examples/motion/cinematic_peek_glance_carddeck_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "cinematic_transitions_showcase"
+path = "examples/basics/cinematic_transitions_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "timeline_transition_showcase"
+path = "examples/motion/timeline_transition_showcase.rs"
+required-features = ["std"]
+
+# ── Widgets ──────────────────────────────────────────────────────────────────
+[[example]]
+name = "alpha_blending_showcase"
+path = "examples/widgets/alpha_blending_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "core_primitives_parity_showcase"
+path = "examples/widgets/core_primitives_parity_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "feed_timeline_showcase"
+path = "examples/widgets/feed_timeline_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "notification_primitives_showcase"
+path = "examples/widgets/notification_primitives_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "state_surface_showcase"
+path = "examples/widgets/state_surface_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "sweeping_arc_widget_showcase"
+path = "examples/widgets/sweeping_arc_widget_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "visual_quality_showcase"
+path = "examples/widgets/visual_quality_showcase.rs"
+required-features = ["std"]
+
+[[example]]
+name = "widgets_showcase"
+path = "examples/widgets/widgets_showcase.rs"
+required-features = ["std"]
+

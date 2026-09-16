@@ -75,7 +75,7 @@ pub struct DeviceLink {
 
 impl DeviceLink {
     /// Spawns a worker that opens `device_id` and begins serving frames. Returns
-    /// immediately; connection failures surface through [`DeviceLink::error`].
+    /// immediately; connection failures surface through [`DeviceLink::take_error`].
     pub fn connect(device_id: &str) -> Result<Self, String> {
         let shared = Arc::new(Shared {
             latest: Mutex::new(None),

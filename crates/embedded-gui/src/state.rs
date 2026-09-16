@@ -123,7 +123,7 @@ impl ScrollState {
     }
 
     /// Whether the current offset is past either edge of `[0, content_h]` —
-    /// a candidate for [`SpringAnimator::rubber_band_snap_back`] once the
+    /// a candidate for [`crate::motion::SpringAnimator::rubber_band_snap_back`] once the
     /// drag/fling driving it ends.
     pub const fn is_overscrolled(&self) -> bool {
         self.offset_y < 0 || self.offset_y > self.content_h as i32

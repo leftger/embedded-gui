@@ -17,7 +17,7 @@ Status legend:
 ---
 
 ## 1) Motion tokens
-- Status: [~]
+- Status: [x]
 - Goal: reusable motion language that can be applied consistently across widgets, transitions, and app flows.
 - Deliverables:
   - `MotionTokens` config object (durations, distances, opacity ranges, easing defaults).
@@ -36,7 +36,7 @@ Status legend:
   - `examples/cinematic_peek_glance_carddeck_showcase.rs`
 
 ## 2) State surfaces
-- Status: [~]
+- Status: [x]
 - Goal: first-class surfaces for loading/empty/error/offline states with consistent visuals and interaction behavior.
 - Deliverables:
   - `SurfaceState` enum (`Loading`, `Empty`, `Error`, `Offline`, `Ready`).
@@ -56,7 +56,7 @@ Status legend:
   - `examples/` new state surface demo
 
 ## 3) Notification primitives
-- Status: [~]
+- Status: [x]
 - Goal: composable heads-up + action-sheet notification UX.
 - Deliverables:
   - `HeadsUpBanner` primitive (ttl, auto-dismiss, manual dismiss).
@@ -76,7 +76,7 @@ Status legend:
   - `examples/` new notifications demo
 
 ## 4) CardStory container
-- Status: [~]
+- Status: [x]
 - Goal: summary -> detail -> graph narrative container with built-in transitions.
 - Deliverables:
   - `CardStory` state container (current card index, direction, transitions).
@@ -95,7 +95,7 @@ Status legend:
   - `examples/cinematic_peek_glance_carddeck_showcase.rs` (or split example)
 
 ## 5) FeedTimeline
-- Status: [~]
+- Status: [x]
 - Goal: feed/timeline primitive with compact rows, expanded preview, and detail pin behavior.
 - Deliverables:
   - `FeedTimeline` widget model (items, selected index, scroll offset).
@@ -115,7 +115,7 @@ Status legend:
   - `examples/` new feed timeline demo
 
 ## 6) Menu contract
-- Status: [~]
+- Status: [x]
 - Goal: codify predictable menu semantics across components.
 - Deliverables:
   - `MenuContract` policy (select/back/open/close/focus movement rules).

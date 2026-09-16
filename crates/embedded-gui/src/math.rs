@@ -24,6 +24,50 @@ compile_error!("Select at most one math backend: `libm` or `micromath`.");
 ))]
 compile_error!("no_std requires a math backend feature: enable `libm` or `micromath`.");
 
+#[cfg(all(
+    not(feature = "std"),
+    not(feature = "libm"),
+    not(feature = "micromath")
+))]
+impl F32Ext for f32 {
+    fn atan2(self, _other: f32) -> f32 {
+        0.0
+    }
+    fn sin(self) -> f32 {
+        0.0
+    }
+    fn cos(self) -> f32 {
+        0.0
+    }
+    fn tan(self) -> f32 {
+        0.0
+    }
+    fn sqrt(self) -> f32 {
+        0.0
+    }
+    fn floor(self) -> f32 {
+        0.0
+    }
+    fn ceil(self) -> f32 {
+        0.0
+    }
+    fn round(self) -> f32 {
+        0.0
+    }
+    fn fract(self) -> f32 {
+        0.0
+    }
+    fn powf(self, _n: f32) -> f32 {
+        0.0
+    }
+    fn powi(self, _n: i32) -> f32 {
+        0.0
+    }
+    fn hypot(self, _other: f32) -> f32 {
+        0.0
+    }
+}
+
 #[cfg(not(feature = "std"))]
 #[cfg(feature = "libm")]
 impl F32Ext for f32 {
