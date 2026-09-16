@@ -15,6 +15,7 @@ pub enum GuiError {
     EventsFull,
     DirtyFull,
     NotFound,
+    Drawing,
 }
 
 impl From<DirtyError> for GuiError {
@@ -198,5 +199,7 @@ pub struct GuiContext<
     pub(crate) theme_transition_duration_ms: u32,
     pub(crate) theme_transition_elapsed_ms: u32,
     pub(crate) haptic_sequencer: HapticSequencer,
+    pub(crate) translation_table: Option<&'a crate::i18n::TranslationTable<'a>>,
+    pub(crate) active_language: crate::i18n::LanguageId,
     pub(crate) next_id: u16,
 }

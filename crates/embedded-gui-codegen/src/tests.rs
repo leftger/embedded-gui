@@ -295,3 +295,27 @@ fn default_defs_parse_tracks_errors_and_relative_svg_paths() {
     let with_separators = parse_svg_path_d("M0,0 5,5 Z");
     assert_eq!(with_separators.len(), 3);
 }
+
+#[test]
+fn test_column_row_stack_and_screen_render_impl() {
+    let kdl = r#"
+screen id="MenuScreen" width=240 height=320 {
+    column gap=6 padding=8 {
+        label id="title" text="Settings"
+        button id="btn_save" text="Save"
+    }
+}
+"#;
+    let screen = parse_kdl_screen(kdl).unwrap();
+    assert_eq!(screen.grid.children.len(), 2);
+    assert_eq!(screen.grid.children[0].0.row, 0);
+    assert_eq!(screen.grid.children[1].0.row, 1);
+
+    let code = compile_kdl_to_rust(kdl).unwrap();
+    assert!(code.contains("impl<'a, const N: usize, const E: usize, const D: usize> Screen<'a, N, E, D> for MenuScreenApp"));
+    assert!(code.contains("impl Render for MenuScreenApp"));
+    assert!(code.contains("pub fn apply_theme"));
+    assert!(code.contains("pub fn set_language"));
+    assert!(code.contains("gui.set_theme(theme)"));
+    assert!(code.contains("gui.set_translation_table(table)"));
+}

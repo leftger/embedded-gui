@@ -317,6 +317,20 @@ impl<T: Copy + PartialEq, const N: usize> Signal<T, N> {
         }
     }
 
+    /// Mutates the value in place using a closure. If the value changes, marks the signal dirty,
+    /// increments its version, and returns true.
+    pub fn update<F: FnOnce(&mut T)>(&mut self, f: F) -> bool {
+        let old = self.value;
+        f(&mut self.value);
+        if self.value != old {
+            self.dirty = true;
+            self.version = self.version.wrapping_add(1);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Registers a widget to be notified when this signal mutates.
     pub fn subscribe(&mut self, widget_id: WidgetId) -> bool {
         if !self.subscribers.contains(&widget_id) {

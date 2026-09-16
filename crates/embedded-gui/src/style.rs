@@ -1270,6 +1270,35 @@ impl Theme {
             focus_ring: primary,
         }
     }
+
+    /// Returns the corresponding `WidgetStyle` for a given `WidgetKind` under this theme.
+    pub fn widget_style_for_kind(&self, kind: &crate::widgets::WidgetKind) -> WidgetStyle {
+        match kind {
+            crate::widgets::WidgetKind::Panel => WidgetStyle::new(self.panel),
+            crate::widgets::WidgetKind::Label(_) => WidgetStyle::new(self.label),
+            crate::widgets::WidgetKind::Button(_) => WidgetStyle::new(self.button),
+            crate::widgets::WidgetKind::ProgressBar { .. } => WidgetStyle::new(self.progress),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Toggle { .. } => WidgetStyle::new(self.toggle),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Checkbox { .. } => WidgetStyle::new(self.checkbox),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Slider { .. } => WidgetStyle::new(self.slider),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::ValueLabel { .. } => WidgetStyle::new(self.value_label),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::IconButton { .. } => WidgetStyle::new(self.icon_button),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::List { .. } => WidgetStyle::new(self.list),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Dialog { .. } => WidgetStyle::new(self.dialog),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Toast { .. } => WidgetStyle::new(self.toast),
+            #[cfg(feature = "rich-widgets")]
+            crate::widgets::WidgetKind::Tabs { .. } => WidgetStyle::new(self.tabs),
+            _ => WidgetStyle::new(self.panel),
+        }
+    }
 }
 
 impl Default for Theme {

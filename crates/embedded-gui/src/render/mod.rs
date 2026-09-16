@@ -2584,6 +2584,72 @@ fn kerning_adjust(prev: Option<char>, next: char, enabled: bool) -> i32 {
     }
 }
 
+pub struct RenderCtxCanvas<'r, 'a, D, C = Dither>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    pub ctx: &'r mut RenderCtx<'a, D, C>,
+}
+
+impl<'r, 'a, D, C> crate::widget::CustomCanvas for RenderCtxCanvas<'r, 'a, D, C>
+where
+    D: DrawTarget<Color = Rgb565>,
+    C: Compositor<D>,
+{
+    fn fill_rect(&mut self, rect: Rect, color: Rgb565) -> Result<(), crate::GuiError> {
+        self.ctx
+            .fill_rect(rect, color)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+
+    fn fill_rounded_rect(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        color: Rgb565,
+    ) -> Result<(), crate::GuiError> {
+        self.ctx
+            .fill_rounded_rect(rect, radius, color)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+
+    fn draw_rect(&mut self, rect: Rect, color: Rgb565) -> Result<(), crate::GuiError> {
+        self.ctx
+            .stroke_rect_alpha(rect, crate::style::Border::one(color), 255)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+
+    fn draw_line(
+        &mut self,
+        p1: (i32, i32),
+        p2: (i32, i32),
+        color: Rgb565,
+    ) -> Result<(), crate::GuiError> {
+        self.ctx
+            .draw_line(p1.0, p1.1, p2.0, p2.1, color)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+
+    fn draw_pixel(&mut self, x: i32, y: i32, color: Rgb565) -> Result<(), crate::GuiError> {
+        self.ctx
+            .pixel(x, y, color, 255)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+
+    fn draw_text(
+        &mut self,
+        text: &str,
+        x: i32,
+        y: i32,
+        color: Rgb565,
+        font: FontId,
+    ) -> Result<(), crate::GuiError> {
+        self.ctx
+            .draw_text_with_font(x, y, text, color, font)
+            .map_err(|_| crate::GuiError::Drawing)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -58,6 +58,8 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             theme_transition_duration_ms: 0,
             theme_transition_elapsed_ms: 0,
             haptic_sequencer: HapticSequencer::new(),
+            translation_table: None,
+            active_language: crate::i18n::LanguageId::EN,
             next_id: 1,
         }
     }
@@ -314,8 +316,98 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
     pub fn set_theme(&mut self, theme: Theme) -> Result<(), GuiError> {
         self.theme = theme;
+        for node in self.widgets.iter_mut() {
+            if node.style_class.is_none() {
+                node.style = theme.widget_style_for_kind(&node.kind);
+            }
+        }
         self.dirty.mark_all(self.viewport)?;
         Ok(())
+    }
+
+    pub fn set_widget_style(&mut self, id: WidgetId, style: WidgetStyle) -> Result<(), GuiError> {
+        let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
+        node.style = style;
+        self.mark_subtree_dirty(id)
+    }
+
+    pub fn set_translation_table(&mut self, table: &'a crate::i18n::TranslationTable<'a>) {
+        self.translation_table = Some(table);
+    }
+
+    pub fn translation_table(&self) -> Option<&'a crate::i18n::TranslationTable<'a>> {
+        self.translation_table
+    }
+
+    pub const fn active_language(&self) -> crate::i18n::LanguageId {
+        self.active_language
+    }
+
+    pub fn set_language(&mut self, lang: crate::i18n::LanguageId) -> Result<(), GuiError> {
+        self.active_language = lang;
+        self.dirty.mark_all(self.viewport)?;
+        Ok(())
+    }
+
+    pub fn translate(&self, key: &'a str) -> &'a str {
+        if let Some(table) = self.translation_table {
+            table.translate_lang(key, self.active_language)
+        } else {
+            key
+        }
+    }
+
+    /// Binds a widget to a reactive signal, registering the widget as a subscriber.
+    pub fn bind_signal<T: Copy + PartialEq, const S: usize>(
+        &mut self,
+        widget_id: WidgetId,
+        signal: &mut crate::state::Signal<T, S>,
+    ) -> Result<(), GuiError> {
+        if self.node(widget_id).is_none() {
+            return Err(GuiError::NotFound);
+        }
+        if !signal.subscribe(widget_id) {
+            return Err(GuiError::WidgetsFull);
+        }
+        Ok(())
+    }
+
+    /// Checks a signal for dirty state. If mutated, automatically invalidates dirty rectangles
+    /// for all subscribed widgets and clears the signal's dirty flag.
+    pub fn poll_signal<T: Copy + PartialEq, const S: usize>(
+        &mut self,
+        signal: &mut crate::state::Signal<T, S>,
+    ) -> Result<bool, GuiError> {
+        if signal.is_dirty() {
+            for &sub_id in signal.subscribers() {
+                if let Some(rect) = self.absolute_rect(sub_id) {
+                    let _ = self.dirty.add(rect);
+                }
+            }
+            signal.clear_dirty();
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Syncs a signal value to a widget property and auto-invalidates if changed.
+    pub fn sync_signal_property<T: Copy + PartialEq, const S: usize, F>(
+        &mut self,
+        signal: &mut crate::state::Signal<T, S>,
+        widget_id: WidgetId,
+        key: crate::widget::PropertyKey,
+        map_fn: F,
+    ) -> Result<bool, GuiError>
+    where
+        F: Fn(T) -> crate::widget::PropertyValue<'a>,
+    {
+        let dirty = self.poll_signal(signal)?;
+        if dirty {
+            let val = map_fn(signal.get());
+            self.set_widget_property(widget_id, key, val)?;
+        }
+        Ok(dirty)
     }
 
     pub fn start_theme_transition(

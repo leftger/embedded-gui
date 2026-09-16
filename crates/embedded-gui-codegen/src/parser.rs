@@ -836,30 +836,90 @@ pub fn parse_kdl_screen(kdl_source: &str) -> Result<ScreenDef, CodegenError> {
         }
     }
 
-    let grid_node = screen_node
+    let container_node = screen_node
         .children()
-        .and_then(|c| c.nodes().iter().find(|n| n.name().value() == "grid"))
+        .and_then(|c| {
+            c.nodes().iter().find(|n| {
+                let name = n.name().value();
+                name == "grid" || name == "column" || name == "row" || name == "stack"
+            })
+        })
         .ok_or_else(|| {
-            CodegenError::MissingAttribute("grid", "screen node must contain a 'grid' child".into())
+            CodegenError::MissingAttribute(
+                "layout",
+                "screen node must contain a 'grid', 'column', 'row', or 'stack' child".into(),
+            )
         })?;
 
-    let cols_str = get_string_prop(grid_node, "cols").unwrap_or("1fr");
-    let rows_str = get_string_prop(grid_node, "rows").unwrap_or("1fr");
-    let col_tracks = parse_tracks(cols_str)?;
-    let row_tracks = parse_tracks(rows_str)?;
-    let gap = get_i64_prop(grid_node, "gap").unwrap_or(4).max(0) as u16;
-    let padding = get_i64_prop(grid_node, "padding").unwrap_or(4).max(0) as u16;
+    let container_type = container_node.name().value();
+    let gap = get_i64_prop(container_node, "gap").unwrap_or(4).max(0) as u16;
+    let padding = get_i64_prop(container_node, "padding").unwrap_or(4).max(0) as u16;
 
     let mut children = Vec::new();
-    if let Some(grid_children) = grid_node.children() {
-        for child in grid_children.nodes() {
-            let (placement, widget) = parse_widget(child)?;
+    if let Some(c_children) = container_node.children() {
+        for (idx, child) in c_children.nodes().iter().enumerate() {
+            let (mut placement, widget) = parse_widget(child)?;
+            match container_type {
+                "column" => {
+                    if get_i64_prop(child, "row").is_none() {
+                        placement.row = idx;
+                    }
+                    if get_i64_prop(child, "col").is_none() {
+                        placement.col = 0;
+                    }
+                }
+                "row" => {
+                    if get_i64_prop(child, "col").is_none() {
+                        placement.col = idx;
+                    }
+                    if get_i64_prop(child, "row").is_none() {
+                        placement.row = 0;
+                    }
+                }
+                "stack" => {
+                    if get_i64_prop(child, "col").is_none() {
+                        placement.col = 0;
+                    }
+                    if get_i64_prop(child, "row").is_none() {
+                        placement.row = 0;
+                    }
+                }
+                _ => {}
+            }
             children.push((placement, widget));
         }
     }
 
+    let (col_tracks, row_tracks) = match container_type {
+        "column" => {
+            let cols_str = get_string_prop(container_node, "cols").unwrap_or("1fr");
+            let cols = parse_tracks(cols_str)?;
+            let rows = if let Some(rows_str) = get_string_prop(container_node, "rows") {
+                parse_tracks(rows_str)?
+            } else {
+                vec![GridTrackDef::Fr(1); children.len().max(1)]
+            };
+            (cols, rows)
+        }
+        "row" => {
+            let rows_str = get_string_prop(container_node, "rows").unwrap_or("1fr");
+            let rows = parse_tracks(rows_str)?;
+            let cols = if let Some(cols_str) = get_string_prop(container_node, "cols") {
+                parse_tracks(cols_str)?
+            } else {
+                vec![GridTrackDef::Fr(1); children.len().max(1)]
+            };
+            (cols, rows)
+        }
+        _ => {
+            let cols_str = get_string_prop(container_node, "cols").unwrap_or("1fr");
+            let rows_str = get_string_prop(container_node, "rows").unwrap_or("1fr");
+            (parse_tracks(cols_str)?, parse_tracks(rows_str)?)
+        }
+    };
+
     let grid = GridLayoutDef {
-        id: get_string_prop(grid_node, "id").map(|s| s.to_string()),
+        id: get_string_prop(container_node, "id").map(|s| s.to_string()),
         cols: col_tracks,
         rows: row_tracks,
         gap,

@@ -60,6 +60,8 @@ pub mod visual_widgets;
 pub mod widget;
 pub mod widgets;
 
+pub use widget::{CustomCanvas, CustomWidget, CustomWidgetRef};
+
 pub use geometry::FluentBuilder;
 pub use text::{StringArena, TextSlice};
 pub use view::{FlexBuilder, Render, ViewContext};
@@ -249,22 +251,23 @@ pub mod prelude {
         ColorOps, ColorStop, CompassMode, CompassWidget, ComposedAnimation,
         ComposedAnimationCallbacks, ComposedAnimationPlayer, ComposedAnimationStatus,
         CompositeIconSpec, CompositionControls, CompositionMode, Compositor, Constraint,
-        DirtyBandAccumulator, DirtyRectVisualizer, DirtyTracker, Dither, DrawTargetColorExt,
-        Easing, EdgeInsets, EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy,
-        FeedTimelineState, FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId,
-        FrameBudgetTracker, Framebuffer, FramebufferGray8, FramebufferRgba8888, FramebufferSlice,
-        GaugeThreshold, GlanceTileSpec, GradientDirection, GridLayout, GridPlacement, GridTrack,
-        GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer, Hardware2DAccelerator,
-        IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef, InertiaAnimator,
-        InputEvent, InverterWidget, KeyBindingAction, KeyboardLayout, Keyframe, KeyframeTrack,
-        KeyframeTrackCallbacks, LanguageId, LargeGuiContext, LayerState, LayoutItem, Length, Line,
-        LineBufferRenderer, LinearGradient, LinearLayout, ListState, MatrixWidget, MenuCell,
-        MenuContract, MeterOrientation, ModelChange, MonoBitmap, MotionTokens, MultiStopGradient,
-        NavDirection, NineSlice, NineSliceLayout, NotificationLevel, PackedFont, PathAnimator,
-        PathPoint, PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState,
-        PowerConfig, PowerEvent, PowerManager, PowerState, PresentRegion, PressTiming,
-        ProgressBarWidget, PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps,
-        RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
+        CustomCanvas, CustomWidget, CustomWidgetRef, DirtyBandAccumulator, DirtyRectVisualizer,
+        DirtyTracker, Dither, DrawTargetColorExt, Easing, EdgeInsets, EllipsisMode, EventContext,
+        EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FlexBuilder, FluentBuilder,
+        FocusGroupId, Font, FontId, FrameBudgetTracker, Framebuffer, FramebufferGray8,
+        FramebufferRgba8888, FramebufferSlice, GaugeThreshold, GlanceTileSpec, GradientDirection,
+        GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern,
+        HapticSequencer, Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry,
+        ImageFit, ImageRef, InertiaAnimator, InputEvent, InverterWidget, KeyBindingAction,
+        KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId,
+        LargeGuiContext, LayerState, LayoutItem, Length, Line, LineBufferRenderer, LinearGradient,
+        LinearLayout, ListState, MatrixWidget, MenuCell, MenuContract, MeterOrientation,
+        ModelChange, MonoBitmap, MotionTokens, MultiStopGradient, NavDirection, NineSlice,
+        NineSliceLayout, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
+        PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState, PowerConfig,
+        PowerEvent, PowerManager, PowerState, PresentRegion, PressTiming, ProgressBarWidget,
+        PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps, RenderCtx,
+        RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
         ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
         ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
         ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
@@ -298,8 +301,8 @@ pub mod prelude {
     pub use crate::{LayerCanvas, TestBuffer};
 
     #[cfg(feature = "macros")]
-    pub use embedded_gui_macros::{gui_kdl, include_gui};
+    pub use embedded_gui_macros::{gui_kdl, include_gui, include_project};
 }
 
 #[cfg(feature = "macros")]
-pub use embedded_gui_macros::{gui_kdl, include_gui};
+pub use embedded_gui_macros::{gui_kdl, include_gui, include_project};

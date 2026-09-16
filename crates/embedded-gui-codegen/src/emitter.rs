@@ -631,9 +631,43 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
         "    pub fn apply_theme<'a, const N: usize, const E: usize, const D: usize>("
     );
     let _ = writeln!(&mut out, "        &self,");
-    let _ = writeln!(&mut out, "        _gui: &mut GuiContext<'a, N, E, D>,");
-    let _ = writeln!(&mut out, "        _theme: Theme,");
-    let _ = writeln!(&mut out, "    ) {{");
+    let _ = writeln!(&mut out, "        gui: &mut GuiContext<'a, N, E, D>,");
+    let _ = writeln!(&mut out, "        theme: Theme,");
+    let _ = writeln!(&mut out, "    ) -> Result<(), GuiError> {{");
+    let _ = writeln!(&mut out, "        gui.set_theme(theme)");
+    let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out);
+    let _ = writeln!(
+        &mut out,
+        "    pub fn set_language_with_table<'a, const N: usize, const E: usize, const D: usize>("
+    );
+    let _ = writeln!(&mut out, "        &self,");
+    let _ = writeln!(&mut out, "        gui: &mut GuiContext<'a, N, E, D>,");
+    let _ = writeln!(&mut out, "        table: &'a TranslationTable<'a>,");
+    let _ = writeln!(&mut out, "        lang: LanguageId,");
+    let _ = writeln!(&mut out, "    ) -> Result<(), GuiError> {{");
+    let _ = writeln!(&mut out, "        gui.set_translation_table(table);");
+    let _ = writeln!(&mut out, "        gui.set_language(lang)?;");
+    for (_, w) in &screen.grid.children {
+        if let Some(id) = w.id() {
+            let field_name = to_snake_case(id);
+            let text_val = match w {
+                WidgetDef::Label { text, .. } => Some(text.as_str()),
+                WidgetDef::Button { text, .. } => Some(text.as_str()),
+                WidgetDef::Toggle { label, .. } => Some(label.as_str()),
+                WidgetDef::Checkbox { label, .. } => Some(label.as_str()),
+                _ => None,
+            };
+            if let Some(t) = text_val {
+                let _ = writeln!(
+                    &mut out,
+                    "        gui.set_text(self.widgets.{}, table.translate_lang({:?}, lang))?;",
+                    field_name, t
+                );
+            }
+        }
+    }
+    let _ = writeln!(&mut out, "        Ok(())");
     let _ = writeln!(&mut out, "    }}");
     let _ = writeln!(&mut out);
     let _ = writeln!(
@@ -641,9 +675,80 @@ pub fn generate_rust_code(screen: &ScreenDef) -> String {
         "    pub fn set_language<'a, const N: usize, const E: usize, const D: usize>("
     );
     let _ = writeln!(&mut out, "        &self,");
-    let _ = writeln!(&mut out, "        _gui: &mut GuiContext<'a, N, E, D>,");
-    let _ = writeln!(&mut out, "        _table: &TranslationTable,");
-    let _ = writeln!(&mut out, "    ) {{");
+    let _ = writeln!(&mut out, "        gui: &mut GuiContext<'a, N, E, D>,");
+    let _ = writeln!(&mut out, "        lang: LanguageId,");
+    let _ = writeln!(&mut out, "    ) -> Result<(), GuiError> {{");
+    let _ = writeln!(&mut out, "        let table = gui.translation_table();");
+    let _ = writeln!(&mut out, "        gui.set_language(lang)?;");
+    let _ = writeln!(&mut out, "        if let Some(table) = table {{");
+    for (_, w) in &screen.grid.children {
+        if let Some(id) = w.id() {
+            let field_name = to_snake_case(id);
+            let text_val = match w {
+                WidgetDef::Label { text, .. } => Some(text.as_str()),
+                WidgetDef::Button { text, .. } => Some(text.as_str()),
+                WidgetDef::Toggle { label, .. } => Some(label.as_str()),
+                WidgetDef::Checkbox { label, .. } => Some(label.as_str()),
+                _ => None,
+            };
+            if let Some(t) = text_val {
+                let _ = writeln!(
+                    &mut out,
+                    "            gui.set_text(self.widgets.{}, table.translate_lang({:?}, lang))?;",
+                    field_name, t
+                );
+            }
+        }
+    }
+    let _ = writeln!(&mut out, "        }}");
+    let _ = writeln!(&mut out, "        Ok(())");
+    let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out);
+
+    let screen_hash: u16 = {
+        let mut h: u16 = 0x811c;
+        for b in screen_name.bytes() {
+            h = (h ^ (b as u16)).wrapping_mul(0x0103);
+        }
+        h & 0x7FFF
+    };
+
+    let _ = writeln!(&mut out, "    pub const fn screen_id(&self) -> ScreenId {{");
+    let _ = writeln!(&mut out, "        ScreenId::new({})", screen_hash);
+    let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out, "}}");
+    let _ = writeln!(&mut out);
+
+    let _ = writeln!(
+        &mut out,
+        "impl<'a, const N: usize, const E: usize, const D: usize> Screen<'a, N, E, D> for {} {{",
+        app_struct_name
+    );
+    let _ = writeln!(&mut out, "    fn id(&self) -> ScreenId {{");
+    let _ = writeln!(&mut out, "        self.screen_id()");
+    let _ = writeln!(&mut out, "    }}");
+    let _ = writeln!(&mut out, "}}");
+    let _ = writeln!(&mut out);
+
+    let first_widget = named_vars.first().cloned();
+    let _ = writeln!(&mut out, "impl Render for {} {{", app_struct_name);
+    let _ = writeln!(
+        &mut out,
+        "    fn render<'a, 'ctx, const N: usize, const E: usize, const D: usize>("
+    );
+    let _ = writeln!(&mut out, "        &self,");
+    let _ = writeln!(&mut out, "        cx: &mut ViewContext<'a, 'ctx, N, E, D>,");
+    let _ = writeln!(&mut out, "    ) -> Result<WidgetId, GuiError> {{");
+    if let Some(w) = first_widget {
+        let _ = writeln!(&mut out, "        let app = Self::build(cx.ctx)?;");
+        let _ = writeln!(&mut out, "        Ok(app.widgets.{})", w);
+    } else {
+        let _ = writeln!(&mut out, "        let _ = Self::build(cx.ctx)?;");
+        let _ = writeln!(
+            &mut out,
+            "        cx.ctx.add_panel(cx.bounds, WidgetStyle::panel())"
+        );
+    }
     let _ = writeln!(&mut out, "    }}");
     let _ = writeln!(&mut out, "}}");
 

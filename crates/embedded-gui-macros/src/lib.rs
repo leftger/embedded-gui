@@ -298,3 +298,299 @@ pub fn gui_kdl(input: TokenStream) -> TokenStream {
             .into(),
     }
 }
+
+fn to_snake_case(s: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.extend(c.to_lowercase());
+        } else if c == '-' || c == ' ' {
+            out.push('_');
+        } else {
+            out.push(c);
+        }
+    }
+    if out.is_empty() { "screen".into() } else { out }
+}
+
+fn to_pascal_case(s: &str) -> String {
+    let mut out = String::new();
+    let mut capitalize = true;
+    for c in s.chars() {
+        if c == '_' || c == '-' || c == ' ' {
+            capitalize = true;
+        } else if capitalize {
+            out.extend(c.to_uppercase());
+            capitalize = false;
+        } else {
+            out.push(c);
+        }
+    }
+    if out.is_empty() { "Screen".into() } else { out }
+}
+
+/// Compiles an entire KDL multi-screen project (`project.kdl` manifest and screens) into typed,
+/// zero-allocation `#![no_std]` Rust code with a strongly-typed screen navigator.
+///
+/// # Example
+/// ```ignore
+/// embedded_gui_macros::include_project!("ui/project.kdl");
+/// ```
+#[proc_macro]
+pub fn include_project(input: TokenStream) -> TokenStream {
+    let lit_str = parse_macro_input!(input as LitStr);
+    let rel_path = lit_str.value();
+
+    let manifest_dir = match std::env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) => PathBuf::from(dir),
+        Err(_) => {
+            return syn::Error::new(lit_str.span(), "Failed to determine CARGO_MANIFEST_DIR")
+                .to_compile_error()
+                .into();
+        }
+    };
+
+    let full_path = manifest_dir.join(&rel_path);
+    let project_kdl_source = match std::fs::read_to_string(&full_path) {
+        Ok(content) => content,
+        Err(err) => {
+            return syn::Error::new(
+                lit_str.span(),
+                format!(
+                    "Failed to read project KDL file at '{}': {}",
+                    full_path.display(),
+                    err
+                ),
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let doc: kdl::KdlDocument = match project_kdl_source.parse() {
+        Ok(d) => d,
+        Err(err) => {
+            return syn::Error::new(
+                lit_str.span(),
+                format!("Failed to parse project.kdl: {}", err),
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let root = match doc.nodes().iter().find(|n| n.name().value() == "project") {
+        Some(n) => n,
+        None => {
+            return syn::Error::new(
+                lit_str.span(),
+                "project.kdl must contain a top-level 'project' node",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let project_dir = full_path.parent().unwrap_or_else(|| Path::new("."));
+
+    struct ScreenEntry {
+        id: String,
+        mod_name: String,
+        app_name: String,
+        widgets_name: String,
+        generated_code: String,
+    }
+
+    let mut screens = Vec::new();
+    if let Some(children) = root.children() {
+        for node in children.nodes() {
+            if node.name().value() != "screen" {
+                continue;
+            }
+            let id = match node.get("id").and_then(|v| v.as_string()) {
+                Some(id) => id.to_string(),
+                None => {
+                    return syn::Error::new(
+                        lit_str.span(),
+                        "Each 'screen' entry in project.kdl must have an id=\"...\" attribute",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+            };
+            let file = match node.get("file").and_then(|v| v.as_string()) {
+                Some(file) => file.to_string(),
+                None => {
+                    return syn::Error::new(
+                        lit_str.span(),
+                        format!(
+                            "Screen '{}' in project.kdl must have a file=\"...\" attribute",
+                            id
+                        ),
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+            };
+
+            let screen_path = project_dir.join(&file);
+            let screen_kdl = match std::fs::read_to_string(&screen_path) {
+                Ok(content) => content,
+                Err(err) => {
+                    return syn::Error::new(
+                        lit_str.span(),
+                        format!(
+                            "Failed to read screen KDL file at '{}': {}",
+                            screen_path.display(),
+                            err
+                        ),
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+            };
+
+            let screen_def = match embedded_gui_codegen::parse_kdl_screen(&screen_kdl) {
+                Ok(s) => s,
+                Err(err) => {
+                    return syn::Error::new(
+                        lit_str.span(),
+                        format!(
+                            "Error parsing screen '{}' at '{}': {}",
+                            id,
+                            screen_path.display(),
+                            err
+                        ),
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+            };
+
+            let assets = match load_project_assets(&screen_def, project_dir) {
+                Ok(a) => a,
+                Err(msg) => {
+                    return syn::Error::new(lit_str.span(), msg)
+                        .to_compile_error()
+                        .into();
+                }
+            };
+
+            let rust_code =
+                embedded_gui_codegen::generate_rust_code_with_assets(&screen_def, &assets);
+            let mod_name = to_snake_case(&id);
+            let app_name = format!("{}App", screen_def.id);
+            let widgets_name = format!("{}Widgets", screen_def.id);
+
+            screens.push(ScreenEntry {
+                id,
+                mod_name,
+                app_name,
+                widgets_name,
+                generated_code: rust_code,
+            });
+        }
+    }
+
+    if screens.is_empty() {
+        return syn::Error::new(
+            lit_str.span(),
+            "project.kdl must declare at least one 'screen'",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let mut out = String::new();
+    out.push_str("// Auto-generated by embedded_gui_macros::include_project! DO NOT EDIT.\n");
+    out.push_str("use embedded_gui::prelude::*;\n\n");
+
+    for s in &screens {
+        out.push_str(&format!("pub mod {} {{\n", s.mod_name));
+        out.push_str(&s.generated_code);
+        out.push_str("\n}\n");
+        out.push_str(&format!("pub use {}::{};\n", s.mod_name, s.app_name));
+        out.push_str(&format!("pub use {}::{};\n\n", s.mod_name, s.widgets_name));
+    }
+
+    out.push_str("/// Strongly-typed identifier for all screens in this project.\n");
+    out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]\n");
+    out.push_str("pub enum ScreenTag {\n");
+    for s in &screens {
+        out.push_str(&format!("    {},\n", to_pascal_case(&s.id)));
+    }
+    out.push_str("}\n\n");
+
+    out.push_str("/// Zero-allocation navigator tracking screen transitions across the project.\n");
+    out.push_str("#[derive(Clone, Copy, Debug)]\n");
+    out.push_str("pub struct AppNavigator {\n");
+    out.push_str("    current: ScreenTag,\n");
+    out.push_str("    previous: Option<ScreenTag>,\n");
+    out.push_str("    transition_count: u32,\n");
+    out.push_str("}\n\n");
+
+    out.push_str("impl AppNavigator {\n");
+    let default_first = to_pascal_case(&screens[0].id);
+    out.push_str(&format!(
+        "    pub const DEFAULT_INITIAL: ScreenTag = ScreenTag::{};\n\n",
+        default_first
+    ));
+    out.push_str("    pub const fn new(initial: ScreenTag) -> Self {\n");
+    out.push_str("        Self {\n");
+    out.push_str("            current: initial,\n");
+    out.push_str("            previous: None,\n");
+    out.push_str("            transition_count: 0,\n");
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub const fn current(&self) -> ScreenTag {\n");
+    out.push_str("        self.current\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub const fn previous(&self) -> Option<ScreenTag> {\n");
+    out.push_str("        self.previous\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub const fn transition_count(&self) -> u32 {\n");
+    out.push_str("        self.transition_count\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn switch_to(&mut self, target: ScreenTag) -> bool {\n");
+    out.push_str("        if self.current != target {\n");
+    out.push_str("            self.previous = Some(self.current);\n");
+    out.push_str("            self.current = target;\n");
+    out.push_str("            self.transition_count = self.transition_count.wrapping_add(1);\n");
+    out.push_str("            true\n");
+    out.push_str("        } else {\n");
+    out.push_str("            false\n");
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn back(&mut self) -> bool {\n");
+    out.push_str("        if let Some(prev) = self.previous {\n");
+    out.push_str("            self.switch_to(prev)\n");
+    out.push_str("        } else {\n");
+    out.push_str("            false\n");
+    out.push_str("        }\n");
+    out.push_str("    }\n");
+    out.push_str("}\n\n");
+
+    out.push_str("impl Default for AppNavigator {\n");
+    out.push_str("    fn default() -> Self {\n");
+    out.push_str("        Self::new(Self::DEFAULT_INITIAL)\n");
+    out.push_str("    }\n");
+    out.push_str("}\n");
+
+    match out.parse::<proc_macro2::TokenStream>() {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::new(
+            lit_str.span(),
+            format!("Failed to tokenize generated project code: {}", err),
+        )
+        .to_compile_error()
+        .into(),
+    }
+}

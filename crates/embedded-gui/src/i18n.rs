@@ -74,8 +74,13 @@ impl<'a> TranslationTable<'a> {
 
     /// Looks up a localized string by key using the active language, falling back to fallback_lang or the raw key.
     pub fn translate(&self, key: &'a str) -> &'a str {
+        self.translate_lang(key, self.active_lang)
+    }
+
+    /// Looks up a localized string by key for an explicit language, falling back to fallback_lang or the raw key.
+    pub fn translate_lang(&self, key: &'a str, lang: LanguageId) -> &'a str {
         if let Some(entry) = self.entries.iter().find(|e| e.key == key) {
-            if let Some(s) = entry.get(self.active_lang) {
+            if let Some(s) = entry.get(lang) {
                 return s;
             }
             if let Some(s) = entry.get(self.fallback_lang) {

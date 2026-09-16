@@ -106,6 +106,25 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
     {
         WidgetBuilder::new(self, rect, widget)
     }
+
+    pub fn add_custom_widget<S>(
+        &mut self,
+        rect: impl Into<Rect>,
+        widget: &'a (dyn crate::widget::CustomWidget + 'a),
+        style: S,
+    ) -> Result<WidgetId, GuiError>
+    where
+        S: Into<WidgetStyle>,
+    {
+        let id = self.add_widget(
+            rect,
+            WidgetKind::Custom(crate::widget::CustomWidgetRef::new(widget)),
+            style,
+        )?;
+        self.ensure_focus();
+        Ok(id)
+    }
+
     pub fn add_panel<S>(&mut self, rect: impl Into<Rect>, style: S) -> Result<WidgetId, GuiError>
     where
         S: Into<WidgetStyle>,

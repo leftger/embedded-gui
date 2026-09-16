@@ -1341,6 +1341,7 @@ version = "0.2.6"
 dependencies = [
  "embedded-gui-codegen",
  "image",
+ "kdl 6.7.1",
  "proc-macro2",
  "quote",
  "syn 3.0.5",

@@ -99,6 +99,32 @@ impl<'a, 'ctx, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.ctx.add_themed_button(self.bounds, text)
     }
 
+    /// Spawns a custom widget implementing `CustomWidget`.
+    pub fn custom_widget(
+        &mut self,
+        widget: &'a (dyn crate::widget::CustomWidget + 'a),
+        style: impl Into<WidgetStyle>,
+    ) -> Result<WidgetId, GuiError> {
+        self.ctx.add_custom_widget(self.bounds, widget, style)
+    }
+
+    /// Binds a widget to a reactive signal for dirty notifications.
+    pub fn bind_signal<T: Copy + PartialEq, const S: usize>(
+        &mut self,
+        widget_id: WidgetId,
+        signal: &mut crate::state::Signal<T, S>,
+    ) -> Result<(), GuiError> {
+        self.ctx.bind_signal(widget_id, signal)
+    }
+
+    /// Polls a reactive signal for dirty state and invalidates subscribed widgets.
+    pub fn poll_signal<T: Copy + PartialEq, const S: usize>(
+        &mut self,
+        signal: &mut crate::state::Signal<T, S>,
+    ) -> Result<bool, GuiError> {
+        self.ctx.poll_signal(signal)
+    }
+
     /// Spawns a themed panel container.
     pub fn panel<F>(&mut self, builder: F) -> Result<WidgetId, GuiError>
     where

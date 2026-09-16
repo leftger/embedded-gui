@@ -37,6 +37,11 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.dirty.add(rect)?;
         Ok(())
     }
+
+    /// Sets the text of a Label, Button, Checkbox, or Toggle widget.
+    pub fn set_text(&mut self, id: WidgetId, text: &'a str) -> Result<(), GuiError> {
+        self.set_widget_property(id, PropertyKey::Text, PropertyValue::Str(text))
+    }
     pub fn set_progress(&mut self, id: WidgetId, value: f32) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;

@@ -250,6 +250,7 @@ impl<'a> MenuCell<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WidgetKind<'a> {
     Panel,
+    Custom(crate::widget::CustomWidgetRef<'a>),
     Label(&'a str),
     Button(&'a str),
     ProgressBar {
@@ -583,7 +584,10 @@ pub enum KeyboardLayout {
 }
 
 impl WidgetKind<'_> {
-    pub const fn focusable(self) -> bool {
+    pub fn focusable(self) -> bool {
+        if let Self::Custom(c) = self {
+            return c.widget.focusable();
+        }
         #[cfg(feature = "rich-widgets")]
         if matches!(
             self,
@@ -734,6 +738,16 @@ impl<'a> WidgetNode<'a> {
                 Ok(())
             }
             #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Text, WidgetKind::Toggle { label, .. }, PropertyValue::Str(s)) => {
+                *label = s;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
+            (PropertyKey::Text, WidgetKind::Checkbox { label, .. }, PropertyValue::Str(s)) => {
+                *label = s;
+                Ok(())
+            }
+            #[cfg(feature = "rich-widgets")]
             (PropertyKey::State, WidgetKind::Toggle { on, .. }, PropertyValue::Bool(b)) => {
                 *on = b;
                 Ok(())
@@ -804,6 +818,11 @@ impl<'a> WidgetNode<'a> {
         }
 
         match self.kind {
+            WidgetKind::Custom(c) => {
+                let mut canvas = crate::render::RenderCtxCanvas { ctx };
+                let _ = c.widget.render(&mut canvas, rect, &self.style, state);
+                Ok(())
+            }
             WidgetKind::Panel => render_panel(ctx, rect, self.style, state),
             WidgetKind::Label(text) => render_label(ctx, rect, text, self.style),
             WidgetKind::Button(text) => render_button(ctx, rect, text, self.style, state),
@@ -1273,7 +1292,7 @@ impl<'a> WidgetNode<'a> {
     }
 }
 
-const fn default_flags(kind: WidgetKind<'_>) -> WidgetFlags {
+fn default_flags(kind: WidgetKind<'_>) -> WidgetFlags {
     let mut flags = WidgetFlags::from_bits(
         WidgetFlags::CLIP_CHILDREN.bits() | WidgetFlags::EVENT_BUBBLE.bits(),
     );

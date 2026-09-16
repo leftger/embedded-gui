@@ -211,3 +211,98 @@ pub trait Widget {
         Err(PropertyError::NotFound)
     }
 }
+
+/// Abstract drawing canvas supplied to custom widgets during render.
+pub trait CustomCanvas {
+    fn fill_rect(
+        &mut self,
+        rect: Rect,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+    ) -> Result<(), crate::GuiError>;
+    fn fill_rounded_rect(
+        &mut self,
+        rect: Rect,
+        radius: u8,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+    ) -> Result<(), crate::GuiError>;
+    fn draw_rect(
+        &mut self,
+        rect: Rect,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+    ) -> Result<(), crate::GuiError>;
+    fn draw_line(
+        &mut self,
+        p1: (i32, i32),
+        p2: (i32, i32),
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+    ) -> Result<(), crate::GuiError>;
+    fn draw_pixel(
+        &mut self,
+        x: i32,
+        y: i32,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+    ) -> Result<(), crate::GuiError>;
+    fn draw_text(
+        &mut self,
+        text: &str,
+        x: i32,
+        y: i32,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+        font: crate::font::FontId,
+    ) -> Result<(), crate::GuiError>;
+}
+
+/// A safe `#![no_std]` extension point allowing user code to define
+/// custom drawing and input handling for widgets.
+pub trait CustomWidget {
+    /// Draw the custom widget onto the provided canvas within `rect`.
+    fn render(
+        &self,
+        canvas: &mut dyn CustomCanvas,
+        rect: Rect,
+        style: &crate::style::WidgetStyle,
+        state: crate::style::VisualState,
+    ) -> Result<(), crate::GuiError>;
+
+    /// Handle UI events directed to this widget.
+    fn handle_event(&self, _event: &crate::input::UiEvent, _ctx: &mut EventContext) -> EventPolicy {
+        EventPolicy::Continue
+    }
+
+    /// Whether this custom widget can receive input focus.
+    fn focusable(&self) -> bool {
+        false
+    }
+}
+
+/// A copyable fat-pointer wrapper around a `CustomWidget` trait object.
+#[derive(Clone, Copy)]
+pub struct CustomWidgetRef<'a> {
+    pub widget: &'a (dyn CustomWidget + 'a),
+}
+
+impl<'a> CustomWidgetRef<'a> {
+    pub const fn new(widget: &'a (dyn CustomWidget + 'a)) -> Self {
+        Self { widget }
+    }
+}
+
+impl<'a> PartialEq for CustomWidgetRef<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        core::ptr::addr_eq(
+            self.widget as *const dyn CustomWidget as *const (),
+            other.widget as *const dyn CustomWidget as *const (),
+        )
+    }
+}
+
+impl<'a> core::fmt::Debug for CustomWidgetRef<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CustomWidgetRef")
+            .field(
+                "addr",
+                &(self.widget as *const dyn CustomWidget as *const ()),
+            )
+            .finish()
+    }
+}
