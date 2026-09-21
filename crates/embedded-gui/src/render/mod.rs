@@ -667,28 +667,75 @@ where
             }
             GradientDirection::Horizontal => {
                 let denom = rect.w.saturating_sub(1).max(1);
-                for x in draw.x..draw.right() {
+                // Copies, so the closure does not borrow `self` -- it has to be callable
+                // while `self.target` is borrowed mutably.
+                let quality = self.quality;
+                let (g_start, g_end) = (gradient.start, gradient.end);
+                let column_color = move |x: i32| -> Rgb565 {
                     let numer = ((x - rect.x).max(0) as u32).min(denom);
                     let mut t = ((numer * 255) / denom) as u8;
-                    t = match self.quality {
+                    t = match quality {
                         RenderQuality::Low => 128,
                         RenderQuality::Medium => (t / 64) * 64,
                         RenderQuality::High => t,
                     };
-                    let color = lerp_rgb565(gradient.start, gradient.end, t);
+                    lerp_rgb565(g_start, g_end, t)
+                };
 
-                    let is_middle_col = r == 0 || (x >= rect.x + r && x < rect.right() - r);
-                    if is_middle_col {
-                        if fast_solid {
-                            let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
-                                Point::new(x, draw.y),
-                                embedded_graphics_core::geometry::Size::new(1, draw.h),
-                            );
-                            self.target.fill_solid(&eg_rect, color)?;
-                        } else {
-                            for y in draw.y..draw.bottom() {
-                                self.pixel(x, y, color, opacity)?;
-                            }
+                // Columns that are inside the rounded rect on *every* row: the corner
+                // arcs only ever cut into the outermost `radius` columns.
+                let x_lo = if r > 0 {
+                    draw.x.max(rect.x + r)
+                } else {
+                    draw.x
+                };
+                let x_hi = if r > 0 {
+                    draw.right().min(rect.right() - r)
+                } else {
+                    draw.right()
+                };
+                let span = x_hi - x_lo;
+
+                // A horizontal gradient's colour depends only on x, so every row of the
+                // span is identical: compute the row once and reuse the same slice.
+                //
+                // The shape of this matters more than it looks. This branch used to
+                // emit one 1px-wide `fill_solid` per column, and each of those is 14
+                // `slice::fill` calls that cost ~50 cycles *each* even for a single
+                // pixel -- ~730 cycles per column, ~220 columns per frame, ~183us
+                // measured. Driving `fill_contiguous` from a lazily-computed iterator
+                // chain was worse still (~40 cycles/px, because `next()` was not
+                // cheap); materialising the row and handing over a slice makes
+                // `next()` inline to a couple of cycles.
+                const MAX_ROW: usize = 512;
+                let row_fits = span > 0 && (span as usize) <= MAX_ROW;
+                if fast_solid && row_fits && draw.h > 0 {
+                    let mut row_buf = [Rgb565::BLACK; MAX_ROW];
+                    for (i, x) in (x_lo..x_hi).enumerate() {
+                        row_buf[i] = column_color(x);
+                    }
+                    let row = &row_buf[..span as usize];
+                    for y in draw.y..draw.bottom() {
+                        let eg_rect = embedded_graphics_core::primitives::Rectangle::new(
+                            Point::new(x_lo, y),
+                            embedded_graphics_core::geometry::Size::new(span as u32, 1),
+                        );
+                        self.target.fill_contiguous(&eg_rect, row.iter().copied())?;
+                    }
+                }
+
+                // Corner columns, plus everything else when blending is required or the
+                // span is too wide for the row buffer.
+                let span_done = fast_solid && row_fits;
+                for x in draw.x..draw.right() {
+                    let in_span = x >= x_lo && x < x_hi;
+                    if in_span && span_done {
+                        continue;
+                    }
+                    let color = column_color(x);
+                    if in_span {
+                        for y in draw.y..draw.bottom() {
+                            self.pixel(x, y, color, opacity)?;
                         }
                     } else {
                         for y in draw.y..draw.bottom() {
