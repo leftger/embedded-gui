@@ -1301,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "criterion",
  "critical-section",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-codegen"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "kdl 6.7.1",
  "thiserror 2.0.20",
@@ -1333,11 +1333,11 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-live"
-version = "0.2.6"
+version = "0.2.7"
 
 [[package]]
 name = "embedded-gui-macros"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "embedded-gui-codegen",
  "image",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-gui-studio"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "eframe",
  "egui_extras",

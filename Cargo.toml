@@ -12,7 +12,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 rust-version = "1.87"
 authors = ["Gerzain Mata <leftger@gmail.com>"]
@@ -23,10 +23,10 @@ documentation = "https://docs.rs/embedded-gui"
 readme = "README.md"
 
 [workspace.dependencies]
-embedded-gui = { path = "crates/embedded-gui", version = "0.2.6" }
-embedded-gui-codegen = { path = "crates/embedded-gui-codegen", version = "0.2.6" }
-embedded-gui-live = { path = "crates/embedded-gui-live", version = "0.2.6" }
-embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.6" }
+embedded-gui = { path = "crates/embedded-gui", version = "0.2.7" }
+embedded-gui-codegen = { path = "crates/embedded-gui-codegen", version = "0.2.7" }
+embedded-gui-live = { path = "crates/embedded-gui-live", version = "0.2.7" }
+embedded-gui-macros = { path = "crates/embedded-gui-macros", version = "0.2.7" }
 
 embedded-graphics-core = "0.4.1"
 embedded-draw-target = "0.1.1"
