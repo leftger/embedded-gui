@@ -114,6 +114,123 @@ impl Hardware2DAccelerator for Software2DAccelerator {
     }
 }
 
+/// Reference silicon-model accelerator for STM32 DMA2D / Chrom-ART and 2D blitters.
+///
+/// Models hardware DMA modes:
+/// - Register-to-Memory (R2M): fast solid color filling.
+/// - Memory-to-Memory (M2M): hardware rectangle copy/blit.
+/// - Memory-to-Memory with Blending (M2M_BLEND): alpha blending between foreground and background.
+///
+/// Also provides hardware operation telemetry (`fill_count`, `copy_count`, `blend_count`, `pixels_processed`)
+/// to measure silicon acceleration effectiveness in firmware and benchmarks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Dma2dAccelerator {
+    /// Number of hardware solid fill operations executed.
+    pub fill_count: u32,
+    /// Number of hardware block blit/copy operations executed.
+    pub copy_count: u32,
+    /// Number of hardware alpha blending operations executed.
+    pub blend_count: u32,
+    /// Cumulative pixels accelerated.
+    pub pixels_processed: u64,
+}
+
+impl Dma2dAccelerator {
+    pub const fn new() -> Self {
+        Self {
+            fill_count: 0,
+            copy_count: 0,
+            blend_count: 0,
+            pixels_processed: 0,
+        }
+    }
+
+    /// Resets telemetry counters to zero.
+    pub fn reset_telemetry(&mut self) {
+        self.fill_count = 0;
+        self.copy_count = 0;
+        self.blend_count = 0;
+        self.pixels_processed = 0;
+    }
+}
+
+impl Hardware2DAccelerator for Dma2dAccelerator {
+    fn fill_rect(&mut self, dest: &mut [Rgb565], dest_stride: usize, rect: Rect, color: Rgb565) {
+        let x0 = rect.x.max(0) as usize;
+        let y0 = rect.y.max(0) as usize;
+        let w = rect.w as usize;
+        let h = rect.h as usize;
+
+        for dy in 0..h {
+            let row_idx = (y0 + dy) * dest_stride + x0;
+            if row_idx + w <= dest.len() {
+                dest[row_idx..row_idx + w].fill(color);
+            }
+        }
+        self.fill_count = self.fill_count.saturating_add(1);
+        self.pixels_processed = self.pixels_processed.saturating_add((w * h) as u64);
+    }
+
+    fn copy_rect(
+        &mut self,
+        src: &[Rgb565],
+        src_stride: usize,
+        src_rect: Rect,
+        dest: &mut [Rgb565],
+        dest_stride: usize,
+        dest_pos: Point,
+    ) {
+        let sx0 = src_rect.x.max(0) as usize;
+        let sy0 = src_rect.y.max(0) as usize;
+        let dx0 = dest_pos.x.max(0) as usize;
+        let dy0 = dest_pos.y.max(0) as usize;
+        let w = src_rect.w as usize;
+        let h = src_rect.h as usize;
+
+        for dy in 0..h {
+            let src_idx = (sy0 + dy) * src_stride + sx0;
+            let dest_idx = (dy0 + dy) * dest_stride + dx0;
+            if src_idx + w <= src.len() && dest_idx + w <= dest.len() {
+                dest[dest_idx..dest_idx + w].copy_from_slice(&src[src_idx..src_idx + w]);
+            }
+        }
+        self.copy_count = self.copy_count.saturating_add(1);
+        self.pixels_processed = self.pixels_processed.saturating_add((w * h) as u64);
+    }
+
+    fn blend_rect(
+        &mut self,
+        fg: &[Rgb565],
+        fg_stride: usize,
+        fg_rect: Rect,
+        fg_alpha: u8,
+        bg: &mut [Rgb565],
+        bg_stride: usize,
+        bg_pos: Point,
+    ) {
+        let fx0 = fg_rect.x.max(0) as usize;
+        let fy0 = fg_rect.y.max(0) as usize;
+        let bx0 = bg_pos.x.max(0) as usize;
+        let by0 = bg_pos.y.max(0) as usize;
+        let w = fg_rect.w as usize;
+        let h = fg_rect.h as usize;
+
+        for dy in 0..h {
+            let fg_idx = (fy0 + dy) * fg_stride + fx0;
+            let bg_idx = (by0 + dy) * bg_stride + bx0;
+            for dx in 0..w {
+                if fg_idx + dx < fg.len() && bg_idx + dx < bg.len() {
+                    let fg_color = fg[fg_idx + dx];
+                    let bg_color = bg[bg_idx + dx];
+                    bg[bg_idx + dx] = lerp_rgb565(bg_color, fg_color, fg_alpha);
+                }
+            }
+        }
+        self.blend_count = self.blend_count.saturating_add(1);
+        self.pixels_processed = self.pixels_processed.saturating_add((w * h) as u64);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +261,33 @@ mod tests {
 
         assert_eq!(target[0], Rgb565::WHITE);
         assert_eq!(target[3], Rgb565::WHITE);
+    }
+
+    #[test]
+    fn test_dma2d_accelerator_telemetry_and_fill() {
+        let mut dest = [Rgb565::BLACK; 64];
+        let mut dma = Dma2dAccelerator::new();
+
+        dma.fill_rect(&mut dest, 8, Rect::new(0, 0, 4, 4), Rgb565::RED);
+        assert_eq!(dest[0], Rgb565::RED);
+        assert_eq!(dma.fill_count, 1);
+        assert_eq!(dma.pixels_processed, 16);
+
+        let mut target = [Rgb565::BLACK; 64];
+        dma.copy_rect(
+            &dest,
+            8,
+            Rect::new(0, 0, 4, 4),
+            &mut target,
+            8,
+            Point::new(0, 0),
+        );
+        assert_eq!(target[0], Rgb565::RED);
+        assert_eq!(dma.copy_count, 1);
+        assert_eq!(dma.pixels_processed, 32);
+
+        dma.reset_telemetry();
+        assert_eq!(dma.fill_count, 0);
+        assert_eq!(dma.pixels_processed, 0);
     }
 }

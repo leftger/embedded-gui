@@ -24,6 +24,7 @@ Heavily inspired by modern wearable and smartwatch UI frameworks—its animation
 - **2D Grid & Flex Layout Engines**: CSS-style track resolution (`"140px 1fr 2fr auto"`), cell placement, multi-track spans (`col_span`, `row_span`), flex rows/columns, gap spacing, and CSS-shorthand insets (`(vertical, horizontal)`, `(top, right, bottom, left)`).
 - **Rich Built-in Widgets**: Buttons, Sliders, Dropdowns, Toggles, Checkboxes, Gauges, Meters, Sweeping Arcs, Plotters/Charts, TextAreas, On-Screen Keyboards, and Circular Lists.
 - **Memory-Efficient String Slab Arena**: Flat `StringArena` text packing to eliminate per-widget buffer bloat while supporting dynamic formatted text slices.
+- **Zero-Allocation Internationalization (i18n)**: Static Flash/ROM translation tables, $O(\log N)$ binary search lookups, $O(1)$ `MessageId` indexing, template formatting interpolation (`translate_fmt`), multilingual `SparseBitmapFont` Unicode subsets, and RTL bidirectional shaping.
 - **Unified Motion Engine**: Tactile spatial easing curves (`moook`), spring dynamics, timeline keyframing, property mutator bindings, and screen stack transitions (flip-card, peek/glance, shutter, portal).
 - **Decoupled & Buffered Rendering Engine**: Bounding-box dirty tracking, adaptive scratch-buffer rendering (`render_dirty_buffered`) for zero-flicker SPI updates, opacity layering, software IIR blur, subpixel anti-aliasing, and custom display backends.
 - **Async DMA & Double/Triple Buffering**: Zero-copy presentation via `CompletionSlot` and `StandardSwapChain`, fully compatible with Embassy `async/await` or bare-metal superloop polling.
@@ -135,6 +136,35 @@ gui.set_widget_property(status_label, PropertyKey::Text, PropertyValue::Text("SY
 // 4. Render only dirty regions to your embedded-graphics DrawTarget
 gui.render_dirty(&mut display)?;
 ```
+
+### 4. Zero-Allocation Internationalization (i18n) & Localization
+
+```rust
+use embedded_gui::prelude::*;
+
+static TRANSLATIONS: [TranslationEntry<'static>; 2] = [
+    TranslationEntry::new("btn_start", &["Start", "Iniciar", "Starten"]),
+    TranslationEntry::new("status_fmt", &["Status: {} ({1})", "Estado: {} ({1})", "Status: {} ({1})"]),
+];
+static TABLE: TranslationTable<'static> = TranslationTable::new_sorted(&TRANSLATIONS);
+
+let mut gui = StandardGuiContext::new(Rect::new(0, 0, 320, 240));
+gui.set_translation_table(&TABLE);
+
+// Simple translation lookup:
+assert_eq!(gui.translate("btn_start"), "Start");
+
+// Switch to Spanish dynamically at runtime:
+gui.set_language(LanguageId::ES).unwrap();
+assert_eq!(gui.translate("btn_start"), "Iniciar");
+
+// Zero-allocation template formatting into stack buffer:
+let mut buf = heapless::String::<64>::new();
+let status = gui.translate_fmt("status_fmt", &["Listo", "100%"], &mut buf).unwrap();
+assert_eq!(status, "Estado: Listo (100%)");
+```
+
+*For complete details, multilingual Unicode fonts (`SparseBitmapFont`), and RTL text shaping, see the [Internationalization & Localization Guide](./docs/i18n-localization-guide.md).*
 
 ---
 

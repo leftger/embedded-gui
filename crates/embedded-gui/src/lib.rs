@@ -67,7 +67,7 @@ pub use text::{StringArena, TextSlice};
 pub use view::{FlexBuilder, Render, ViewContext};
 
 pub use haptics::{HapticPattern, HapticSequencer};
-pub use i18n::{LanguageId, TranslationEntry, TranslationTable};
+pub use i18n::{I18nError, LanguageId, MessageId, TranslationEntry, TranslationTable};
 
 pub use visual_widgets::{BusyWheel, GaugeWidget};
 #[cfg(feature = "embedded-dsp")]
@@ -133,8 +133,8 @@ pub use cinematic::{
 };
 pub use completion::{CompletionSlot, WaitTransfer, WaitTransferFuture};
 pub use context::{
-    GuiContext, GuiError, KeyBindingAction, LargeGuiContext, PressTiming, SmallGuiContext,
-    StandardGuiContext, WidgetBuilder, WidgetKeyBindings, WidgetKeyInputPolicy,
+    CapacityStats, GuiContext, GuiError, KeyBindingAction, LargeGuiContext, PressTiming,
+    SmallGuiContext, StandardGuiContext, WidgetBuilder, WidgetKeyBindings, WidgetKeyInputPolicy,
 };
 pub use display_backend::{
     AsyncDmaTransfer, DisplayBackend, DisplayError, DisplayRegion, DmaTransfer, SimulatorBackend,
@@ -146,7 +146,7 @@ pub use embedded_graphics_framebuf::{
     FrameBuf,
     backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
 };
-pub use font::{BitmapFont, Font, FontId, PackedFont};
+pub use font::{BitmapFont, Font, FontId, PackedFont, SparseBitmapFont};
 pub use framebuffer::{
     Framebuffer, FramebufferGray8, FramebufferRgba8888, FramebufferSlice, Rgba8888,
 };
@@ -174,13 +174,17 @@ pub use pdc::{PdcCommand, PdcCommandType, PdcImage, PdcPrecisePoint};
 pub use present::PresentRegion;
 pub use render::{
     AntiAliasMode, Blend, BlendMode, CHAR_HEIGHT, CHAR_WIDTH, ColorFormat, Compositor, Dither,
-    DrawTask, DrawTaskQueue, DrawUnit, EllipsisMode, Hardware2DAccelerator, LayerState,
-    PartialBandBuffer, PathVerb, PixelRead, RenderBackendCaps, RenderCtx, RenderQuality,
-    Software2DAccelerator, SoftwareDrawUnit, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle,
-    TextAlign, TextMetrics, TextOverflow, TextOverflowPolicy, TextStyle, TextWrap, Transform2D,
-    VectorPath, VerticalAlign, dispatch_draw_tasks,
+    Dma2dAccelerator, DrawTask, DrawTaskQueue, DrawUnit, EllipsisMode,
+    FramebufferAcceleratorDrawUnit, Hardware2DAccelerator, LayerState, PartialBandBuffer, PathVerb,
+    PixelRead, RenderBackendCaps, RenderCtx, RenderQuality, Software2DAccelerator,
+    SoftwareDrawUnit, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle, TextAlign, TextMetrics,
+    TextOverflow, TextOverflowPolicy, TextStyle, TextWrap, Transform2D, VectorPath, VerticalAlign,
+    dispatch_draw_tasks,
 };
-pub use render::{LineBufferRenderer, ScanlineTarget};
+pub use render::{
+    HardwareVerticalScrollTarget, HardwareVerticalScroller, LineBufferRenderer,
+    MipiDcsScrollConfig, ScanlineTarget, ScrollConfigError, ScrollDamage, St7789ScrollConfig,
+};
 pub use round::{UnobstructedArea, circle_chord_width, round_screen_line_bounds};
 pub use screen::{
     Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack, ScreenStackError,
@@ -246,38 +250,39 @@ pub mod prelude {
         AnimationManager, AnimationManagerCallbacks, AnimationSequence, AnimationState,
         AntiAliasMode, ArcGaugeWidget, Axis, BandMeterWidget, BasicTextShaper, BindingSnapshot,
         BitmapFont, Blend, BlendMode, Block, Border, BorderRect, CallbackSlot, CanvasColor,
-        CardDeckDirection, CardDeckState, CardStory, CardStoryTransition, CarouselSpec,
-        CatmullRomSpline, ChartMode, CinematicPreset, ColorConvertedDrawTarget, ColorFormat,
-        ColorOps, ColorStop, CompassMode, CompassWidget, ComposedAnimation,
+        CapacityStats, CardDeckDirection, CardDeckState, CardStory, CardStoryTransition,
+        CarouselSpec, CatmullRomSpline, ChartMode, CinematicPreset, ColorConvertedDrawTarget,
+        ColorFormat, ColorOps, ColorStop, CompassMode, CompassWidget, ComposedAnimation,
         ComposedAnimationCallbacks, ComposedAnimationPlayer, ComposedAnimationStatus,
         CompositeIconSpec, CompositionControls, CompositionMode, Compositor, Constraint,
         CustomCanvas, CustomWidget, CustomWidgetRef, DirtyBandAccumulator, DirtyRectVisualizer,
-        DirtyTracker, Dither, DrawTargetColorExt, Easing, EdgeInsets, EllipsisMode, EventContext,
-        EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState, FlexBuilder, FluentBuilder,
-        FocusGroupId, Font, FontId, FrameBudgetTracker, Framebuffer, FramebufferGray8,
-        FramebufferRgba8888, FramebufferSlice, GaugeThreshold, GlanceTileSpec, GradientDirection,
-        GridLayout, GridPlacement, GridTrack, GuiContext, GuiError, GuiModel, HapticPattern,
-        HapticSequencer, Hardware2DAccelerator, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry,
-        ImageFit, ImageRef, InertiaAnimator, InputEvent, InverterWidget, KeyBindingAction,
-        KeyboardLayout, Keyframe, KeyframeTrack, KeyframeTrackCallbacks, LanguageId,
-        LargeGuiContext, LayerState, LayoutItem, Length, Line, LineBufferRenderer, LinearGradient,
-        LinearLayout, ListState, MatrixWidget, MenuCell, MenuContract, MeterOrientation,
-        ModelChange, MonoBitmap, MotionTokens, MultiStopGradient, NavDirection, NineSlice,
-        NineSliceLayout, NotificationLevel, PackedFont, PathAnimator, PathPoint, PathVerb,
-        PeekRevealSpec, PixelRead, PlaybackMode, PointerButton, PointerState, PowerConfig,
-        PowerEvent, PowerManager, PowerState, PresentRegion, PressTiming, ProgressBarWidget,
-        PropertySignal, Rect, ReelFrame, ReelPlayer, Render, RenderBackendCaps, RenderCtx,
-        RenderQuality, RepeatMode, RepeaterWidget, Rgba8888, ScaleMode, ScaleWidget,
-        ScanlineTarget, Screen, ScreenCommand, ScreenId, ScreenLifecycleEvent, ScreenStack,
-        ScreenStackError, ScreenTransition, ScreenTransitionEffect, ScreenTransitionOrigin,
-        ScreenTransitionRunner, ScreenTransitionSample, ScreenTransitionSpec, ScrollState,
-        SegmentStyle, SequencePlayer, SequencePlayerStatus, SequenceRepeatMode,
-        SevenSegmentDisplay, Shadow, ShapedGlyph, ShapingConfig, Signal, SliceModel, SlicePair,
-        SliceScaleMode, SliderState, SmallGuiContext, Software2DAccelerator, Span, SparklineWidget,
-        SpinboxWidget, SpringAnimator, SpriteSheet, StandardGuiContext, StateStyle,
-        StateTransition, StatefulWidget, Stopwatch, StringArena, StrokeCap, StrokeDash, StrokeJoin,
-        StrokeStyle, Style, StyleClassId, StyleTransition, SurfaceState, TableWidget, TabsState,
-        Text, TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
+        DirtyTracker, Dither, Dma2dAccelerator, DrawTargetColorExt, Easing, EdgeInsets,
+        EllipsisMode, EventContext, EventPhase, EventPhaseMask, EventPolicy, FeedTimelineState,
+        FlexBuilder, FluentBuilder, FocusGroupId, Font, FontId, FrameBudgetTracker, Framebuffer,
+        FramebufferAcceleratorDrawUnit, FramebufferGray8, FramebufferRgba8888, FramebufferSlice,
+        GaugeThreshold, GlanceTileSpec, GradientDirection, GridLayout, GridPlacement, GridTrack,
+        GuiContext, GuiError, GuiModel, HapticPattern, HapticSequencer, Hardware2DAccelerator,
+        I18nError, IconAlign, IconPart, ImageAtlas, ImageAtlasEntry, ImageFit, ImageRef,
+        InertiaAnimator, InputEvent, InverterWidget, KeyBindingAction, KeyboardLayout, Keyframe,
+        KeyframeTrack, KeyframeTrackCallbacks, LanguageId, LargeGuiContext, LayerState, LayoutItem,
+        Length, Line, LineBufferRenderer, LinearGradient, LinearLayout, ListState, MatrixWidget,
+        MenuCell, MenuContract, MessageId, MeterOrientation, ModelChange, MonoBitmap, MotionTokens,
+        MultiStopGradient, NavDirection, NineSlice, NineSliceLayout, NotificationLevel, PackedFont,
+        PathAnimator, PathPoint, PathVerb, PeekRevealSpec, PixelRead, PlaybackMode, PointerButton,
+        PointerState, PowerConfig, PowerEvent, PowerManager, PowerState, PresentRegion,
+        PressTiming, ProgressBarWidget, PropertySignal, Rect, ReelFrame, ReelPlayer, Render,
+        RenderBackendCaps, RenderCtx, RenderQuality, RepeatMode, RepeaterWidget, Rgba8888,
+        ScaleMode, ScaleWidget, ScanlineTarget, Screen, ScreenCommand, ScreenId,
+        ScreenLifecycleEvent, ScreenStack, ScreenStackError, ScreenTransition,
+        ScreenTransitionEffect, ScreenTransitionOrigin, ScreenTransitionRunner,
+        ScreenTransitionSample, ScreenTransitionSpec, ScrollState, SegmentStyle, SequencePlayer,
+        SequencePlayerStatus, SequenceRepeatMode, SevenSegmentDisplay, Shadow, ShapedGlyph,
+        ShapingConfig, Signal, SliceModel, SlicePair, SliceScaleMode, SliderState, SmallGuiContext,
+        Software2DAccelerator, Span, SparklineWidget, SparseBitmapFont, SpinboxWidget,
+        SpringAnimator, SpriteSheet, StandardGuiContext, StateStyle, StateTransition,
+        StatefulWidget, Stopwatch, StringArena, StrokeCap, StrokeDash, StrokeJoin, StrokeStyle,
+        Style, StyleClassId, StyleTransition, SurfaceState, TableWidget, TabsState, Text,
+        TextAlign, TextDirection, TextMetrics, TextOverflow, TextOverflowPolicy, TextShaper,
         TextSlice, TextStyle, TextWrap, Theme, TileMode, TileRef, TimelineError,
         TimelineMotionPreset, TimelineStep, Timer, Transform2D, TransitionPreset, TranslationEntry,
         TranslationTable, Tween, UiEvent, UiEventFilter, VectorPath, VerticalAlign, ViewContext,

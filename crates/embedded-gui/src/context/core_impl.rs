@@ -310,6 +310,19 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.dirty.clear();
     }
 
+    /// Returns current capacity utilization and telemetry statistics across fixed buffers.
+    pub fn capacity_stats(&self) -> crate::context::types::CapacityStats {
+        crate::context::types::CapacityStats {
+            nodes_used: self.widgets.len(),
+            nodes_capacity: NODES,
+            events_used: self.events.len(),
+            events_capacity: EVENTS,
+            dirty_used: self.dirty.len(),
+            dirty_capacity: DIRTY,
+            subscriptions_used: self.subscriptions.len(),
+        }
+    }
+
     pub const fn theme(&self) -> Theme {
         self.theme
     }
@@ -354,6 +367,30 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
             table.translate_lang(key, self.active_language)
         } else {
             key
+        }
+    }
+
+    /// Looks up a localized string by numeric/enum MessageId using the active language in O(1) time.
+    pub fn translate_id(&self, id: crate::i18n::MessageId) -> Option<&'a str> {
+        self.translation_table
+            .and_then(|table| table.translate_id_lang(id, self.active_language))
+    }
+
+    /// Formats a localized string template for the active language by interpolating arguments into a stack buffer.
+    pub fn translate_fmt<'b, const CAP: usize>(
+        &self,
+        key: &'a str,
+        args: &[&str],
+        buf: &'b mut heapless::String<CAP>,
+    ) -> Result<&'b str, GuiError> {
+        if let Some(table) = self.translation_table {
+            table
+                .translate_fmt_lang(key, self.active_language, args, buf)
+                .map_err(|_| GuiError::Formatting)
+        } else {
+            buf.clear();
+            crate::i18n::interpolate_template(key, args, buf).map_err(|_| GuiError::Formatting)?;
+            Ok(buf.as_str())
         }
     }
 

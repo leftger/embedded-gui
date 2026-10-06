@@ -20,7 +20,9 @@ There are two complementary layers:
    - `blend_rect(fg, fg_stride, fg_rect, fg_alpha, bg, bg_stride, bg_pos)` — alpha blend
 
    `Software2DAccelerator` is the fallback implementation; it lets the same code
-   run on targets without a blitter.
+   run on targets without a blitter. `Dma2dAccelerator` is a reference implementation
+   modeling silicon blitters with hardware operation telemetry (`fill_count`, `copy_count`,
+   `blend_count`, `pixels_processed`).
 
 2. **`DrawUnit<D>`** (`crates/embedded-gui/src/render/task.rs`) is the
    rasterizer plug-in point used by `dispatch_draw_tasks`. A draw unit inspects
@@ -28,12 +30,22 @@ There are two complementary layers:
    the software fallback handles it.
 
 `HardwareAcceleratorDrawUnit<A>` is provided as a convenience wrapper that
-routes solid rectangle fills to the target's fast `fill_solid` path. For
-engines that operate directly on a framebuffer slice, implement your own
-`DrawUnit<Framebuffer<N>>` and call the `Hardware2DAccelerator` methods on
-`fb.pixels_mut()`.
+routes solid rectangle fills to the target's fast `fill_solid` path.
+`FramebufferAcceleratorDrawUnit<A>` is provided for engines that operate directly
+on a [`Framebuffer<N>`] slice (`fb.pixels_mut()`).
 
 ## 2. Minimal hardware draw unit
+
+You can use the built-in `FramebufferAcceleratorDrawUnit`:
+
+```rust
+use embedded_gui::prelude::*;
+use embedded_gui::render::task::FramebufferAcceleratorDrawUnit;
+
+let mut pxp_draw_unit = FramebufferAcceleratorDrawUnit::new(MyPxpDriver::new(), 320, 240);
+```
+
+Or implement a custom `DrawUnit`:
 
 ```rust
 use embedded_graphics_core::pixelcolor::Rgb565;

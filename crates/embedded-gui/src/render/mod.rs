@@ -1,18 +1,23 @@
 pub mod accelerator;
 pub mod band;
 pub mod compositor;
+pub mod hardware_scroll;
 pub mod line_buffer;
 pub mod span;
 pub mod stroke;
 pub mod task;
 pub mod text_style;
 
-pub use accelerator::{Hardware2DAccelerator, Software2DAccelerator};
+pub use accelerator::{Dma2dAccelerator, Hardware2DAccelerator, Software2DAccelerator};
 pub use band::PartialBandBuffer;
 pub(crate) use compositor::apply_blend_mode;
 pub use compositor::{
     Blend, BlendMode, ColorFormat, Compositor, Dither, LayerState, PixelRead, RenderBackendCaps,
     WindowedDrawTarget, lerp_rgb565,
+};
+pub use hardware_scroll::{
+    HardwareVerticalScrollTarget, HardwareVerticalScroller, MipiDcsScrollConfig, ScrollConfigError,
+    ScrollDamage, St7789ScrollConfig,
 };
 pub use line_buffer::{LineBufferRenderer, ScanlineTarget};
 pub use span::{FixedSpanRasterizer, ScanlineSpan};
@@ -21,8 +26,8 @@ pub use stroke::{
     Transform2D, VectorPath,
 };
 pub use task::{
-    DrawTask, DrawTaskQueue, DrawUnit, HardwareAcceleratorDrawUnit, SoftwareDrawUnit,
-    dispatch_draw_tasks,
+    DrawTask, DrawTaskQueue, DrawUnit, FramebufferAcceleratorDrawUnit, HardwareAcceleratorDrawUnit,
+    SoftwareDrawUnit, dispatch_draw_tasks,
 };
 pub use text_style::{
     CHAR_HEIGHT, CHAR_WIDTH, EllipsisMode, TextAlign, TextMetrics, TextOverflow,

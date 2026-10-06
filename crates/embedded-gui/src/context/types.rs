@@ -16,11 +16,18 @@ pub enum GuiError {
     DirtyFull,
     NotFound,
     Drawing,
+    Formatting,
 }
 
 impl From<DirtyError> for GuiError {
     fn from(_: DirtyError) -> Self {
         Self::DirtyFull
+    }
+}
+
+impl From<crate::i18n::I18nError> for GuiError {
+    fn from(_: crate::i18n::I18nError) -> Self {
+        Self::Formatting
     }
 }
 
@@ -143,6 +150,60 @@ pub(crate) struct StateTransition {
     pub(crate) from: VisualState,
     pub(crate) to: VisualState,
     pub(crate) elapsed_ms: u32,
+}
+
+/// Telemetry and watermark statistics for fixed-capacity [`GuiContext`] buffers.
+///
+/// Use this in firmware builds to inspect buffer utilization and tune `NODES`, `EVENTS`,
+/// and `DIRTY` const generics to minimize MCU SRAM footprint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CapacityStats {
+    /// Number of active widget nodes in the tree.
+    pub nodes_used: usize,
+    /// Maximum widget node capacity (`NODES` const generic).
+    pub nodes_capacity: usize,
+    /// Number of pending UI events in the queue.
+    pub events_used: usize,
+    /// Maximum event queue capacity (`EVENTS` const generic).
+    pub events_capacity: usize,
+    /// Number of active dirty damage rectangles tracked.
+    pub dirty_used: usize,
+    /// Maximum dirty rectangle tracker capacity (`DIRTY` const generic).
+    pub dirty_capacity: usize,
+    /// Number of active widget event subscriptions.
+    pub subscriptions_used: usize,
+}
+
+impl CapacityStats {
+    /// Returns `true` if widget node capacity has reached its limit.
+    pub fn is_nodes_full(&self) -> bool {
+        self.nodes_used >= self.nodes_capacity
+    }
+
+    /// Remaining widget capacity available.
+    pub fn nodes_remaining(&self) -> usize {
+        self.nodes_capacity.saturating_sub(self.nodes_used)
+    }
+
+    /// Returns `true` if event queue capacity has reached its limit.
+    pub fn is_events_full(&self) -> bool {
+        self.events_used >= self.events_capacity
+    }
+
+    /// Remaining event capacity available.
+    pub fn events_remaining(&self) -> usize {
+        self.events_capacity.saturating_sub(self.events_used)
+    }
+
+    /// Returns `true` if dirty rectangle capacity has reached its limit.
+    pub fn is_dirty_full(&self) -> bool {
+        self.dirty_used >= self.dirty_capacity
+    }
+
+    /// Remaining dirty tracker capacity available.
+    pub fn dirty_remaining(&self) -> usize {
+        self.dirty_capacity.saturating_sub(self.dirty_used)
+    }
 }
 
 /// A compact GUI context budget suitable for resource-constrained microcontrollers (e.g. Cortex-M0+).

@@ -220,6 +220,134 @@ impl Font for BitmapFont {
     }
 }
 
+/// A sparse or non-contiguous Unicode bitmap font.
+///
+/// Unlike [`BitmapFont`] which requires contiguous ASCII character codes starting from `first_char`,
+/// [`SparseBitmapFont`] allows microcontrollers to store only the specific Unicode characters
+/// needed by the application's localized translations (e.g. accented Latin `á, é, ñ`, Cyrillic,
+/// Greek, Katakana, Kanji, symbols) in Flash/ROM without wasting space on unused glyphs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SparseBitmapFont {
+    /// Bounding box width in pixels.
+    pub width: u8,
+    /// Bounding box height in pixels.
+    pub height: u8,
+    /// Character horizontal advance in pixels.
+    pub advance: u8,
+    /// Vertical line height in pixels.
+    pub line_height: u8,
+    /// Number of bytes per row for each glyph.
+    pub bytes_per_row: u8,
+    /// Sorted array of `(char, glyph_bytes)` pairs.
+    pub glyphs: &'static [(char, &'static [u8])],
+}
+
+impl SparseBitmapFont {
+    /// Creates a new `SparseBitmapFont`. The `glyphs` slice MUST be sorted by character code.
+    pub const fn new(
+        width: u8,
+        height: u8,
+        advance: u8,
+        line_height: u8,
+        bytes_per_row: u8,
+        glyphs: &'static [(char, &'static [u8])],
+    ) -> Self {
+        Self {
+            width,
+            height,
+            advance,
+            line_height,
+            bytes_per_row,
+            glyphs,
+        }
+    }
+
+    /// Lookup glyph data for a character using binary search over sorted glyphs.
+    pub fn glyph_bytes(&self, ch: char) -> Option<&'static [u8]> {
+        self.glyphs
+            .binary_search_by_key(&ch, |(c, _)| *c)
+            .ok()
+            .map(|idx| self.glyphs[idx].1)
+    }
+
+    /// Renders a glyph by emitting [`GlyphOp`] commands to a callback.
+    pub fn draw_glyph_to<F>(&self, ch: char, mut emit: F)
+    where
+        F: FnMut(GlyphOp),
+    {
+        if let Some(data) = self.glyph_bytes(ch) {
+            let bpr = self.bytes_per_row as usize;
+            for row in 0..(self.height as usize) {
+                let start_idx = row * bpr;
+                let end_idx = start_idx + bpr;
+                if end_idx <= data.len() {
+                    let row_data = &data[start_idx..end_idx];
+                    let mut span_start: Option<usize> = None;
+                    let mut span_len = 0u32;
+
+                    for col in 0..(self.width as usize) {
+                        let byte_idx = col / 8;
+                        let bit_idx = 7 - (col % 8);
+                        let is_set =
+                            byte_idx < row_data.len() && (row_data[byte_idx] & (1 << bit_idx)) != 0;
+
+                        if is_set {
+                            if span_start.is_none() {
+                                span_start = Some(col);
+                                span_len = 1;
+                            } else {
+                                span_len += 1;
+                            }
+                        } else if let Some(start) = span_start {
+                            if span_len == 1 {
+                                emit(GlyphOp::Pixel(start as i32, row as i32));
+                            } else {
+                                emit(GlyphOp::Span(start as i32, row as i32, span_len));
+                            }
+                            span_start = None;
+                            span_len = 0;
+                        }
+                    }
+                    if let Some(start) = span_start {
+                        if span_len == 1 {
+                            emit(GlyphOp::Pixel(start as i32, row as i32));
+                        } else {
+                            emit(GlyphOp::Span(start as i32, row as i32, span_len));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Font for SparseBitmapFont {
+    fn advance(&self) -> u32 {
+        self.advance as u32
+    }
+
+    fn line_height(&self) -> u32 {
+        self.line_height as u32
+    }
+
+    fn draw_glyph(&self, ch: char, draw_pixel: &mut dyn FnMut(i32, i32)) {
+        self.draw_glyph_to(ch, |op| match op {
+            GlyphOp::Pixel(dx, dy) => draw_pixel(dx, dy),
+            GlyphOp::Span(dx, dy, len) => {
+                for col in 0..len {
+                    draw_pixel(dx + col as i32, dy);
+                }
+            }
+        });
+    }
+}
+
+impl From<&'static SparseBitmapFont> for FontId {
+    fn from(font: &'static SparseBitmapFont) -> Self {
+        FontId::Dynamic(font)
+    }
+}
+
 #[cfg(feature = "embedded-graphics")]
 impl Font for embedded_graphics::mono_font::MonoFont<'static> {
     fn advance(&self) -> u32 {

@@ -456,6 +456,16 @@ impl<const N: usize> DirtyTracker<N> {
     pub fn is_empty(&self) -> bool {
         self.regions.is_empty()
     }
+
+    /// Number of active dirty rect regions currently tracked.
+    pub fn len(&self) -> usize {
+        self.regions.len()
+    }
+
+    /// Maximum capacity of the dirty rect tracker.
+    pub const fn capacity(&self) -> usize {
+        N
+    }
 }
 
 impl<const N: usize> Default for DirtyTracker<N> {

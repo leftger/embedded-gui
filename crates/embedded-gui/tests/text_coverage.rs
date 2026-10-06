@@ -79,3 +79,59 @@ fn basic_text_shaper_directions_and_arena() {
     assert_eq!(arena.len(), 0);
     assert!(arena.is_empty());
 }
+
+#[test]
+fn basic_text_shaper_rtl_digits_and_bracket_mirroring() {
+    let shaper = BasicTextShaper;
+    let mut glyphs = heapless::Vec::<ShapedGlyph, 32>::new();
+
+    // In RTL, digits preserve LTR reading order while brackets are mirrored
+    shaper.shape(
+        "(abc 42)",
+        ShapingConfig {
+            direction: TextDirection::Rtl,
+            language_tag: Some("ar"),
+            enable_ligatures: false,
+        },
+        &mut glyphs,
+    );
+
+    let result_chars: heapless::Vec<char, 32> = glyphs.iter().map(|g| g.ch).collect();
+    // '(' becomes ')', ')' becomes '('
+    // "abc" reversed -> "cba"
+    // "42" digits stay "42" (not reversed to "24")
+    // Original: '(' 'a' 'b' 'c' ' ' '4' '2' ')'
+    // Reversed: ')' '2' '4' ' ' 'c' 'b' 'a' '('
+    // Mirrored brackets: '(' '2' '4' ' ' 'c' 'b' 'a' ')'
+    // Digit un-reversed: '(' '4' '2' ' ' 'c' 'b' 'a' ')'
+    let expected = ['(', '4', '2', ' ', 'c', 'b', 'a', ')'];
+    assert_eq!(result_chars.as_slice(), &expected);
+}
+
+#[test]
+fn sparse_bitmap_font_lookup_and_rendering() {
+    use embedded_gui::font::{Font, FontId, SparseBitmapFont};
+
+    static GLYPH_A: [u8; 8] = [0x18, 0x3C, 0x66, 0x7E, 0x66, 0x66, 0x00, 0x00];
+    static GLYPH_ACCENT_E: [u8; 8] = [0x0C, 0x18, 0x3C, 0x66, 0x7E, 0x60, 0x3C, 0x00]; // é
+
+    // Sorted glyphs
+    static GLYPHS: [(char, &[u8]); 2] = [('A', &GLYPH_A), ('é', &GLYPH_ACCENT_E)];
+
+    static FONT: SparseBitmapFont = SparseBitmapFont::new(8, 8, 8, 8, 1, &GLYPHS);
+
+    assert_eq!(FONT.advance(), 8);
+    assert_eq!(FONT.line_height(), 8);
+    assert!(FONT.glyph_bytes('A').is_some());
+    assert!(FONT.glyph_bytes('é').is_some());
+    assert!(FONT.glyph_bytes('Z').is_none());
+
+    let mut pixel_count = 0;
+    FONT.draw_glyph('A', &mut |_x, _y| {
+        pixel_count += 1;
+    });
+    assert!(pixel_count > 0);
+
+    let font_id: FontId = (&FONT).into();
+    assert!(matches!(font_id, FontId::Dynamic(_)));
+}

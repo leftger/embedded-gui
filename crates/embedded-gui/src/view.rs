@@ -380,6 +380,25 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let mut cx = ViewContext::new(self, viewport);
         view.render(&mut cx)
     }
+
+    /// Clears the existing widget tree and renders the new view, preserving global theme and context settings.
+    ///
+    /// This method is the recommended way to swap or transition screens using the declarative
+    /// [`Render`] DSL without accumulating stale widget nodes or overflowing `NODES` capacity.
+    pub fn replace_view<V: Render>(&mut self, view: &V) -> Result<WidgetId, GuiError> {
+        self.clear_widgets()?;
+        self.render_view(view)
+    }
+
+    /// Renders a component implementing the [`Render`] trait into specific bounds rather than the entire viewport.
+    pub fn render_view_in_bounds<V: Render>(
+        &mut self,
+        bounds: Rect,
+        view: &V,
+    ) -> Result<WidgetId, GuiError> {
+        let mut cx = ViewContext::new(self, bounds);
+        view.render(&mut cx)
+    }
 }
 
 #[cfg(test)]
@@ -418,6 +437,21 @@ mod tests {
         let root = ctx.render_view(&view).unwrap();
         assert_eq!(ctx.widgets().len(), 4); // panel container + 3 children
         assert!(ctx.node(root).is_some());
+
+        // Replace view resets the widget tree and mounts the new view cleanly
+        let view2 = ClimateCard {
+            title: "Kitchen",
+            is_eco: false,
+        };
+        let root2 = ctx.replace_view(&view2).unwrap();
+        assert_eq!(ctx.widgets().len(), 3); // panel container + 2 children (no eco)
+        assert!(ctx.node(root2).is_some());
+
+        // Render in specific bounds
+        let sub_root = ctx
+            .render_view_in_bounds(Rect::new(10, 10, 100, 100), &view2)
+            .unwrap();
+        assert!(ctx.node(sub_root).is_some());
     }
 
     #[test]

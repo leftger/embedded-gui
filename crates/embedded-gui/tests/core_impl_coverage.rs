@@ -93,3 +93,50 @@ fn core_context_configuration_and_lifecycle() {
     gui.clear_widgets().unwrap();
     assert_eq!(gui.widgets().len(), 0);
 }
+
+#[test]
+fn test_capacity_stats_telemetry() {
+    let mut gui = GuiContext::<8, 16, 4>::new(Rect::new(0, 0, 100, 100));
+    let stats = gui.capacity_stats();
+    assert_eq!(stats.nodes_used, 0);
+    assert_eq!(stats.nodes_capacity, 8);
+    assert_eq!(stats.nodes_remaining(), 8);
+    assert!(!stats.is_nodes_full());
+
+    let _btn = gui
+        .add_button(Rect::new(0, 0, 30, 10), "B", Style::button())
+        .unwrap();
+    let stats_after = gui.capacity_stats();
+    assert_eq!(stats_after.nodes_used, 1);
+    assert_eq!(stats_after.nodes_remaining(), 7);
+}
+
+#[test]
+fn test_gui_context_translate_id_and_fmt() {
+    static ENTRIES: [TranslationEntry<'static>; 2] = [
+        TranslationEntry::new("battery_fmt", &["Battery: {}% ({1})", "Batería: {}% ({1})"]),
+        TranslationEntry::new("btn_ok", &["OK", "Aceptar"]),
+    ];
+    let table = TranslationTable::new_sorted(&ENTRIES);
+
+    let mut gui = GuiContext::<8, 8, 4>::new(Rect::new(0, 0, 100, 100));
+    gui.set_translation_table(&table);
+
+    // O(1) indexed lookup via MessageId
+    assert_eq!(gui.translate_id(MessageId(0)), Some("Battery: {}% ({1})"));
+    assert_eq!(gui.translate_id(MessageId(1)), Some("OK"));
+
+    // Template interpolation with translate_fmt
+    let mut buf = heapless::String::<64>::new();
+    let res = gui
+        .translate_fmt("battery_fmt", &["85", "Charging"], &mut buf)
+        .unwrap();
+    assert_eq!(res, "Battery: 85% (Charging)");
+
+    gui.set_language(LanguageId::ES).unwrap();
+    assert_eq!(gui.translate_id(MessageId(1)), Some("Aceptar"));
+    let res_es = gui
+        .translate_fmt("battery_fmt", &["85", "Cargando"], &mut buf)
+        .unwrap();
+    assert_eq!(res_es, "Batería: 85% (Cargando)");
+}

@@ -302,6 +302,23 @@ pub trait TextShaper {
     );
 }
 
+#[inline]
+const fn mirror_bidi_char(ch: char) -> char {
+    match ch {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '<' => '>',
+        '>' => '<',
+        '«' => '»',
+        '»' => '«',
+        other => other,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BasicTextShaper;
 
@@ -313,13 +330,29 @@ impl TextShaper for BasicTextShaper {
         out: &mut heapless::Vec<ShapedGlyph, N>,
     ) {
         out.clear();
-        let iter = text.chars();
         if matches!(config.direction, TextDirection::Rtl) {
-            for ch in iter.rev() {
-                let _ = out.push(ShapedGlyph { ch, x_advance: 1 });
+            for ch in text.chars().rev() {
+                let mirrored = mirror_bidi_char(ch);
+                let _ = out.push(ShapedGlyph {
+                    ch: mirrored,
+                    x_advance: 1,
+                });
+            }
+            // Preserve natural LTR reading order for contiguous digit runs within RTL text
+            let mut i = 0;
+            while i < out.len() {
+                if out[i].ch.is_ascii_digit() {
+                    let start = i;
+                    while i < out.len() && out[i].ch.is_ascii_digit() {
+                        i += 1;
+                    }
+                    out[start..i].reverse();
+                } else {
+                    i += 1;
+                }
             }
         } else {
-            for ch in iter {
+            for ch in text.chars() {
                 let _ = out.push(ShapedGlyph { ch, x_advance: 1 });
             }
         }

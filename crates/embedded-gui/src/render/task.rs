@@ -322,6 +322,60 @@ impl<A: crate::render::Hardware2DAccelerator, D: DrawTarget<Color = Rgb565>> Dra
     }
 }
 
+/// A hardware draw unit operating directly on a [`crate::framebuffer::Framebuffer<N>`] target via [`Hardware2DAccelerator`].
+pub struct FramebufferAcceleratorDrawUnit<A: crate::render::Hardware2DAccelerator> {
+    pub accelerator: A,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl<A: crate::render::Hardware2DAccelerator> FramebufferAcceleratorDrawUnit<A> {
+    pub const fn new(accelerator: A, width: u32, height: u32) -> Self {
+        Self {
+            accelerator,
+            width,
+            height,
+        }
+    }
+
+    pub fn can_handle(&self, task: &DrawTask) -> bool {
+        match task {
+            DrawTask::Fill {
+                radius, opacity, ..
+            } => *radius == 0 && *opacity == 255,
+            _ => false,
+        }
+    }
+    pub fn execute_framebuffer<const N: usize>(
+        &mut self,
+        task: &DrawTask,
+        target: &mut crate::framebuffer::Framebuffer<N>,
+    ) {
+        if let DrawTask::Fill { rect, color, .. } = task {
+            let stride = self.width as usize;
+            self.accelerator
+                .fill_rect(target.pixels_mut(), stride, *rect, *color);
+        }
+    }
+}
+
+impl<A: crate::render::Hardware2DAccelerator, const N: usize>
+    DrawUnit<crate::framebuffer::Framebuffer<N>> for FramebufferAcceleratorDrawUnit<A>
+{
+    fn can_handle(&self, task: &DrawTask) -> bool {
+        self.can_handle(task)
+    }
+
+    fn execute(
+        &mut self,
+        task: &DrawTask,
+        target: &mut crate::framebuffer::Framebuffer<N>,
+    ) -> Result<(), core::convert::Infallible> {
+        self.execute_framebuffer(task, target);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,5 +632,28 @@ mod tests {
         let mut units: [&mut dyn DrawUnit<Framebuffer<400>>; 0] = [];
         dispatch_draw_tasks(&queue, &mut fb, &mut units, &mut unit).unwrap();
         assert!(fb.pixels().contains(&Rgb565::RED));
+    }
+
+    #[test]
+    fn test_framebuffer_accelerator_draw_unit() {
+        use crate::render::accelerator::Dma2dAccelerator;
+
+        let mut fb = Framebuffer::<100>::new(10, 10);
+        let dma = Dma2dAccelerator::new();
+        let mut accel_unit = FramebufferAcceleratorDrawUnit::new(dma, 10, 10);
+
+        let task = DrawTask::Fill {
+            rect: Rect::new(2, 2, 4, 4),
+            color: Rgb565::RED,
+            radius: 0,
+            opacity: 255,
+        };
+
+        assert!(accel_unit.can_handle(&task));
+        accel_unit.execute_framebuffer(&task, &mut fb);
+
+        assert_eq!(fb.pixels()[2 * 10 + 2], Rgb565::RED);
+        assert_eq!(accel_unit.accelerator.fill_count, 1);
+        assert_eq!(accel_unit.accelerator.pixels_processed, 16);
     }
 }
