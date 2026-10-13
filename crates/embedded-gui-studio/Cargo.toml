@@ -23,7 +23,7 @@ eframe = { version = "0.36", default-features = true }
 egui_extras = { version = "0.36", features = ["syntect"] }
 nusb = "0.2"
 rfd = "0.17"
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 zstd = "0.14"
 flate2 = "1.0"
 image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp"] }
