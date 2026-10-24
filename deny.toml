@@ -6,6 +6,11 @@ ignore = [
     "RUSTSEC-2024-0320", # yaml-rust unmaintained
     "RUSTSEC-2025-0141", # bincode unmaintained
     "RUSTSEC-2026-0192", # ttf-parser unmaintained
+    # Transitive via eframe 0.36 -> accesskit -> zbus 5.x. These crates were
+    # merged into zbus 6; no safe upgrade short of the eframe 0.37 migration.
+    "RUSTSEC-2026-0370", # zvariant unmaintained
+    "RUSTSEC-2026-0371", # zbus_names unmaintained
+    "RUSTSEC-2026-0372", # zvariant_derive unmaintained
 ]
 
 [licenses]
