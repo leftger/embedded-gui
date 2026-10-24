@@ -164,25 +164,27 @@ impl TouchInputFilter {
             self.initialized = true;
         }
 
-        let mut inst_x = embedded_dsp::filtering::BiquadCascadeInstanceF32 {
+        let mut inst_x = embedded_dsp::filtering::BiquadCascadeInstance::<f32> {
             num_stages: 1,
+            post_shift: 0,
             coeffs: &self.coeffs,
             state: &mut self.state_x,
         };
         let mut out_x = 0.0f32;
-        embedded_dsp::filtering::biquad_cascade_df1_f32(
+        embedded_dsp::filtering::biquad_cascade_df1(
             &mut inst_x,
             &[raw_x],
             core::slice::from_mut(&mut out_x),
         );
 
-        let mut inst_y = embedded_dsp::filtering::BiquadCascadeInstanceF32 {
+        let mut inst_y = embedded_dsp::filtering::BiquadCascadeInstance::<f32> {
             num_stages: 1,
+            post_shift: 0,
             coeffs: &self.coeffs,
             state: &mut self.state_y,
         };
         let mut out_y = 0.0f32;
-        embedded_dsp::filtering::biquad_cascade_df1_f32(
+        embedded_dsp::filtering::biquad_cascade_df1(
             &mut inst_y,
             &[raw_y],
             core::slice::from_mut(&mut out_y),

@@ -1,4 +1,4 @@
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics_core::{
     draw_target::DrawTarget,
     geometry::Size,
