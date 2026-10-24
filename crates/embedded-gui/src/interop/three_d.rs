@@ -2,12 +2,16 @@
 
 use core::fmt::Debug;
 use embedded_3dgfx::{
-    camera::Ray,
-    command_buffer::{CommandBuffer, RenderCommand},
     engine::K3dengine,
-    mesh::{K3dMesh, RenderMode},
-    primitive::DrawPrimitive,
-    renderer::FrameCtx,
+    pipeline::{
+        assemble::primitive::DrawPrimitive,
+        command_buffer::{CommandBuffer, RenderCommand},
+        renderer::FrameCtx,
+        vertex::{
+            camera::Ray,
+            mesh::{K3dMesh, RenderMode},
+        },
+    },
 };
 use embedded_graphics_core::{
     Pixel,
@@ -292,7 +296,7 @@ impl<'a, const MAX_NODES: usize, const MAX_HANDLERS: usize, const MAX_ACTIVE: us
 
 /// Re-exported so generated code and app code can describe geometry without
 /// depending on `embedded-3dgfx` directly.
-pub use embedded_3dgfx::mesh::Geometry;
+pub use embedded_3dgfx::pipeline::vertex::mesh::Geometry;
 
 /// Shading used by [`MeshPanel`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

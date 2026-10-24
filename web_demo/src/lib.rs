@@ -395,17 +395,37 @@ pub fn start() -> Result<(), JsValue> {
         let down_app = Rc::clone(&app);
         let pointer_down =
             Closure::<dyn FnMut(PointerEvent)>::wrap(Box::new(move |event: PointerEvent| {
-                if event.button() == 0 {
-                    let mut app = down_app.borrow_mut();
-                    app.pointer_down = true;
-                    let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
-                    app.handle_input(InputEvent::Pointer {
-                        x,
-                        y,
-                        state: PointerState::Pressed,
-                        button: PointerButton::Primary,
-                    });
+                if event.button() != 0 {
+                    return;
                 }
+                let mut app = down_app.borrow_mut();
+                app.pointer_down = true;
+                let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
+                app.handle_input(InputEvent::Pointer {
+                    x,
+                    y,
+                    state: PointerState::Pressed,
+                    button: PointerButton::Primary,
+                });
+                // Keep receiving moves even when the pointer leaves the
+                // canvas mid-drag (e.g. while dragging a slider).
+                let _ = app.canvas.set_pointer_capture(event.pointer_id());
+            }));
+
+        let move_app = Rc::clone(&app);
+        let pointer_move =
+            Closure::<dyn FnMut(PointerEvent)>::wrap(Box::new(move |event: PointerEvent| {
+                let mut app = move_app.borrow_mut();
+                if !app.pointer_down {
+                    return;
+                }
+                let (x, y) = app.pointer_pos(event.client_x(), event.client_y());
+                app.handle_input(InputEvent::Pointer {
+                    x,
+                    y,
+                    state: PointerState::Moved,
+                    button: PointerButton::Primary,
+                });
             }));
 
         let up_app = Rc::clone(&app);
@@ -429,6 +449,9 @@ pub fn start() -> Result<(), JsValue> {
             .add_event_listener_with_callback("pointerdown", pointer_down.as_ref().unchecked_ref())
             .map_err(js_error)?;
         canvas
+            .add_event_listener_with_callback("pointermove", pointer_move.as_ref().unchecked_ref())
+            .map_err(js_error)?;
+        canvas
             .add_event_listener_with_callback("pointerup", pointer_up.as_ref().unchecked_ref())
             .map_err(js_error)?;
         canvas
@@ -436,6 +459,7 @@ pub fn start() -> Result<(), JsValue> {
             .map_err(js_error)?;
 
         pointer_down.forget();
+        pointer_move.forget();
         pointer_up.forget();
     }
 
