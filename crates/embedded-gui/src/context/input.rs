@@ -1285,7 +1285,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
 
         if let Some(id) = hit {
             self.dispatch_activation(id, true)?;
-            self.update_dial_value_at_pointer(id, x, y)?;
+            self.update_value_at_pointer(id, x, y)?;
             self.pressed = Some(PressTracker {
                 id,
                 start_x: x,
@@ -1357,7 +1357,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         let Some(mut pressed) = self.pressed else {
             return Ok(());
         };
-        self.update_dial_value_at_pointer(pressed.id, x, y)?;
+        self.update_value_at_pointer(pressed.id, x, y)?;
         #[allow(unused_variables)]
         let dy = y - pressed.last_y;
         pressed.last_x = x;
@@ -1941,29 +1941,54 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
         self.push_event(UiEvent::Back)
     }
 
-    pub(crate) fn update_dial_value_at_pointer(
+    /// Updates the value of pointer-adjustable widgets (`Dial` and, with the
+    /// `rich-widgets` feature, `Slider`) from a pointer position. Called on
+    /// press and again while the pointer is dragged.
+    pub(crate) fn update_value_at_pointer(
         &mut self,
         id: WidgetId,
         x: i32,
         y: i32,
     ) -> Result<(), GuiError> {
         let rect = self.absolute_rect(id).ok_or(GuiError::NotFound)?;
+        #[cfg(feature = "rich-widgets")]
+        let visual_state = self.current_visual_state(id);
         let node = self.node_mut(id).ok_or(GuiError::NotFound)?;
-        if let WidgetKind::Dial { value, min, max } = &mut node.kind {
-            let cx = rect.x + rect.w as i32 / 2;
-            let cy = rect.y + rect.h as i32 / 2;
-            let dx = (x - cx) as f32;
-            let dy = (y - cy) as f32;
-            if dx != 0.0 || dy != 0.0 {
-                #[cfg(not(feature = "std"))]
-                use crate::math::F32Ext as _;
+        #[cfg(feature = "rich-widgets")]
+        let style = node.style;
+        match &mut node.kind {
+            WidgetKind::Dial { value, min, max } => {
+                let cx = rect.x + rect.w as i32 / 2;
+                let cy = rect.y + rect.h as i32 / 2;
+                let dx = (x - cx) as f32;
+                let dy = (y - cy) as f32;
+                if dx != 0.0 || dy != 0.0 {
+                    #[cfg(not(feature = "std"))]
+                    use crate::math::F32Ext as _;
 
-                let angle_rad = dy.atan2(dx);
-                let mut angle_norm = angle_rad + core::f32::consts::PI;
-                if angle_norm < 0.0 {
-                    angle_norm += 2.0 * core::f32::consts::PI;
+                    let angle_rad = dy.atan2(dx);
+                    let mut angle_norm = angle_rad + core::f32::consts::PI;
+                    if angle_norm < 0.0 {
+                        angle_norm += 2.0 * core::f32::consts::PI;
+                    }
+                    let progress = (angle_norm / (2.0 * core::f32::consts::PI)).clamp(0.0, 1.0);
+                    let next_val = *min + progress * (*max - *min);
+                    if (*value - next_val).abs() > 0.001 {
+                        *value = next_val;
+                        self.dirty.add(rect)?;
+                        self.push_event(UiEvent::ValueChanged(id))?;
+                    }
                 }
-                let progress = (angle_norm / (2.0 * core::f32::consts::PI)).clamp(0.0, 1.0);
+            }
+            #[cfg(feature = "rich-widgets")]
+            WidgetKind::Slider { value, min, max } => {
+                // Match the hit area to the rendered track: `render_slider`
+                // draws the track and knob inside `Block::inner(rect)`.
+                let inner = crate::Block::styled(style.resolve(visual_state)).inner(rect);
+                if inner.w == 0 {
+                    return Ok(());
+                }
+                let progress = ((x - inner.x) as f32 / inner.w as f32).clamp(0.0, 1.0);
                 let next_val = *min + progress * (*max - *min);
                 if (*value - next_val).abs() > 0.001 {
                     *value = next_val;
@@ -1971,6 +1996,7 @@ impl<'a, const NODES: usize, const EVENTS: usize, const DIRTY: usize>
                     self.push_event(UiEvent::ValueChanged(id))?;
                 }
             }
+            _ => {}
         }
         Ok(())
     }

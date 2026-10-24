@@ -274,6 +274,54 @@ fn key_activation_changes_focusable_widget_state() {
 }
 
 #[test]
+fn pointer_drag_and_tap_move_slider_value() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 80, 40));
+    let slider = gui
+        .add_slider(Rect::new(0, 0, 40, 10), 0.5, 0.0, 1.0, Style::panel())
+        .unwrap();
+
+    while gui.pop_event().is_some() {}
+
+    // Press near the left edge of the track: value jumps toward min.
+    gui.handle_input(InputEvent::Pointer {
+        x: 3,
+        y: 5,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert!(gui.slider_value(slider).unwrap() < 0.05);
+
+    // Drag to the middle: value follows the pointer.
+    gui.handle_input(InputEvent::Pointer {
+        x: 20,
+        y: 5,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert!((gui.slider_value(slider).unwrap() - 0.5).abs() < 0.05);
+
+    // Drag past the right edge: value clamps to max.
+    gui.handle_input(InputEvent::Pointer {
+        x: 60,
+        y: 5,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    assert_eq!(gui.slider_value(slider), Some(1.0));
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 60,
+        y: 5,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+}
+
+#[test]
 fn select_toggles_dropdown_and_roller() {
     static ITEMS: [&str; 3] = ["A", "B", "C"];
     let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 100, 100));
