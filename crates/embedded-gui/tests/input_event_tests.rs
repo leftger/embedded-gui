@@ -322,6 +322,72 @@ fn pointer_drag_and_tap_move_slider_value() {
 }
 
 #[test]
+fn pointer_press_and_drag_update_dial_value() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 40, 40));
+    let dial = gui
+        .add_dial(Rect::new(0, 0, 20, 20), 5.0, 0.0, 10.0, Style::panel())
+        .unwrap();
+
+    while gui.pop_event().is_some() {}
+
+    // Press at the top of the dial: straight up is 25% of the range.
+    gui.handle_input(InputEvent::Pointer {
+        x: 10,
+        y: 0,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    let top_value = gui.dial_value(dial).unwrap();
+    assert!((top_value - 2.5).abs() < 0.05, "top value {top_value}");
+
+    // Drag to the right edge: straight right is 50% of the range.
+    gui.handle_input(InputEvent::Pointer {
+        x: 20,
+        y: 10,
+        state: PointerState::Moved,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+    let right_value = gui.dial_value(dial).unwrap();
+    assert!(
+        (right_value - 5.0).abs() < 0.05,
+        "right value {right_value}"
+    );
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 20,
+        y: 10,
+        state: PointerState::Released,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+}
+
+#[test]
+fn pointer_press_on_zero_width_slider_guard_is_noop() {
+    let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 40, 20));
+    // Style::panel() insets the track by 3px on each side, so a 2px-wide
+    // slider has an empty inner track (width 0). The pointer handler must
+    // bail out without touching the value.
+    let slider = gui
+        .add_slider(Rect::new(0, 0, 2, 10), 0.5, 0.0, 1.0, Style::panel())
+        .unwrap();
+
+    while gui.pop_event().is_some() {}
+
+    gui.handle_input(InputEvent::Pointer {
+        x: 1,
+        y: 5,
+        state: PointerState::Pressed,
+        button: PointerButton::Primary,
+    })
+    .unwrap();
+
+    assert_eq!(gui.slider_value(slider), Some(0.5));
+}
+
+#[test]
 fn select_toggles_dropdown_and_roller() {
     static ITEMS: [&str; 3] = ["A", "B", "C"];
     let mut gui = GuiContext::<8, 32, 8>::new(Rect::new(0, 0, 100, 100));
